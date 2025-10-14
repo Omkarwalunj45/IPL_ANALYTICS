@@ -1976,6 +1976,7 @@ elif sidebar_option == "Matchup Analysis":
 
 
 elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
+    # Match by Match Analysis - full updated code with sector-label wagon wheel
     import streamlit as st
     import pandas as pd
     import numpy as np
@@ -1991,9 +1992,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                        max_pixels: int = 40_000_000,
                        fallback_set_max: bool = False,
                        use_column_width: bool = True):
-        """
-        Render a Matplotlib Figure safely in Streamlit avoiding PIL DecompressionBombError.
-        """
         try:
             dpi = fig.get_dpi()
             width_in = fig.get_figwidth()
@@ -2041,7 +2039,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     st.warning("Figure was too large; displayed at reduced resolution.")
                     st.image(buf, use_column_width=use_column_width)
                     return
-                except Exception as e3:
+                except Exception:
                     st.error("Unable to render figure due to image size / PIL safety check.")
                     raise
     
@@ -2232,7 +2230,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             st.dataframe(style_scoring(scoring_table), use_container_width=True)
     
             # -------------------------
-            # Wagon Wheel (8 sectors) - percent of runs per sector (uses wagonZone & run_col)
+            # Wagon Wheel (8 sectors) - use sector-label style requested by user
             # -------------------------
             sector_names = {
                 1: "Third Man / Behind Off",
@@ -2245,11 +2243,85 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 8: "Fine Leg"
             }
     
+            # local helper: angle for sector centre (RHB base; LHB mirrored)
+            def get_sector_angle(zone, batting_style):
+                base_angles = {
+                    1: 45,   # Third Man
+                    2: 90,   # Point
+                    3: 135,  # Covers
+                    4: 180,  # Mid-off
+                    5: 225,  # Mid-on
+                    6: 270,  # Mid-wicket
+                    7: 315,  # Square leg
+                    8: 0     # Fine leg
+                }
+                angle = base_angles.get(int(zone), 0)
+                if str(batting_style).strip().upper().startswith('L'):
+                    angle = (180 + angle) % 360
+                return math.radians(angle)
+    
+            def draw_cricket_field_with_run_totals(final_df_local):
+                fig, ax = plt.subplots(figsize=(10, 10))
+                ax.set_aspect('equal')
+                ax.axis('off')
+    
+                # Field base
+                boundary = plt.Circle((0, 0), 1, fill=True, color='#228B22', alpha=1)
+                boundary_line = plt.Circle((0, 0), 1, fill=False, color='black', linewidth=3)
+                inner_circle = plt.Circle((0, 0), 0.5, fill=True, color='#66bb6a')
+                inner_circle_line = plt.Circle((0, 0), 0.5, fill=False, color='white', linewidth=1)
+    
+                ax.add_patch(boundary)
+                ax.add_patch(boundary_line)
+                ax.add_patch(inner_circle)
+                ax.add_patch(inner_circle_line)
+    
+                # pitch rectangle approx
+                pitch_rect = plt.Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
+                ax.add_patch(pitch_rect)
+    
+                # radial sector lines (8)
+                angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                for angle in angles:
+                    x = math.cos(angle)
+                    y = math.sin(angle)
+                    ax.plot([0, x], [0, y], color='white', alpha=0.2, linewidth=1)
+    
+                # Determine total runs per sector (use run_col)
+                runs_by_zone = final_df_local.groupby(final_df_local[wagon_zone_col].astype('Int64'))[run_col].sum()
+    
+                # Determine batting style for title
+                batting_style_series = final_df_local.get(bat_hand_col, pd.Series([None]))
+                batting_style_val = batting_style_series.dropna().iloc[0] if (not batting_style_series.dropna().empty) else None
+                title = "Right-handed Batsman" if batting_style_val is None or str(batting_style_val).strip().upper().startswith('R') else "Left-handed Batsman"
+                plt.title(title, pad=20, color='white', size=14, fontweight='bold')
+    
+                # Label each sector with total runs (big white text)
+                for zone in range(1, 9):
+                    # mid-angle for text: add 22.5 degrees to align inside sector
+                    angle_rad = get_sector_angle(zone, batting_style_val) + math.radians(22.5)
+                    x = 0.65 * math.cos(angle_rad)
+                    y = 0.65 * math.sin(angle_rad)
+                    runs = int(runs_by_zone.get(zone, 0))
+                    # big white number
+                    ax.text(x, y, str(runs), ha='center', va='center', color='white', fontweight='bold', fontsize=22)
+    
+                    # small sector name below
+                    sx = 0.78 * math.cos(angle_rad)
+                    sy = 0.78 * math.sin(angle_rad)
+                    ax.text(sx, sy, sector_names.get(zone, f"Sector {zone}"), ha='center', va='center', color='white', fontsize=9)
+    
+                ax.set_xlim(-1.2, 1.2)
+                ax.set_ylim(-1.2, 1.2)
+                plt.tight_layout(pad=0)
+                return fig
+    
+            # run the wagon wheel drawing if column exists
             if wagon_zone_col not in final_df.columns:
                 st.info("wagonZone column not available for wagon wheel.")
             else:
+                # create grouped table for display as before
                 ww_df = final_df.copy()
-                # normalize wagon zones to integer sectors 1..8
                 ww_df['wagon_zone_int'] = pd.to_numeric(ww_df[wagon_zone_col], errors='coerce').astype('Int64')
                 grouped = ww_df.groupby('wagon_zone_int').agg(
                     runs = (run_col, 'sum'),
@@ -2257,101 +2329,28 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     fours = (run_col, lambda s: int((s==4).sum())),
                     sixes = (run_col, lambda s: int((s==6).sum()))
                 ).reset_index().rename(columns={'wagon_zone_int':'sector'})
-    
                 all_sectors = pd.DataFrame({"sector": list(range(1,9))})
                 grouped = all_sectors.merge(grouped, on='sector', how='left').fillna(0)
                 grouped[['runs','balls','fours','sixes']] = grouped[['runs','balls','fours','sixes']].astype(int)
-                total_runs_wagon = int(grouped['runs'].sum())
-                grouped['pct_runs'] = grouped.apply(lambda r: (r['runs'] / total_runs_wagon * 100) if total_runs_wagon>0 else 0.0, axis=1)
+                grouped['pct_runs'] = grouped.apply(lambda r: (r['runs'] / grouped['runs'].sum() * 100) if grouped['runs'].sum()>0 else 0.0, axis=1)
                 grouped['pct_runs'] = grouped['pct_runs'].round(2)
     
-                # display table
                 ww_display = grouped.copy()
-                ww_display['Sector Name'] = ww_display['sector'].map(sector_names)
+                ww_display['Sector Name'] = ww_display['sector'].map({
+                    1:"Third Man/Behind Off",2:"Point",3:"Covers",4:"Mid-off",5:"Mid-on",6:"Mid-wicket",7:"Square Leg",8:"Fine Leg"
+                })
                 ww_display = ww_display[['sector','Sector Name','runs','pct_runs','fours','sixes','balls']].rename(columns={
                     'sector':'Sector','runs':'Runs','pct_runs':'Pct of Runs','fours':'4s','sixes':'6s','balls':'Balls'
                 })
                 ww_display['Pct of Runs'] = ww_display['Pct of Runs'].apply(lambda x: f"{x:.2f}%")
     
-                st.markdown("### Wagon Wheel (8 sectors) — % runs per sector")
-                # draw donut wheel (8 sectors) and annotate
-                fig_w = 12
-                fig_h = 6
-                fig, ax = plt.subplots(figsize=(fig_w, fig_h))
-                ax.axis('equal'); ax.axis('off')
-    
-                pct_list = grouped.sort_values('sector')['pct_runs'].tolist()
-                runs_list = grouped.sort_values('sector')['runs'].tolist()
-                cmap = plt.get_cmap('tab20')
-                colors = [cmap(i*2) for i in range(8)]
-    
-                start_angle = 90.0
-                outer_r = 1.0
-                inner_r = 0.45
-                current_angle = start_angle
-    
-                for idx, pct in enumerate(pct_list):
-                    angle = pct / 100.0 * 360.0
-                    if angle < 0.0001:
-                        theta1 = current_angle
-                        theta2 = current_angle - 0.0001
-                        wedge = Wedge((0,0), outer_r, theta2, theta1, width=outer_r-inner_r,
-                                      facecolor=(0,0,0,0.02), edgecolor='white', linewidth=0.5, zorder=2)
-                        ax.add_patch(wedge)
-                        current_angle -= 0.0001
-                        continue
-    
-                    theta1 = current_angle
-                    theta2 = current_angle - angle
-                    wedge = Wedge((0,0), outer_r, theta2, theta1, width=outer_r-inner_r,
-                                  facecolor=colors[idx], edgecolor='white', linewidth=0.8, zorder=3, alpha=0.95)
-                    ax.add_patch(wedge)
-    
-                    mid_ang_deg = (theta1 + theta2) / 2.0
-                    mid_ang_rad = math.radians(mid_ang_deg)
-                    lx = (outer_r + 0.18) * math.cos(mid_ang_rad)
-                    ly = (outer_r + 0.18) * math.sin(mid_ang_rad)
-                    label_text = f"{int(runs_list[idx])}\n({pct_list[idx]:.2f}%)"
-                    ax.text(lx, ly, label_text, ha='center', va='center', fontsize=9, fontweight='bold', color='#111111')
-    
-                    fours = int(grouped.loc[grouped['sector'] == (idx+1), 'fours'].iloc[0])
-                    sixes = int(grouped.loc[grouped['sector'] == (idx+1), 'sixes'].iloc[0])
-                    sublabel = f"{sixes}x6  {fours}x4"
-                    lx2 = (outer_r + 0.34) * math.cos(mid_ang_rad)
-                    ly2 = (outer_r + 0.34) * math.sin(mid_ang_rad)
-                    ax.text(lx2, ly2, sublabel, ha='center', va='center', fontsize=8, color='#444444')
-    
-                    current_angle -= angle
-    
-                center_circle = Circle((0,0), inner_r - 0.02, color='#2e7d32', zorder=6)
-                ax.add_patch(center_circle)
-                ax.text(0,0, f"{batsman_selected}\nTotal runs: {total_runs_wagon}", ha='center', va='center', fontsize=11, fontweight='bold', color='white')
-    
-                # sector legend below (two columns)
-                legend_x = -1.25
-                legend_y = -1.35
-                col_a_x = legend_x
-                col_b_x = legend_x + 1.25
-                for i in range(8):
-                    sector_name = sector_names[i+1]
-                    pct_text = f"{grouped.loc[grouped['sector']==(i+1),'pct_runs'].iloc[0]:.2f}%"
-                    txt = f"Sector {i+1}: {sector_name} — {pct_text}"
-                    if i < 4:
-                        ax.text(col_a_x, legend_y + (3 - i) * 0.16, txt, fontsize=9, color='#222222', va='center')
-                    else:
-                        ax.text(col_b_x, legend_y + (7 - i) * 0.16, txt, fontsize=9, color='#222222', va='center')
-    
-                batting_style_series = final_df.get(bat_hand_col, pd.Series([None]))
-                hand = batting_style_series.dropna().iloc[0] if (not batting_style_series.dropna().empty) else None
-                hand_str = 'Right-handed' if hand is None or str(hand).strip().upper().startswith('R') else 'Left-handed'
-                ax.text(0, -1.55, f"Style: {hand_str}", ha='center', fontsize=10, color='#111111')
-    
-                ax.set_xlim(-1.6, 1.6)
-                ax.set_ylim(-1.8, 1.6)
-                plt.tight_layout(pad=0.2)
-    
+                # draw figure using requested style
+                fig_w = 11
+                fig_h = 9
+                fig = draw_cricket_field_with_run_totals(final_df)
                 safe_st_pyplot(fig, max_pixels=40_000_000, fallback_set_max=False)
     
+                # show table below wheel
                 st.dataframe(ww_display.style.set_table_styles([
                     {"selector":"thead th", "props":[("background-color","#e6f2ff"),("font-weight","600")]},
                 ]), use_container_width=True)
