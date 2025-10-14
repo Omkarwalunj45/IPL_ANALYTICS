@@ -2345,7 +2345,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     
                 ww_display = grouped.copy()
                 ww_display['Sector Name'] = ww_display['sector'].map({
-                    1:"Third Man/Behind Off",2:"Point",3:"Covers",4:"Mid-off",5:"Mid-on",6:"Mid-wicket",7:"Square Leg",8:"Fine Leg"
+                    1:"Third Man",2:"Point",3:"Covers",4:"Mid Off",5:"Mid On",6:"Mid Wicket",7:"Square Leg",8:"Fine Leg"
                 })
                 ww_display = ww_display[['sector','Sector Name','runs','pct_runs','fours','sixes','balls']].rename(columns={
                     'sector':'Sector','runs':'Runs','pct_runs':'Pct of Runs','fours':'4s','sixes':'6s','balls':'Balls'
