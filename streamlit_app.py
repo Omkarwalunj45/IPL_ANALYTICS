@@ -1977,8 +1977,6 @@ elif sidebar_option == "Matchup Analysis":
 
 elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
     # Match by Match Analysis - full updated code with sector-label wagon wheel
-    # Match by Match Analysis - updated wagon wheel sector labels with Third Man between 10:30 and 12:00 (clock analogy)
-    # match_by_match_streamlit.py
     import streamlit as st
     import pandas as pd
     import numpy as np
@@ -2000,8 +1998,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                        max_pixels: int = 40_000_000,
                        fallback_set_max: bool = False,
                        use_container_width: bool = True):
-        """
-        Save matplotlib figure into an in-memory buffer and render via st.image.
+        """Save matplotlib figure to an in-memory buffer then display via st.image.
         Uses use_container_width param (no deprecated use_column_width).
         """
         try:
@@ -2051,7 +2048,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     buf = BytesIO()
                     fig.savefig(buf, format="png", bbox_inches="tight", dpi=70)
                     buf.seek(0)
-                    # use st.info to avoid portal warnings UI
                     st.info("Figure was too large; displayed at reduced resolution.")
                     st.image(buf, use_container_width=use_container_width)
                     plt.close(fig)
@@ -2063,6 +2059,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     # -------------------------
     # Helpers
     # -------------------------
+    
     def as_dataframe(x):
         if isinstance(x, pd.Series):
             return x.to_frame().T.reset_index(drop=True)
@@ -2070,6 +2067,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             return x.copy()
         else:
             return pd.DataFrame(x)
+    
     
     def safe_get_col(df_local, candidates, default=None):
         for c in candidates:
@@ -2248,7 +2246,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             st.dataframe(style_scoring(scoring_table), use_container_width=True)
     
             # -------------------------
-            # Wagon Wheel (8 sectors) - clock-accurate sector centers
+            # Wagon Wheel (8 sectors) - clock-accurate sector centers + proper mirroring for LHB
             # -------------------------
             sector_names = {
                 1: "Third Man",
@@ -2261,25 +2259,29 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 8: "Fine Leg"
             }
     
-            # EXACT mapping per your instruction:
-            # Third Man between 10:30 and 12 => center 11:15 (112.5°),
-            # then towards left (counter-clockwise) each sector +45°:
+            # Base angles for RHB per your clock instruction: Third Man centered at 11:15 (112.5°)
+            # and then each sector moves 45° toward the left (counter-clockwise)
             base_angles = {
-                1: 112.5,  # Third Man (between 10:30 and 12)
-                2: 157.5,  # Point (between 9 and 10:30)
+                1: 112.5,  # Third Man
+                2: 157.5,  # Point
                 3: 202.5,  # Covers
                 4: 247.5,  # Mid Off
                 5: 292.5,  # Mid On
                 6: 337.5,  # Mid Wicket
                 7: 22.5,   # Square Leg
-                8: 67.5    # Fine Leg (between 12 and 1:30)
+                8: 67.5    # Fine Leg
             }
     
             def get_sector_angle_requested(zone, batting_style):
-                angle = base_angles.get(int(zone), 0)
-                # Mirror for left-hander (add 180 degrees)
+                """Return sector center in radians.
+    
+                IMPORTANT: For left-handers we must *mirror* the chart across vertical axis so that
+                Third Man <-> Fine Leg, Point <-> Square Leg, Covers <-> Mid Wicket, Mid Off <-> Mid On.
+                This is achieved by reflecting the angle across the vertical axis: angle -> (180 - angle) % 360.
+                """
+                angle = float(base_angles.get(int(zone), 0.0))
                 if str(batting_style).strip().upper().startswith('L'):
-                    angle = (angle + 180.0) % 360.0
+                    angle = (180.0 - angle) % 360.0
                 return math.radians(angle)
     
             def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name):
@@ -2304,7 +2306,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     y = math.sin(angle)
                     ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
     
-                # prepare data
+                # prepare data (runs, fours, sixes by sector)
                 tmp = final_df_local.copy()
                 if wagon_zone_col in tmp.columns:
                     tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
@@ -2312,6 +2314,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
     
                 runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
+                fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
+                sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
                 total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
     
                 # Title
@@ -2329,8 +2333,15 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     runs = int(runs_by_zone.get(zone, 0))
                     pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
                     pct_str = f"{pct:.2f}%"
+    
+                    # main labels
                     ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
-                    ax.text(x, y-0.07, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
+                    ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
+    
+                    # fours & sixes below
+                    fours = int(fours_by_zone.get(zone, 0))
+                    sixes = int(sixes_by_zone.get(zone, 0))
+                    ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
     
                     # sector name slightly farther out
                     sx = 0.80 * math.cos(angle_mid)
@@ -2373,6 +2384,13 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 fig = draw_cricket_field_with_run_totals_requested(final_df, batsman_selected)
                 safe_st_pyplot(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
     
+                # Label below wagon chart indicating RHB/LHB
+                batting_style_display = None
+                if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
+                    batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
+                side_label = "LHB" if batting_style_display and str(batting_style_display).strip().upper().startswith('L') else "RHB"
+                st.markdown(f"<div style='text-align:center; margin-top:6px;'><strong>{batsman_selected}'s Wagon Chart ({side_label})</strong></div>", unsafe_allow_html=True)
+    
                 # show table below wheel
                 st.dataframe(ww_display.style.set_table_styles([
                     {"selector":"thead th", "props":[("background-color","#e6f2ff"),("font-weight","600")]},
@@ -2401,7 +2419,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 with c1:
                     st.markdown("**Dot Balls (count)**")
                     # Increased height for better readability
-                    fig1, ax1 = plt.subplots(figsize=(6, 10))
+                    fig1, ax1 = plt.subplots(figsize=(7, 12))
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2413,7 +2431,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
-                    fig2, ax2 = plt.subplots(figsize=(6, 10))
+                    fig2, ax2 = plt.subplots(figsize=(7, 12))
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2493,7 +2511,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write("Dot Balls")
-                    fig1, ax1 = plt.subplots(figsize=(6, 10))
+                    fig1, ax1 = plt.subplots(figsize=(7, 12))
                     im1 = ax1.imshow(dot_grid_b, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2505,7 +2523,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                 with c2:
                     st.write("Runs Conceded")
-                    fig2, ax2 = plt.subplots(figsize=(6, 10))
+                    fig2, ax2 = plt.subplots(figsize=(7, 12))
                     im2 = ax2.imshow(run_grid_b, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
