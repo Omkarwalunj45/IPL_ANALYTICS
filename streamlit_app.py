@@ -1976,8 +1976,6 @@ elif sidebar_option == "Matchup Analysis":
 
 
 elif sidebar_option == "Match by Match Analysis":
-    ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerates truncated images (optional)
-
     def safe_st_pyplot(fig,
                        max_pixels: int = 40_000_000,
                        fallback_set_max: bool = False,
