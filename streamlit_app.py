@@ -2431,7 +2431,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
-                    fig2, ax2 = plt.subplots(figsize=(7, 12))
+                    fig2, ax2 = plt.subplots(figsize=(7, 18))
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
