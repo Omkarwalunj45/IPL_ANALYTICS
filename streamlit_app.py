@@ -4,6 +4,42 @@ import math as mt
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go  
+# --- helper: render matplotlib fig as fixed-pixel-height image in Streamlit ---
+from PIL import Image
+
+def display_figure_fixed_height(fig, height_px=1200, bg='white'):
+    """
+    Save `fig` to buffer, open with PIL, resize to desired height (preserve aspect ratio),
+    and display with st.image using exact pixel dimensions (no auto-scaling).
+    - height_px: desired displayed height in pixels (e.g. 1800)
+    """
+    buf = BytesIO()
+    # Save at a high DPI so the saved image is high-res (avoids blur when resizing)
+    fig.savefig(buf, format='png', bbox_inches='tight', dpi=200, facecolor=fig.get_facecolor())
+    buf.seek(0)
+    img = Image.open(buf).convert('RGBA')
+
+    # preserve aspect ratio, compute new width
+    w, h = img.size
+    if h == 0:
+        st.error("Figure saved with zero height unexpectedly.")
+        return
+    new_h = int(height_px)
+    new_w = int(round((w / h) * new_h))
+
+    # resize using LANCZOS for quality
+    img_resized = img.resize((new_w, new_h), Image.LANCZOS)
+
+    # if you prefer a white background (avoid transparency), compose
+    if bg is not None:
+        bg_img = Image.new('RGB', img_resized.size, bg)
+        bg_img.paste(img_resized, mask=img_resized.split()[3] if img_resized.mode == 'RGBA' else None)
+        img_resized = bg_img
+
+    # display with explicit width (same as new_w) so Streamlit doesn't auto-scale
+    st.image(img_resized, use_column_width=False, width=new_w)
+    plt.close(fig)
+
 
 
 st.set_page_config(page_title='IPL Performance Analysis Portal', layout='wide')
