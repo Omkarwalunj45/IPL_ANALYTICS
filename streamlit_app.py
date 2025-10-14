@@ -1974,12 +1974,7 @@ elif sidebar_option == "Matchup Analysis":
         else:
             st.info("Unknown grouping option selected.")
 
-# Put this near the top of your Streamlit app
-import io
-import math
-from io import BytesIO
-import streamlit as st
-from PIL import Image, ImageFile
+elif sidebar_option == "Match by Match Analysis":
 ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerates truncated images (optional)
 
 def safe_st_pyplot(fig,
@@ -2066,6 +2061,7 @@ import matplotlib.pyplot as plt
 import math
 from matplotlib.patches import Wedge, Circle, Rectangle
 import plotly.graph_objects as go
+from matplotlib.colors import Normalize
 
 # -------------------------
 # Minimal helper functions
@@ -2299,42 +2295,39 @@ if option == "Batsman Analysis":
             ax.axis('equal')
             ax.axis('off')
 
-            # draw background donut / stadium (simple)
-            # prepare pie chart wedge sizes by pct_runs
-            sizes = grouped['pct_runs'].tolist()
-            # to ensure pie takes full circle even if zeros, add tiny epsilon
-            eps = 1e-6
-            sizes = [s if s>0 else eps for s in sizes]
-            cmap = plt.get_cmap('tab20c')
-            colors = [cmap(i) for i in range(len(sizes))]
-            # Use Wedge drawing to control labels outward
-            start_angle = 90
             outer_r = 1.0
             inner_r = 0.4
-            current_angle = start_angle
-            for idx, pct in enumerate(grouped['pct_runs']):
-                angle = pct/100.0*360.0
-                # color pick: use color map but keep 4/6 different highlight
-                sector_color = colors[idx]
-                wedge = Wedge((0,0), outer_r, current_angle, current_angle-angle, width=outer_r-inner_r, facecolor=sector_color, edgecolor='white', linewidth=0.8, alpha=0.9)
+            # colormap
+            cmap = plt.get_cmap('YlOrRd')
+            max_pct = grouped['pct_runs'].max()
+            norm = Normalize(vmin=0, vmax=max_pct)
+            # sector order ccw from 0 degrees: 3,4,5,6,7,8,1,2
+            sector_order = [3,4,5,6,7,8,1,2]
+            angle_width = 360 / 8  # 45
+            current_angle = 0.0  # start at 0 (right)
+            for sec in sector_order:
+                row_idx = grouped[grouped['sector'] == sec].index[0]
+                pct = grouped.at[row_idx, 'pct_runs']
+                runs = grouped.at[row_idx, 'runs']
+                color = cmap(norm(pct)) if max_pct > 0 else 'lightgray'
+                wedge = Wedge((0,0), outer_r, current_angle, current_angle + angle_width, width=outer_r-inner_r, facecolor=color, edgecolor='white', linewidth=0.8, alpha=0.9)
                 ax.add_patch(wedge)
-                # label at mid-angle
-                mid_ang = math.radians(current_angle - angle/2.0)
-                lx = (outer_r + 0.12) * math.cos(mid_ang)
-                ly = (outer_r + 0.12) * math.sin(mid_ang)
-                sec_runs = grouped.loc[idx,'runs']
-                sec_pct = grouped.loc[idx,'pct_runs']
-                label = f"{int(grouped.loc[idx,'runs'])} ({sec_pct:.2f}%)"
-                ax.text(lx, ly, label, ha='center', va='center', fontsize=9)
-                current_angle -= angle
+                mid_ang_deg = current_angle + angle_width / 2
+                mid_ang = math.radians(mid_ang_deg)
+                label_r = outer_r + 0.05  # adjust if needed
+                lx = label_r * math.cos(mid_ang)
+                ly = label_r * math.sin(mid_ang)
+                label = f"{sec}\n{int(runs)}\n({pct:.0f}%)"
+                ax.text(lx, ly, label, ha='center', va='center', fontsize=8, linespacing=1.2)
+                current_angle += angle_width
             # center circle
-            c = Circle((0,0), inner_r-0.02, color='#2e7d32', zorder=10)
+            c = Circle((0,0), inner_r - 0.02, color='#2e7d32', zorder=10)  # green pitch
             ax.add_patch(c)
             # Title and footer info
             batting_style = final_df.get(bat_hand_col, pd.Series([None])).dropna()
             hand = batting_style.iloc[0] if (not batting_style.empty) else None
             hand_str = 'Right-handed' if pd.isna(hand) or str(hand).strip().upper().startswith('R') else 'Left-handed'
-            ax.text(0, -1.45, f"Striker: {batsman_selected}  |  Style: {hand_str}  |  Total Runs in sectors: {total_runs_wagon}", ha='center', fontsize=10)
+            ax.text(0, -1.45, f"Striker: {batsman_selected}  |  Style: {hand_str}  |  Total Runs in sectors: {int(total_runs_wagon)}", ha='center', fontsize=10)
             safe_st_pyplot(fig, max_pixels=40_000_000, fallback_set_max=False)
 
 
