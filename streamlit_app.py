@@ -2446,7 +2446,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 plt.tight_layout(pad=3.0)
                 st.pyplot(fig2, use_container_width=False)
 
-        else:
+            else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
     
     # ---------------------------
