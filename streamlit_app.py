@@ -1975,8 +1975,7 @@ elif sidebar_option == "Matchup Analysis":
             st.info("Unknown grouping option selected.")
 
 
-elif sidebar_option == "Match by Match Analysis":
-# Match by Match Analysis - full code block
+elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
 import streamlit as st
 import pandas as pd
 import numpy as np
