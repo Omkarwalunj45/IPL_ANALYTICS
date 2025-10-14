@@ -2235,12 +2235,12 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # -------------------------
             # sector mapping names (kept concise)
             sector_names = {
-                1: "Third Man / Behind Off",
+                1: "Third Man",
                 2: "Point",
                 3: "Covers",
-                4: "Mid-off",
-                5: "Mid-on",
-                6: "Mid-wicket",
+                4: "Mid Off",
+                5: "Mid On",
+                6: "Mid Wwicket",
                 7: "Square Leg",
                 8: "Fine Leg"
             }
