@@ -1975,7 +1975,7 @@ elif sidebar_option == "Matchup Analysis":
             st.info("Unknown grouping option selected.")
 
 elif sidebar_option == "Match by Match Analysis":
-ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerates truncated images (optional)
+
 
 def safe_st_pyplot(fig,
                    max_pixels: int = 40_000_000,
@@ -2052,7 +2052,7 @@ def safe_st_pyplot(fig,
 
 # Example usage: replace st.pyplot(fig, use_container_width=True) with:
 # safe_st_pyplot(fig, max_pixels=40_000_000, fallback_set_max=False)
-
+ImageFile.LOAD_TRUNCATED_IMAGES = True  # tolerates truncated images (optional)
 # Place in your app where you handle sidebar_option == "Match by Match Analysis"
 import streamlit as st
 import pandas as pd
