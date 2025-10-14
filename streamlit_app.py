@@ -2419,7 +2419,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 with c1:
                     st.markdown("**Dot Balls (count)**")
                     # Increased height for better readability
-                    fig1, ax1 = plt.subplots(figsize=(7, 12))
+                    fig1, ax1 = plt.subplots(figsize=(7, 18))
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
