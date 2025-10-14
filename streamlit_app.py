@@ -1977,6 +1977,7 @@ elif sidebar_option == "Matchup Analysis":
 
 elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
     # Match by Match Analysis - full updated code with sector-label wagon wheel
+    # Match by Match Analysis - updated wagon wheel sector labels with Third Man between 10:30 and 12:00 (clock analogy)
     import streamlit as st
     import pandas as pd
     import numpy as np
@@ -1984,12 +1985,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     import matplotlib.pyplot as plt
     from matplotlib.patches import Circle, Rectangle
     from io import BytesIO
-    import warnings
-    
-    # -------------------------
-    # Configuration: tidy UI + suppress non-critical warnings
-    # -------------------------
-    warnings.filterwarnings("ignore")
     
     # -------------------------
     # safe plotting helper to avoid PIL DecompressionBombError
@@ -1997,11 +1992,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     def safe_st_pyplot(fig,
                        max_pixels: int = 40_000_000,
                        fallback_set_max: bool = False,
-                       use_column_width: bool = True):
-        """Save matplotlib figure to an in-memory buffer then display via st.image.
-        Includes fallback DPI scaling to avoid PIL DecompressionBomb errors on very large figures.
-        Uses st.info instead of st.warning to keep the portal free of warnings.
-        """
+                       use_container_width: bool = True):
         try:
             dpi = fig.get_dpi()
             width_in = fig.get_figwidth()
@@ -2015,8 +2006,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             if pixel_count <= max_pixels:
                 fig.savefig(buf, format="png", bbox_inches="tight")
                 buf.seek(0)
-                st.image(buf, use_column_width=use_column_width)
-                plt.close(fig)
+                st.image(buf, use_container_width=use_container_width)
                 return
             else:
                 scale = math.sqrt(max_pixels / float(pixel_count))
@@ -2025,8 +2015,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 new_dpi = max(50, int(math.floor(dpi * scale)))
                 fig.savefig(buf, format="png", bbox_inches="tight", dpi=new_dpi)
                 buf.seek(0)
-                st.image(buf, use_column_width=use_column_width)
-                plt.close(fig)
+                st.image(buf, use_container_width=use_container_width)
                 return
     
         except Exception as e:
@@ -2038,28 +2027,22 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     buf = BytesIO()
                     fig.savefig(buf, format="png", bbox_inches="tight")
                     buf.seek(0)
-                    st.image(buf, use_column_width=use_column_width)
-                    plt.close(fig)
+                    st.image(buf, use_container_width=use_container_width)
                     return
-                except Exception as e2:
-                    st.error(f"still failed after disabling MAX_IMAGE_PIXELS: {e2}")
-                    raise
+                except Exception:
+                    return
             else:
                 try:
                     buf = BytesIO()
                     fig.savefig(buf, format="png", bbox_inches="tight", dpi=70)
                     buf.seek(0)
-                    # prefer st.info to avoid 'warning' UI elements
-                    st.info("Figure was too large; displayed at reduced resolution.")
-                    st.image(buf, use_column_width=use_column_width)
-                    plt.close(fig)
+                    st.image(buf, use_container_width=use_container_width)
                     return
                 except Exception:
-                    st.error("Unable to render figure due to image size / PIL safety check.")
-                    raise
+                    return
     
     # -------------------------
-    # Helpers
+    # Minimal helper functions
     # -------------------------
     def as_dataframe(x):
         if isinstance(x, pd.Series):
@@ -2068,7 +2051,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             return x.copy()
         else:
             return pd.DataFrame(x)
-    
     
     def safe_get_col(df_local, candidates, default=None):
         for c in candidates:
@@ -2087,7 +2069,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     
     bdf = as_dataframe(df)
     
-    # detect columns (use your preferred names as preference)
+    # detect columns (use your provided column names as preference)
     match_col = safe_get_col(bdf, ['p_match', 'match_id'], default=None)
     batter_col = safe_get_col(bdf, ['bat', 'batsman'], default=None)
     bowler_col = safe_get_col(bdf, ['bowl', 'bowler'], default=None)
@@ -2095,7 +2077,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     wagon_zone_col = safe_get_col(bdf, ['wagonZone','wagon_zone','wagon_zone_id'], default='wagonZone')
     wagonx_col = safe_get_col(bdf, ['wagonX','wagon_x','wagon_xx'], default='wagonX')
     wagony_col = safe_get_col(bdf, ['wagonY','wagon_y','wagon_yy'], default='wagonY')
-    run_col = safe_get_col(bdf, ['batruns','batsman_runs','score','runs'], default='batruns')
+    run_col = safe_get_col(bdf, ['batruns','batsman_runs','score'], default='batruns')
     line_col = safe_get_col(bdf, ['line'], default='line')
     length_col = safe_get_col(bdf, ['length'], default='length')
     
@@ -2119,7 +2101,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
         st.error("No rows for selected match.")
         st.stop()
     
-    # metadata for header
+    # metadata for header (no start_date requirement)
     first_row = match_rows.iloc[0]
     batting_team = first_row.get(safe_get_col(bdf, ['team_bat','batting_team','team_batting']), "Unknown")
     bowling_team = first_row.get(safe_get_col(bdf, ['team_bowl','bowling_team','team_bow']), "Unknown")
@@ -2152,7 +2134,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
         'obstructing the field', 'obstructing thefield', 'obstructing',
         'retired out', 'retired not out (hurt)', 'retired not out', 'retired'
     ])
-    
     temp_df['is_wkt'] = temp_df.apply(
         lambda r: 1 if (int(r.get('out_flag',0)) == 1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip() != '') else 0,
         axis=1
@@ -2247,8 +2228,9 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             st.dataframe(style_scoring(scoring_table), use_container_width=True)
     
             # -------------------------
-            # Wagon Wheel (8 sectors) - adjusted base angles per your clock analogy
+            # Wagon Wheel (8 sectors) - sector-label style with Third Man at 10:30-12:00
             # -------------------------
+            # sector mapping names (kept concise)
             sector_names = {
                 1: "Third Man",
                 2: "Point",
@@ -2260,23 +2242,22 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 8: "Fine Leg"
             }
     
-            # centres: Third Man centered between 10:30 and 12 => 112.5°, then +45° steps clockwise
-            base_angles = {
-                1: 112.5,  # Third Man (top-left-ish, between 10:30 and 12)
-                2: 67.5,   # Point (top)
-                3: 22.5,   # Covers (top-right)
-                4: 337.5,  # Mid Off (right-ish)
-                5: 292.5,  # Mid On (bottom-right)
-                6: 247.5,  # Mid Wicket (bottom)
-                7: 202.5,  # Square Leg (bottom-left)
-                8: 157.5   # Fine Leg (left-ish)
-            }
-    
+            # base_angles adjusted for Third Man between 10:30 and 12:00, moving left by 45° each
             def get_sector_angle_requested(zone, batting_style):
+                base_angles = {
+                    1: 75,   # Third Man (center of 10:30-12:00, i.e., 11:15 = 75°)
+                    2: 30,   # Point
+                    3: 345,  # Covers
+                    4: 300,  # Mid-off
+                    5: 255,  # Mid-on
+                    6: 210,  # Mid-wicket
+                    7: 165,  # Square leg
+                    8: 120   # Fine leg
+                }
                 angle = base_angles.get(int(zone), 0)
-                # Mirror for left-hander (add 180 deg)
+                # Mirror for left-hander
                 if str(batting_style).strip().upper().startswith('L'):
-                    angle = (angle + 180.0) % 360.0
+                    angle = (180 + angle) % 360
                 return math.radians(angle)
     
             def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name):
@@ -2301,7 +2282,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     y = math.sin(angle)
                     ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
     
-                # prepare data
+                # runs per zone (use wagon_zone col and run_col)
+                # ensure numeric sector
                 tmp = final_df_local.copy()
                 if wagon_zone_col in tmp.columns:
                     tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
@@ -2311,17 +2293,13 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
                 total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
     
-                # Title
+                # Title as requested: "(Batter Name)'s Scoring Zones"
                 title_text = f"{batsman_name}'s Scoring Zones"
                 plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
     
                 # Place % runs (2 decimals) in each sector at the centre; also show raw runs below
                 for zone in range(1, 9):
-                    # robust fetch batting_style if present
-                    batting_style_val = None
-                    if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
-                        batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
-                    angle_mid = get_sector_angle_requested(zone, batting_style_val)
+                    angle_mid = get_sector_angle_requested(zone, tmp.get(bat_hand_col, pd.Series([None])).dropna().iloc[0] if not tmp.get(bat_hand_col, pd.Series([])).dropna().empty else None)
                     # move slightly inside sector
                     label_angle = angle_mid
                     x = 0.60 * math.cos(label_angle)
@@ -2359,8 +2337,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 all_sectors = pd.DataFrame({"sector": list(range(1,9))})
                 grouped = all_sectors.merge(grouped, on='sector', how='left').fillna(0)
                 grouped[['runs','balls','fours','sixes']] = grouped[['runs','balls','fours','sixes']].astype(int)
-                total_runs = grouped['runs'].sum()
-                grouped['pct_runs'] = grouped['runs'].apply(lambda x: round((x / total_runs * 100) if total_runs>0 else 0.0,2))
+                grouped['pct_runs'] = grouped.apply(lambda r: (r['runs'] / grouped['runs'].sum() * 100) if grouped['runs'].sum()>0 else 0.0, axis=1)
+                grouped['pct_runs'] = grouped['pct_runs'].round(2)
     
                 ww_display = grouped.copy()
                 ww_display['Sector Name'] = ww_display['sector'].map({
@@ -2371,7 +2349,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 })
                 ww_display['Pct of Runs'] = ww_display['Pct of Runs'].apply(lambda x: f"{x:.2f}%")
     
-                # draw figure using requested style and adjusted base_angles mapping
+                # draw figure using requested style and exact base_angles mapping
                 fig = draw_cricket_field_with_run_totals_requested(final_df, batsman_selected)
                 safe_st_pyplot(fig, max_pixels=40_000_000, fallback_set_max=False)
     
@@ -2381,7 +2359,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 ]), use_container_width=True)
     
             # -------------------------
-            # Pitchmaps below Wagon: two heatmaps (dots vs scoring) with larger height
+            # Pitchmaps below Wagon: two heatmaps (dots vs scoring)
             # -------------------------
             run_grid = np.zeros((5,5), dtype=float)
             dot_grid = np.zeros((5,5), dtype=int)
@@ -2402,8 +2380,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 c1, c2 = st.columns([1,1])
                 with c1:
                     st.markdown("**Dot Balls (count)**")
-                    # increased figsize for clearer display
-                    fig1, ax1 = plt.subplots(figsize=(6, 8))
+                    fig1, ax1 = plt.subplots(figsize=(5,10))
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2415,7 +2392,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False)
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
-                    fig2, ax2 = plt.subplots(figsize=(6, 8))
+                    fig2, ax2 = plt.subplots(figsize=(5,10))
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2427,6 +2404,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig2, max_pixels=40_000_000, fallback_set_max=False)
             else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+    
     
     # ---------------------------
     # Bowler Analysis (match-level)
@@ -2495,7 +2473,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write("Dot Balls")
-                    fig1, ax1 = plt.subplots(figsize=(6, 8))
+                    fig1, ax1 = plt.subplots(figsize=(5,10))
                     im1 = ax1.imshow(dot_grid_b, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2507,7 +2485,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False)
                 with c2:
                     st.write("Runs Conceded")
-                    fig2, ax2 = plt.subplots(figsize=(6, 8))
+                    fig2, ax2 = plt.subplots(figsize=(5,10))
                     im2 = ax2.imshow(run_grid_b, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2520,4 +2498,3 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     
     else:
         st.info("Choose a valid analysis option.")
-    
