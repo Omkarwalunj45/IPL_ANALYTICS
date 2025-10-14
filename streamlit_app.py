@@ -1978,12 +1978,18 @@ elif sidebar_option == "Matchup Analysis":
 elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
     # Match by Match Analysis - full updated code with sector-label wagon wheel
     # Match by Match Analysis - updated wagon wheel sector labels per your base_angles and % formatting
+    # elif sidebar_option == "Match by Match Analysis":
+    # Full updated Match-by-Match Analysis block (paste/replace in your app)
+    
+    import warnings
+    warnings.filterwarnings("ignore")   # remove warnings as requested
+    
     import streamlit as st
     import pandas as pd
     import numpy as np
     import math
     import matplotlib.pyplot as plt
-    from matplotlib.patches import Circle, Rectangle
+    from matplotlib.patches import Circle, Rectangle, Wedge
     from io import BytesIO
     
     # -------------------------
@@ -2231,40 +2237,41 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             st.dataframe(style_scoring(scoring_table), use_container_width=True)
     
             # -------------------------
-            # Wagon Wheel (8 sectors) - sector-label style following your exact base_angles mapping
+            # Wagon Wheel (8 sectors) - exact requested sector placement and % runs per sector
             # -------------------------
-            # sector mapping names (kept concise)
+            # sector mapping (labels)
             sector_names = {
                 1: "Third Man",
                 2: "Point",
                 3: "Covers",
                 4: "Mid Off",
                 5: "Mid On",
-                6: "Mid Wwicket",
+                6: "Mid Wicket",
                 7: "Square Leg",
                 8: "Fine Leg"
             }
     
-            # exact base_angles you specified — follow these exactly
+            # New explicit angle mapping so top-left is Third Man, then clockwise:
+            # Top-left (NW) = 135°, Top (N) = 90°, Top-right (NE)=45°, Right (E)=0°, etc.
             def get_sector_angle_requested(zone, batting_style):
-                base_angles = {
-                    1: 45,   # Third Man
-                    2: 90,   # Point
-                    3: 135,  # Covers
-                    4: 180,  # Mid-off
-                    5: 225,  # Mid-on
-                    6: 270,  # Mid-wicket
-                    7: 315,  # Square leg
-                    8: 0     # Fine leg (360 degrees or 0 degrees)
+                desired_angles = {
+                    1: 135,  # Third Man (top-left)
+                    2: 90,   # Point (top-center)
+                    3: 45,   # Covers (top-right)
+                    4: 0,    # Mid Off (right)
+                    5: 315,  # Mid On (bottom-right)
+                    6: 270,  # Mid Wicket (bottom)
+                    7: 225,  # Square Leg (bottom-left)
+                    8: 180   # Fine Leg (left)
                 }
-                angle = base_angles.get(int(zone), 0)
-                # Mirror for left-hander
+                angle = desired_angles.get(int(zone), 0)
+                # Mirror for left-hander: flip by 180 degrees
                 if str(batting_style).strip().upper().startswith('L'):
-                    angle = (180 + angle) % 360
+                    angle = (angle + 180) % 360
                 return math.radians(angle)
     
             def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name):
-                fig, ax = plt.subplots(figsize=(10, 10))
+                fig, ax = plt.subplots(figsize=(12, 10))  # wide + tall so wheel sits centrally horizontally
                 ax.set_aspect('equal')
                 ax.axis('off')
     
@@ -2286,7 +2293,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
     
                 # runs per zone (use wagon_zone col and run_col)
-                # ensure numeric sector
                 tmp = final_df_local.copy()
                 if wagon_zone_col in tmp.columns:
                     tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
@@ -2296,32 +2302,39 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
                 total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
     
-                # Title as requested: "(Batter Name)'s Scoring Zones"
+                # Title as requested
                 title_text = f"{batsman_name}'s Scoring Zones"
-                plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
+                plt.title(title_text, pad=20, color='white', size=16, fontweight='bold')
     
                 # Place % runs (2 decimals) in each sector at the centre; also show raw runs below
+                # use batting style from final_df_local if available
+                batting_style_val = None
+                if bat_hand_col in final_df_local.columns:
+                    tmp_bh = final_df_local[bat_hand_col].dropna()
+                    if len(tmp_bh) > 0:
+                        batting_style_val = tmp_bh.iloc[0]
+    
                 for zone in range(1, 9):
-                    angle_mid = get_sector_angle_requested(zone, tmp.get(bat_hand_col, pd.Series([None])).dropna().iloc[0] if not tmp.get(bat_hand_col, pd.Series([])).dropna().empty else None)
-                    # move slightly inside sector
-                    label_angle = angle_mid + math.radians(22.5)
+                    angle_mid = get_sector_angle_requested(zone, batting_style_val)
+                    # place label a bit inside sector
+                    label_angle = angle_mid
                     x = 0.60 * math.cos(label_angle)
                     y = 0.60 * math.sin(label_angle)
                     runs = int(runs_by_zone.get(zone, 0))
                     pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
                     pct_str = f"{pct:.2f}%"
                     # big percent in white
-                    ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
+                    ax.text(x, y+0.04, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
                     # small runs label below
-                    ax.text(x, y-0.07, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
+                    ax.text(x, y-0.06, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
     
-                    # small sector name even lower (optional)
-                    sx = 0.80 * math.cos(label_angle)
-                    sy = 0.80 * math.sin(label_angle)
-                    ax.text(sx, sy, sector_names.get(zone, f"Sector {zone}"), ha='center', va='center', color='white', fontsize=8)
+                    # sector name further out
+                    sx = 0.88 * math.cos(label_angle)
+                    sy = 0.88 * math.sin(label_angle)
+                    ax.text(sx, sy, sector_names.get(zone, f"Sector {zone}"), ha='center', va='center', color='white', fontsize=9)
     
-                ax.set_xlim(-1.2, 1.2)
-                ax.set_ylim(-1.2, 1.2)
+                ax.set_xlim(-1.3, 1.3)
+                ax.set_ylim(-1.3, 1.3)
                 plt.tight_layout(pad=0)
                 return fig
     
@@ -2340,7 +2353,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 all_sectors = pd.DataFrame({"sector": list(range(1,9))})
                 grouped = all_sectors.merge(grouped, on='sector', how='left').fillna(0)
                 grouped[['runs','balls','fours','sixes']] = grouped[['runs','balls','fours','sixes']].astype(int)
-                grouped['pct_runs'] = grouped.apply(lambda r: (r['runs'] / grouped['runs'].sum() * 100) if grouped['runs'].sum()>0 else 0.0, axis=1)
+                total_runs_sum = grouped['runs'].sum()
+                grouped['pct_runs'] = grouped.apply(lambda r: (r['runs'] / total_runs_sum * 100) if total_runs_sum>0 else 0.0, axis=1)
                 grouped['pct_runs'] = grouped['pct_runs'].round(2)
     
                 ww_display = grouped.copy()
@@ -2352,7 +2366,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 })
                 ww_display['Pct of Runs'] = ww_display['Pct of Runs'].apply(lambda x: f"{x:.2f}%")
     
-                # draw figure using requested style and exact base_angles mapping
+                # draw figure using requested style and exact requested angles
                 fig = draw_cricket_field_with_run_totals_requested(final_df, batsman_selected)
                 safe_st_pyplot(fig, max_pixels=40_000_000, fallback_set_max=False)
     
@@ -2363,6 +2377,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     
             # -------------------------
             # Pitchmaps below Wagon: two heatmaps (dots vs scoring)
+            # increased height to look more like 22 yards (taller)
             # -------------------------
             run_grid = np.zeros((5,5), dtype=float)
             dot_grid = np.zeros((5,5), dtype=int)
@@ -2383,7 +2398,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 c1, c2 = st.columns([1,1])
                 with c1:
                     st.markdown("**Dot Balls (count)**")
-                    fig1, ax1 = plt.subplots(figsize=(5,6))
+                    fig1, ax1 = plt.subplots(figsize=(5, 8))   # taller
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2395,7 +2410,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False)
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
-                    fig2, ax2 = plt.subplots(figsize=(5,6))
+                    fig2, ax2 = plt.subplots(figsize=(5, 8))   # taller
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2476,7 +2491,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 c1, c2 = st.columns(2)
                 with c1:
                     st.write("Dot Balls")
-                    fig1, ax1 = plt.subplots(figsize=(5,6))
+                    fig1, ax1 = plt.subplots(figsize=(5,8))
                     im1 = ax1.imshow(dot_grid_b, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2488,7 +2503,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False)
                 with c2:
                     st.write("Runs Conceded")
-                    fig2, ax2 = plt.subplots(figsize=(5,6))
+                    fig2, ax2 = plt.subplots(figsize=(5,8))
                     im2 = ax2.imshow(run_grid_b, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
@@ -2501,4 +2516,3 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     
     else:
         st.info("Choose a valid analysis option.")
-
