@@ -2450,13 +2450,13 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     run_grid[le, li] += runs_here
                     if runs_here == 0:
                         dot_grid[le, li] += 1
-    
+                    
                 st.markdown("### Pitchmaps")
                 c1, c2 = st.columns([1, 1])
                 
                 with c1:
                     st.markdown("**Dot Balls (count)**")
-                    fig1, ax1 = plt.subplots(figsize=(7, 18), dpi=150)
+                    fig1, ax1 = plt.subplots(figsize=(8, 10), dpi=150)  # Adjust figsize as needed
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
                     ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'], rotation=45, ha='right')
@@ -2466,13 +2466,13 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                             ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
                     fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
                     plt.tight_layout(pad=3.0)
-                
-                    # **robust display**: force displayed height to 1800 px (change height_px to taste)
-                    display_figure_fixed_height(fig1, height_px=1800)
+                    
+                    # Let Streamlit handle the display naturally
+                    st.pyplot(fig1)
                 
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
-                    fig2, ax2 = plt.subplots(figsize=(7, 18), dpi=150)
+                    fig2, ax2 = plt.subplots(figsize=(8, 10), dpi=150)
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
                     ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'], rotation=45, ha='right')
@@ -2482,9 +2482,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                             ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
                     fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
                     plt.tight_layout(pad=3.0)
-                
-                    # force displayed height
-                    display_figure_fixed_height(fig2, height_px=1800)
+                    
+                    st.pyplot(fig2)
 
             else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
