@@ -2882,117 +2882,117 @@ else:
         side_label = "LHB" if bat_style_display and str(bat_style_display).strip().upper().startswith('L') else "RHB"
         st.markdown(f"<div style='text-align:center; margin-top:6px;'><strong>{player_selected}'s Wagon Chart ({side_label})</strong></div>", unsafe_allow_html=True)
 
-st.subheader("Pitchmaps — Boundaries & Dismissals (Pace vs Spin)")
-
-# mapping used previously
-line_map = {
-    'WIDE_OUTSIDE_OFFSTUMP': 0,
-    'OUTSIDE_OFFSTUMP': 1,
-    'ON_THE_STUMPS': 2,
-    'DOWN_LEG': 3,
-    'WIDE_DOWN_LEG': 4
-}
-length_map = {
-    'SHORT': 0,
-    'SHORT_OF_A_GOOD_LENGTH': 1,
-    'GOOD_LENGTH': 2,
-    'FULL': 3,
-    'YORKER': 4,
-    'FULL_TOSS': 4
-}
-
-# helper to build grids
-def build_boundaries_grid(df_local):
-    grid = np.zeros((5,5), dtype=int)
-    if col_line in df_local.columns and col_length in df_local.columns:
-        plot_df = df_local[[col_line,col_length,col_batruns]].dropna(subset=[col_line,col_length])
-        for _, r in plot_df.iterrows():
-            li = line_map.get(r[col_line], None)
-            le = length_map.get(r[col_length], None)
-            if li is None or le is None:
-                continue
-            runs_here = int(r[col_batruns])
-            if runs_here in (4,6):
-                grid[le, li] += 1
-    return grid
-
-def build_dismissals_grid(df_local):
-    grid = np.zeros((5,5), dtype=int)
-    if col_line in df_local.columns and col_length in df_local.columns:
-        plot_df = df_local[[col_line,col_length,col_is_wkt]].dropna(subset=[col_line,col_length])
-        for _, r in plot_df.iterrows():
-            li = line_map.get(r[col_line], None)
-            le = length_map.get(r[col_length], None)
-            if li is None or le is None:
-                continue
-            isw = int(r.get(col_is_wkt, 0))
-            if isw == 1:
-                grid[le, li] += 1
-    return grid
-
-# split by bowl_kind
-pace_df = player_df[player_df.get(col_bowl_kind, '').astype(str).str.lower().str.contains('pace', na=False)].copy()
-spin_df = player_df[player_df.get(col_bowl_kind, '').astype(str).str.lower().str.contains('spin', na=False)].copy()
-
-# Top row: boundaries
-col_bound_left, col_bound_right = st.columns(2)
-with col_bound_left:
-    st.markdown("**Boundaries vs Pace**")
-    grid_pace_bound = build_boundaries_grid(pace_df)
-    fig_pb, ax_pb = plt.subplots(figsize=(6,12))
-    im_pb = ax_pb.imshow(grid_pace_bound, origin='lower', cmap='Oranges')
-    ax_pb.set_xticks(range(5)); ax_pb.set_yticks(range(5))
-    ax_pb.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-    ax_pb.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-    for i in range(5):
-        for j in range(5):
-            ax_pb.text(j, i, int(grid_pace_bound[i,j]), ha='center', va='center', color='black', fontsize=12)
-    fig_pb.colorbar(im_pb, ax=ax_pb, fraction=0.046, pad=0.04)
-    safe_st_pyplot(fig_pb, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-
-with col_bound_right:
-    st.markdown("**Boundaries vs Spin**")
-    grid_spin_bound = build_boundaries_grid(spin_df)
-    fig_sb, ax_sb = plt.subplots(figsize=(6,12))
-    im_sb = ax_sb.imshow(grid_spin_bound, origin='lower', cmap='Oranges')
-    ax_sb.set_xticks(range(5)); ax_sb.set_yticks(range(5))
-    ax_sb.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-    ax_sb.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-    for i in range(5):
-        for j in range(5):
-            ax_sb.text(j, i, int(grid_spin_bound[i,j]), ha='center', va='center', color='black', fontsize=12)
-    fig_sb.colorbar(im_sb, ax=ax_sb, fraction=0.046, pad=0.04)
-    safe_st_pyplot(fig_sb, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-
-# Bottom row: dismissals
-col_dis_left, col_dis_right = st.columns(2)
-with col_dis_left:
-    st.markdown("**Dismissals vs Pace**")
-    grid_pace_wkt = build_dismissals_grid(pace_df)
-    fig_pw, ax_pw = plt.subplots(figsize=(6,12))
-    im_pw = ax_pw.imshow(grid_pace_wkt, origin='lower', cmap='Reds')
-    ax_pw.set_xticks(range(5)); ax_pw.set_yticks(range(5))
-    ax_pw.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-    ax_pw.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-    for i in range(5):
-        for j in range(5):
-            ax_pw.text(j, i, int(grid_pace_wkt[i,j]), ha='center', va='center', color='black', fontsize=12)
-    fig_pw.colorbar(im_pw, ax=ax_pw, fraction=0.046, pad=0.04)
-    safe_st_pyplot(fig_pw, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-
-with col_dis_right:
-    st.markdown("**Dismissals vs Spin**")
-    grid_spin_wkt = build_dismissals_grid(spin_df)
-    fig_sw, ax_sw = plt.subplots(figsize=(6,12))
-    im_sw = ax_sw.imshow(grid_spin_wkt, origin='lower', cmap='Reds')
-    ax_sw.set_xticks(range(5)); ax_sw.set_yticks(range(5))
-    ax_sw.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-    ax_sw.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-    for i in range(5):
-        for j in range(5):
-            ax_sw.text(j, i, int(grid_spin_wkt[i,j]), ha='center', va='center', color='black', fontsize=12)
-    fig_sw.colorbar(im_sw, ax=ax_sw, fraction=0.046, pad=0.04)
-    safe_st_pyplot(fig_sw, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+    # --------- Pitchmaps — Boundaries & Dismissals (Pace vs Spin) for current `pf` (player frame) ----------
+    st.subheader("Pitchmaps — Boundaries & Dismissals (Pace vs Spin)")
+    
+    # map columns from detected names in your environment
+    col_line = line_col            # usually 'line'
+    col_length = length_col        # usually 'length'
+    col_batruns = run_col         # usually 'batruns' or similar
+    col_bowl_kind = bowl_kind_col  # usually 'bowl_kind'
+    col_is_wkt = 'is_wkt'         # computed earlier in pf
+    
+    # basic guard
+    if col_line not in pf.columns or col_length not in pf.columns:
+        st.info("Pitchmaps require both 'line' and 'length' columns in the dataset. Skipping pitchmaps.")
+    else:
+        # mapping used previously
+        line_map = {
+            'WIDE_OUTSIDE_OFFSTUMP': 0,
+            'OUTSIDE_OFFSTUMP': 1,
+            'ON_THE_STUMPS': 2,
+            'DOWN_LEG': 3,
+            'WIDE_DOWN_LEG': 4
+        }
+        length_map = {
+            'SHORT': 0,
+            'SHORT_OF_A_GOOD_LENGTH': 1,
+            'GOOD_LENGTH': 2,
+            'FULL': 3,
+            'YORKER': 4,
+            'FULL_TOSS': 4
+        }
+    
+        # helper to build grids
+        def build_boundaries_grid(df_local):
+            grid = np.zeros((5,5), dtype=int)
+            plot_df = df_local[[col_line, col_length, col_batruns]].dropna(subset=[col_line, col_length])
+            for _, r in plot_df.iterrows():
+                li = line_map.get(r[col_line], None)
+                le = length_map.get(r[col_length], None)
+                if li is None or le is None:
+                    continue
+                try:
+                    runs_here = int(r[col_batruns])
+                except Exception:
+                    runs_here = 0
+                if runs_here in (4, 6):
+                    grid[le, li] += 1
+            return grid
+    
+        def build_dismissals_grid(df_local):
+            grid = np.zeros((5,5), dtype=int)
+            plot_df = df_local[[col_line, col_length, col_is_wkt]].dropna(subset=[col_line, col_length])
+            for _, r in plot_df.iterrows():
+                li = line_map.get(r[col_line], None)
+                le = length_map.get(r[col_length], None)
+                if li is None or le is None:
+                    continue
+                isw = int(r.get(col_is_wkt, 0))
+                if isw == 1:
+                    grid[le, li] += 1
+            return grid
+    
+        # split by bowl_kind in pf (safely)
+        if col_bowl_kind in pf.columns:
+            # normalize and filter
+            bk_series = pf[col_bowl_kind].astype(str).str.lower().fillna('')
+            pace_df = pf[bk_series.str.contains('pace', na=False)].copy()
+            spin_df = pf[bk_series.str.contains('spin', na=False)].copy()
+        else:
+            # no bowl_kind column -> empty splits
+            pace_df = pf.iloc[0:0].copy()
+            spin_df = pf.iloc[0:0].copy()
+    
+        # function to produce and display a grid figure using HTML embed helper
+        def plot_and_show_grid(grid, title, cmap_name='Oranges'):
+            fig, ax = plt.subplots(figsize=(6, 12), dpi=150)
+            im = ax.imshow(grid, origin='lower', cmap=cmap_name)
+            ax.set_xticks(range(5)); ax.set_yticks(range(5))
+            ax.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
+                               rotation=45, ha='right')
+            ax.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
+            for i in range(5):
+                for j in range(5):
+                    ax.text(j, i, int(grid[i, j]), ha='center', va='center', color='black', fontsize=12)
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+            plt.title(title)
+            plt.tight_layout(pad=3.0)
+            display_figure_fixed_height_html(fig, height_px=HEIGHT_PITCHMAP_PX, bg='white')
+    
+        # Top row: boundaries (Pace left, Spin right)
+        col_bound_left, col_bound_right = st.columns(2)
+        with col_bound_left:
+            st.markdown("**Boundaries vs Pace**")
+            grid_pace_bound = build_boundaries_grid(pace_df)
+            plot_and_show_grid(grid_pace_bound, title=f"{player_selected} — Boundaries vs Pace", cmap_name='Oranges')
+    
+        with col_bound_right:
+            st.markdown("**Boundaries vs Spin**")
+            grid_spin_bound = build_boundaries_grid(spin_df)
+            plot_and_show_grid(grid_spin_bound, title=f"{player_selected} — Boundaries vs Spin", cmap_name='Oranges')
+    
+        # Bottom row: dismissals (Pace left, Spin right)
+        col_dis_left, col_dis_right = st.columns(2)
+        with col_dis_left:
+            st.markdown("**Dismissals vs Pace**")
+            grid_pace_wkt = build_dismissals_grid(pace_df)
+            plot_and_show_grid(grid_pace_wkt, title=f"{player_selected} — Dismissals vs Pace", cmap_name='Reds')
+    
+        with col_dis_right:
+            st.markdown("**Dismissals vs Spin**")
+            grid_spin_wkt = build_dismissals_grid(spin_df)
+            plot_and_show_grid(grid_spin_wkt, title=f"{player_selected} — Dismissals vs Spin", cmap_name='Reds')
 
 # If user chooses Bowling role, provide a placeholder (or extend later)
 # else:
