@@ -2498,7 +2498,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 
                 with c1:
                     st.markdown("**Dot Balls (count)**")
-                    fig1, ax1 = plt.subplots(figsize=(8, 12), dpi=150)  # Increased height from 10 to 12
+                    fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5))
                     ax1.set_yticks(range(5))
@@ -2514,7 +2514,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
-                    fig2, ax2 = plt.subplots(figsize=(8, 12), dpi=150)  # Increased height from 10 to 12
+                    fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5))
                     ax2.set_yticks(range(5))
