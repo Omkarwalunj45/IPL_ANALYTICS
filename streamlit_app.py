@@ -2995,7 +2995,7 @@ else:
         safe_st_pyplot(fig_sw, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
 
 # If user chooses Bowling role, provide a placeholder (or extend later)
-else:
-    st.header(f"Strength & Weakness — Bowling: {player_selected}")
+# else:
+#     st.header(f"Strength & Weakness — Bowling: {player_selected}")
 
 
