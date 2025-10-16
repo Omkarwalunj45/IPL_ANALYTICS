@@ -4,6 +4,11 @@ import math as mt
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go  
+import base64
+from io import BytesIO
+from PIL import Image
+st.set_page_config(layout="wide")
+
 # --- helper: render matplotlib fig as fixed-pixel-height image in Streamlit ---
 from PIL import Image
 
@@ -40,6 +45,34 @@ def display_figure_fixed_height(fig, height_px=1200, bg='white'):
     st.image(img_resized, use_column_width=False, width=new_w)
     plt.close(fig)
 
+def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_id=None):
+    """
+    Save fig to buffer, encode to base64, and embed using HTML <img> with fixed height in pixels.
+    This forces the browser to render the exact height (no Streamlit autoscaling).
+    - height_px: desired displayed height in pixels (e.g. 1800)
+    - bg: background color for composition to remove transparency
+    """
+    buf = BytesIO()
+    fig.savefig(buf, format='png', bbox_inches='tight', dpi=200, facecolor=fig.get_facecolor())
+    buf.seek(0)
+    img = Image.open(buf).convert('RGBA')
+
+    # Compose over background if required (avoid transparency artifacts)
+    if bg is not None:
+        bg_img = Image.new('RGB', img.size, bg)
+        bg_img.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
+        img = bg_img
+    # encode to base64
+    out_buf = BytesIO()
+    img.save(out_buf, format='PNG')
+    b64 = base64.b64encode(out_buf.getvalue()).decode('ascii')
+
+    # create HTML; width:auto keeps aspect ratio while height is forced
+    html = f'<img src="data:image/png;base64,{b64}" style="height:{int(height_px)}px; width:auto; display:block; margin-left:auto; margin-right:auto;" />'
+    # Optionally wrap in a container div with max-width:100% to avoid horizontal overflow
+    wrapper = f'<div style="max-width:100%;">{html}</div>'
+    st.markdown(wrapper, unsafe_allow_html=True)
+    plt.close(fig)
 
 
 st.set_page_config(page_title='IPL Performance Analysis Portal', layout='wide')
@@ -2451,6 +2484,13 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     if runs_here == 0:
                         dot_grid[le, li] += 1
                     
+                import base64
+                from io import BytesIO
+                from PIL import Image
+                
+                # Pixel height for pitchmaps (change this value to whatever visible height you want)
+                HEIGHT_PITCHMAP_PX = 1600
+                
                 st.markdown("### Pitchmaps")
                 c1, c2 = st.columns([1, 1])
                 
@@ -2466,9 +2506,20 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                             ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
                     fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
                     plt.tight_layout(pad=3.0)
-                    
-                    # Let Streamlit handle the display naturally
-                    st.pyplot(fig1)
+                
+                    # --- robust display: embed PNG as HTML <img> with fixed pixel height ---
+                    buf1 = BytesIO()
+                    fig1.savefig(buf1, format='png', bbox_inches='tight', dpi=200, facecolor=fig1.get_facecolor())
+                    buf1.seek(0)
+                    img1 = Image.open(buf1).convert('RGBA')
+                    bg1 = Image.new('RGB', img1.size, 'white')
+                    bg1.paste(img1, mask=img1.split()[3] if img1.mode == 'RGBA' else None)
+                    out1 = BytesIO()
+                    bg1.save(out1, format='PNG')
+                    b64_1 = base64.b64encode(out1.getvalue()).decode('ascii')
+                    html1 = f'<div style="overflow:auto;"><img src="data:image/png;base64,{b64_1}" style="height:{HEIGHT_PITCHMAP_PX}px; width:auto; display:block; margin-left:auto; margin-right:auto;" /></div>'
+                    st.markdown(html1, unsafe_allow_html=True)
+                    plt.close(fig1)
                 
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
@@ -2482,8 +2533,20 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                             ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
                     fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
                     plt.tight_layout(pad=3.0)
-                    
-                    st.pyplot(fig2)
+                
+                    # --- robust display for second plot ---
+                    buf2 = BytesIO()
+                    fig2.savefig(buf2, format='png', bbox_inches='tight', dpi=200, facecolor=fig2.get_facecolor())
+                    buf2.seek(0)
+                    img2 = Image.open(buf2).convert('RGBA')
+                    bg2 = Image.new('RGB', img2.size, 'white')
+                    bg2.paste(img2, mask=img2.split()[3] if img2.mode == 'RGBA' else None)
+                    out2 = BytesIO()
+                    bg2.save(out2, format='PNG')
+                    b64_2 = base64.b64encode(out2.getvalue()).decode('ascii')
+                    html2 = f'<div style="overflow:auto;"><img src="data:image/png;base64,{b64_2}" style="height:{HEIGHT_PITCHMAP_PX}px; width:auto; display:block; margin-left:auto; margin-right:auto;" /></div>'
+                    st.markdown(html2, unsafe_allow_html=True)
+                    plt.close(fig2)
 
             else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
