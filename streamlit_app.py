@@ -2484,69 +2484,49 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     if runs_here == 0:
                         dot_grid[le, li] += 1
                     
-                import base64
-                from io import BytesIO
-                from PIL import Image
+                # import base64
+                # from io import BytesIO
+                # from PIL import Image
                 
-                # Pixel height for pitchmaps (change this value to whatever visible height you want)
-                HEIGHT_PITCHMAP_PX = 1600
+                # # Pixel height for pitchmaps (change this value to whatever visible height you want)
+                # HEIGHT_PITCHMAP_PX = 1600
+
+                # Assuming dot_grid and run_grid are 5x5 numpy arrays already defined
                 
                 st.markdown("### Pitchmaps")
                 c1, c2 = st.columns([1, 1])
                 
                 with c1:
                     st.markdown("**Dot Balls (count)**")
-                    fig1, ax1 = plt.subplots(figsize=(8, 10), dpi=150)  # Adjust figsize as needed
+                    fig1, ax1 = plt.subplots(figsize=(8, 12), dpi=150)  # Increased height from 10 to 12
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
-                    ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
-                    ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'], rotation=45, ha='right')
+                    ax1.set_xticks(range(5))
+                    ax1.set_yticks(range(5))
+                    ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
+                                        rotation=45, ha='right')
                     ax1.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
                     for i in range(5):
                         for j in range(5):
                             ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
                     fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
                     plt.tight_layout(pad=3.0)
-                
-                    # --- robust display: embed PNG as HTML <img> with fixed pixel height ---
-                    buf1 = BytesIO()
-                    fig1.savefig(buf1, format='png', bbox_inches='tight', dpi=200, facecolor=fig1.get_facecolor())
-                    buf1.seek(0)
-                    img1 = Image.open(buf1).convert('RGBA')
-                    bg1 = Image.new('RGB', img1.size, 'white')
-                    bg1.paste(img1, mask=img1.split()[3] if img1.mode == 'RGBA' else None)
-                    out1 = BytesIO()
-                    bg1.save(out1, format='PNG')
-                    b64_1 = base64.b64encode(out1.getvalue()).decode('ascii')
-                    html1 = f'<div style="overflow:auto;"><img src="data:image/png;base64,{b64_1}" style="height:{HEIGHT_PITCHMAP_PX}px; width:auto; display:block; margin-left:auto; margin-right:auto;" /></div>'
-                    st.markdown(html1, unsafe_allow_html=True)
-                    plt.close(fig1)
+                    st.pyplot(fig1)
                 
                 with c2:
                     st.markdown("**Scoring Balls (runs)**")
-                    fig2, ax2 = plt.subplots(figsize=(8, 10), dpi=150)
+                    fig2, ax2 = plt.subplots(figsize=(8, 12), dpi=150)  # Increased height from 10 to 12
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
-                    ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
-                    ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'], rotation=45, ha='right')
+                    ax2.set_xticks(range(5))
+                    ax2.set_yticks(range(5))
+                    ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
+                                        rotation=45, ha='right')
                     ax2.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
                     for i in range(5):
                         for j in range(5):
                             ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
                     fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
                     plt.tight_layout(pad=3.0)
-                
-                    # --- robust display for second plot ---
-                    buf2 = BytesIO()
-                    fig2.savefig(buf2, format='png', bbox_inches='tight', dpi=200, facecolor=fig2.get_facecolor())
-                    buf2.seek(0)
-                    img2 = Image.open(buf2).convert('RGBA')
-                    bg2 = Image.new('RGB', img2.size, 'white')
-                    bg2.paste(img2, mask=img2.split()[3] if img2.mode == 'RGBA' else None)
-                    out2 = BytesIO()
-                    bg2.save(out2, format='PNG')
-                    b64_2 = base64.b64encode(out2.getvalue()).decode('ascii')
-                    html2 = f'<div style="overflow:auto;"><img src="data:image/png;base64,{b64_2}" style="height:{HEIGHT_PITCHMAP_PX}px; width:auto; display:block; margin-left:auto; margin-right:auto;" /></div>'
-                    st.markdown(html2, unsafe_allow_html=True)
-                    plt.close(fig2)
+                    st.pyplot(fig2)
 
             else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
