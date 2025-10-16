@@ -2626,423 +2626,510 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 else:
         st.header("Strength and Weakness Analysis")
             # Strength & Weakness Analysis - updated and adapted to your dataframe columns
-        import streamlit as st
-        import pandas as pd
-        import numpy as np
-        import math
-        import matplotlib.pyplot as plt
-        from matplotlib.patches import Circle, Rectangle
-        from io import BytesIO
-        import warnings
-        
-        warnings.filterwarnings("ignore")
-        
-        # ---------- safe plotting helper to avoid DecompressionBomb errors ----------
-        def safe_st_pyplot(fig, max_pixels: int = 40_000_000, fallback_set_max: bool = False, use_container_width: bool = True):
+# Match by Match Analysis - full updated block (paste into your app)
+import streamlit as st
+import pandas as pd
+import numpy as np
+import math
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle
+from io import BytesIO
+import warnings
+
+warnings.filterwarnings("ignore")
+
+# -------------------------
+# safe plotting helper to avoid PIL DecompressionBombError
+# -------------------------
+def safe_st_pyplot(fig, max_pixels: int = 40_000_000, fallback_set_max: bool = False, use_container_width: bool = True):
+    try:
+        dpi = fig.get_dpi()
+        width_in = fig.get_figwidth()
+        height_in = fig.get_figheight()
+        width_px = int(round(width_in * dpi))
+        height_px = int(round(height_in * dpi))
+        pixel_count = int(width_px) * int(height_px)
+
+        buf = BytesIO()
+
+        if pixel_count <= max_pixels:
+            fig.savefig(buf, format="png", bbox_inches="tight")
+            buf.seek(0)
+            st.image(buf, use_container_width=use_container_width)
+            return
+        else:
+            scale = math.sqrt(max_pixels / float(pixel_count))
+            if scale <= 0 or scale >= 1:
+                scale = min(1.0, 0.7)
+            new_dpi = max(50, int(math.floor(dpi * scale)))
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=new_dpi)
+            buf.seek(0)
+            st.image(buf, use_container_width=use_container_width)
+            return
+
+    except Exception as e:
+        err_str = str(e)
+        if ("DecompressionBombError" in err_str or "DecompressionBomb" in err_str) and fallback_set_max:
             try:
-                dpi = fig.get_dpi()
-                width_in = fig.get_figwidth()
-                height_in = fig.get_figheight()
-                width_px = int(round(width_in * dpi))
-                height_px = int(round(height_in * dpi))
-                pixel_count = int(width_px) * int(height_px)
-        
+                from PIL import Image
+                Image.MAX_IMAGE_PIXELS = None
                 buf = BytesIO()
-                if pixel_count <= max_pixels:
-                    fig.savefig(buf, format="png", bbox_inches="tight")
-                    buf.seek(0)
-                    st.image(buf, use_container_width=use_container_width)
-                    return
-                else:
-                    scale = math.sqrt(max_pixels / float(pixel_count))
-                    if scale <= 0 or scale >= 1:
-                        scale = min(1.0, 0.7)
-                    new_dpi = max(50, int(math.floor(dpi * scale)))
-                    fig.savefig(buf, format="png", bbox_inches="tight", dpi=new_dpi)
-                    buf.seek(0)
-                    st.image(buf, use_container_width=use_container_width)
-                    return
-            except Exception as e:
-                err_str = str(e)
-                if ("DecompressionBombError" in err_str or "DecompressionBomb" in err_str) and fallback_set_max:
-                    try:
-                        from PIL import Image
-                        Image.MAX_IMAGE_PIXELS = None
-                        buf = BytesIO()
-                        fig.savefig(buf, format="png", bbox_inches="tight")
-                        buf.seek(0)
-                        st.image(buf, use_container_width=use_container_width)
-                        return
-                    except Exception as e2:
-                        st.error(f"still failed after disabling MAX_IMAGE_PIXELS: {e2}")
-                        raise
-                else:
-                    try:
-                        buf = BytesIO()
-                        fig.savefig(buf, format="png", bbox_inches="tight", dpi=70)
-                        buf.seek(0)
-                        st.warning("Figure was too large; displayed at reduced resolution.")
-                        st.image(buf, use_container_width=use_container_width)
-                        return
-                    except Exception:
-                        st.error("Unable to render figure due to image size / PIL safety check.")
-                        raise
-        
-        # ---------- helper to pick existing df variable ----------
-        if 'pdf' in globals():
-            df_main = pdf.copy()
-        elif 'df' in globals():
-            df_main = df.copy()
+                fig.savefig(buf, format="png", bbox_inches="tight")
+                buf.seek(0)
+                st.image(buf, use_container_width=use_container_width)
+                return
+            except Exception as e2:
+                st.error(f"still failed after disabling MAX_IMAGE_PIXELS: {e2}")
+                raise
         else:
-            st.error("No dataframe named 'pdf' or 'df' found. Load your data first.")
-            st.stop()
-        
-        # ---------- safe column lookup (use provided names) ----------
-        def safe_get_col(df_local, candidates, default=None):
-            for c in candidates:
-                if c in df_local.columns:
-                    return c
-            return default
-        
-        col_bat = safe_get_col(df_main, ['bat', 'batsman'], default=None)
-        col_batruns = safe_get_col(df_main, ['batruns', 'batsman_runs', 'score'], default='batruns')
-        col_bat_hand = safe_get_col(df_main, ['bat_hand', 'batting_style'], default='bat_hand')
-        col_bowl = safe_get_col(df_main, ['bowl', 'bowler'], default=None)
-        col_bowl_kind = safe_get_col(df_main, ['bowl_kind','bowl_kind'], default='bowl_kind')
-        col_bowl_style = safe_get_col(df_main, ['bowl_style','bowl_style','bowl_style'], default='bowl_style')
-        col_wagon_zone = safe_get_col(df_main, ['wagonZone','wagon_zone','wagonZone'], default='wagonZone')
-        col_line = safe_get_col(df_main, ['line'], default='line')
-        col_length = safe_get_col(df_main, ['length'], default='length')
-        col_out = safe_get_col(df_main, ['out'], default='out')
-        col_dismissal = safe_get_col(df_main, ['dismissal'], default='dismissal')
-        
-        # Basic checks
-        if col_bat is None or col_bowl is None:
-            st.error("Required columns 'bat'/'batsman' or 'bowl'/'bowler' missing in dataframe.")
-            st.stop()
-        
-        # create normalized columns used below
-        df_main[col_batruns] = pd.to_numeric(df_main.get(col_batruns, 0), errors='coerce').fillna(0).astype(int)
-        df_main[col_bat_hand] = df_main.get(col_bat_hand, '').fillna('').astype(str)
-        # compute is_wkt flag safely (if out + dismissal present)
-        if col_out in df_main.columns:
-            df_main['out_flag'] = pd.to_numeric(df_main.get(col_out,0), errors='coerce').fillna(0).astype(int)
+            try:
+                buf = BytesIO()
+                fig.savefig(buf, format="png", bbox_inches="tight", dpi=70)
+                buf.seek(0)
+                st.warning("Figure was too large; displayed at reduced resolution.")
+                st.image(buf, use_container_width=use_container_width)
+                return
+            except Exception as e3:
+                st.error("Unable to render figure due to image size / PIL safety check.")
+                raise
+
+# -------------------------
+# find the input dataframe (pdf or df)
+# -------------------------
+if 'pdf' in globals():
+    df_main = pdf.copy()
+elif 'df' in globals():
+    df_main = df.copy()
+else:
+    st.error("No dataframe named 'pdf' or 'df' found. Load your data first.")
+    st.stop()
+
+# -------------------------
+# safe column lookup
+# -------------------------
+def safe_get_col(df_local, candidates, default=None):
+    for c in candidates:
+        if c in df_local.columns:
+            return c
+    return default
+
+col_match = safe_get_col(df_main, ['p_match', 'match_id'], default=None)
+col_bat = safe_get_col(df_main, ['bat', 'batsman'], default=None)
+col_batruns = safe_get_col(df_main, ['batruns', 'batsman_runs', 'score'], default='batruns')
+col_bat_hand = safe_get_col(df_main, ['bat_hand', 'batting_style'], default='bat_hand')
+col_bowl = safe_get_col(df_main, ['bowl', 'bowler'], default=None)
+col_bowl_kind = safe_get_col(df_main, ['bowl_kind'], default='bowl_kind')
+col_bowl_style = safe_get_col(df_main, ['bowl_style'], default='bowl_style')
+col_wagon_zone = safe_get_col(df_main, ['wagonZone','wagon_zone','wagonZone'], default='wagonZone')
+col_line = safe_get_col(df_main, ['line'], default='line')
+col_length = safe_get_col(df_main, ['length'], default='length')
+col_out = safe_get_col(df_main, ['out'], default='out')
+col_dismissal = safe_get_col(df_main, ['dismissal'], default='dismissal')
+# fallback ensure essential columns exist
+if col_bat is None or col_bowl is None:
+    st.error("Dataset must contain batter and bowler columns ('bat'/'batsman' and 'bowl'/'bowler').")
+    st.stop()
+
+# normalize columns we will use
+df_main[col_batruns] = pd.to_numeric(df_main.get(col_batruns, 0), errors='coerce').fillna(0).astype(int)
+df_main[col_bat_hand] = df_main.get(col_bat_hand, '').fillna('').astype(str)
+
+# compute wicket flag safely
+if col_out in df_main.columns:
+    df_main['out_flag'] = pd.to_numeric(df_main.get(col_out,0), errors='coerce').fillna(0).astype(int)
+else:
+    df_main['out_flag'] = 0
+if col_dismissal in df_main.columns:
+    df_main['dismissal_clean'] = df_main[col_dismissal].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+else:
+    df_main['dismissal_clean'] = ''
+special_runout_types = set(['run out','runout','retired','obstructing the field','obstructing'])
+df_main['is_wkt'] = df_main.apply(lambda r: 1 if (int(r.get('out_flag',0))==1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip()!='') else 0, axis=1)
+
+# -------------------------
+# UI: select match & player
+# -------------------------
+match_ids = sorted(df_main[col_match].dropna().unique().tolist()) if col_match is not None else []
+if not match_ids:
+    st.error("No match ids found in dataset (p_match or match_id).")
+    st.stop()
+
+match_id = st.selectbox("Select Match ID", options=match_ids, index=0)
+match_rows = df_main[df_main[col_match] == match_id].copy()
+if match_rows.empty:
+    st.error("No rows for selected match.")
+    st.stop()
+
+st.markdown(f"**Match:** {match_id}")
+# show simple header metadata if present
+first_row = match_rows.iloc[0]
+bat_team = first_row.get(safe_get_col(df_main, ['team_bat','batting_team','team_batting']), "Unknown")
+bowl_team = first_row.get(safe_get_col(df_main, ['team_bowl','bowling_team','team_bow']), "Unknown")
+venue = first_row.get(safe_get_col(df_main, ['ground','venue']), "Unknown")
+st.markdown(f"**{bat_team}** vs **{bowl_team}**  |  **Venue:** {venue}")
+
+# choose analysis mode
+option = st.selectbox("Select Analysis Dimension", ("Batsman Analysis", "Bowler Analysis"))
+
+# mapping for pitchmaps (5x5)
+line_map = {
+    'WIDE_OUTSIDE_OFFSTUMP': 0,
+    'OUTSIDE_OFFSTUMP': 1,
+    'ON_THE_STUMPS': 2,
+    'DOWN_LEG': 3,
+    'WIDE_DOWN_LEG': 4
+}
+length_map = {
+    'SHORT': 0,
+    'SHORT_OF_A_GOOD_LENGTH': 1,
+    'GOOD_LENGTH': 2,
+    'FULL': 3,
+    'YORKER': 4,
+    'FULL_TOSS': 4
+}
+
+# ---------------------------
+# Batsman Analysis
+# ---------------------------
+if option == "Batsman Analysis":
+    batsmen = sorted(match_rows[col_bat].dropna().unique().tolist())
+    if not batsmen:
+        st.info("No batsmen found for this match.")
+    else:
+        batsman_selected = st.selectbox("Select Batsman", options=batsmen)
+        filtered_df = match_rows[match_rows[col_bat] == batsman_selected].copy()
+
+        # Bowler filter (All + bowlers)
+        bowl_opts = ["All"] + sorted(filtered_df[col_bowl].dropna().unique().tolist())
+        bowler_selected = st.selectbox("Select Bowler", options=bowl_opts)
+        if bowler_selected != "All":
+            final_df = filtered_df[filtered_df[col_bowl] == bowler_selected].copy()
         else:
-            df_main['out_flag'] = 0
-        if col_dismissal in df_main.columns:
-            df_main['dismissal_clean'] = df_main[col_dismissal].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+            final_df = filtered_df.copy()
+
+        # summary
+        total_runs = int(final_df[col_batruns].sum())
+        total_balls = int(final_df.shape[0])
+        strike_rate = (total_runs / total_balls * 100) if total_balls > 0 else 0.0
+
+        # scoring shot counts
+        counts = {k: int((final_df[col_batruns] == k).sum()) for k in [0,1,2,3,4,6]}
+        counts_pct_balls = {k: (counts[k] / total_balls * 100) if total_balls>0 else 0.0 for k in counts}
+
+        st.markdown(f"### Analysis for Batsman: {batsman_selected}")
+        if bowler_selected == "All":
+            st.markdown("Against: All Bowlers")
         else:
-            df_main['dismissal_clean'] = ''
-        special_runout_types = set(['run out','runout','retired','obstructing the field','obstructing'])
-        df_main['is_wkt'] = df_main.apply(lambda r: 1 if (int(r.get('out_flag',0))==1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip()!='') else 0, axis=1)
-        
-        # ---------- UI ----------
-        st.header("Strength and Weakness Analysis")
-        player_name = st.selectbox("Search for a player", sorted(df_main[col_bat].dropna().unique()))
-        
-        option = st.selectbox("Select Role", ("Batting", "Bowling"))
-        
-        # common mapping for pitchmaps
-        line_map = {
-            'WIDE_OUTSIDE_OFFSTUMP': 0,
-            'OUTSIDE_OFFSTUMP': 1,
-            'ON_THE_STUMPS': 2,
-            'DOWN_LEG': 3,
-            'WIDE_DOWN_LEG': 4
-        }
-        length_map = {
-            'SHORT': 0,
-            'SHORT_OF_A_GOOD_LENGTH': 1,
-            'GOOD_LENGTH': 2,
-            'FULL': 3,
-            'YORKER': 4,
-            'FULL_TOSS': 4
-        }
-        
-        # ---------- BATTING ----------
-        if option == "Batting":
-            player_df = df_main[df_main[col_bat] == player_name].copy()
-            if player_df.empty:
-                st.info("No data for selected batsman.")
-            else:
-                st.markdown(f"## Batting: {player_name}")
-        
-                # --- Performance by bowl_kind (pace/spin) ---
-                if col_bowl_kind in df_main.columns:
-                    bk_group = player_df.groupby(col_bowl_kind).agg(
-                        Runs = (col_batruns, 'sum'),
-                        Balls = (col_batruns, 'size'),
-                        '4s' = (col_batruns, lambda s: int((s==4).sum())),
-                        '6s' = (col_batruns, lambda s: int((s==6).sum()))
-                    ).reset_index().rename(columns={col_bowl_kind:'Bowl Kind'})
-                    bk_group['SR'] = bk_group.apply(lambda r: (r['Runs'] / r['Balls'] * 100) if r['Balls']>0 else 0.0, axis=1)
-                    bk_group = bk_group[['Bowl Kind','Runs','Balls','4s','6s','SR']]
-                    st.markdown("### Performance by Bowl Kind")
-                    st.table(bk_group.style.format({"Runs":"{:,}","Balls":"{:,}","SR":"{:.1f}"}))
-                else:
-                    st.info("No 'bowl_kind' column found; skipping Bowl Kind table.")
-        
-                # --- Performance by bowling style (top styles present) ---
-                if col_bowl_style in df_main.columns:
-                    # show up to e.g. 12 styles present for readability
-                    styles = player_df[col_bowl_style].dropna().unique().tolist()
-                    styles = [s for s in styles if str(s).strip() != ""]
-                    rows = []
-                    for s in styles:
-                        tmp = player_df[player_df[col_bowl_style] == s]
-                        if tmp.empty:
-                            continue
-                        runs = int(tmp[col_batruns].sum())
-                        balls = int(tmp.shape[0])
-                        fours = int((tmp[col_batruns]==4).sum())
-                        sixes = int((tmp[col_batruns]==6).sum())
-                        sr = (runs / balls * 100) if balls>0 else 0.0
-                        rows.append((s, runs, balls, fours, sixes, sr))
-                    if rows:
-                        style_df = pd.DataFrame(rows, columns=['Bowling Style','Runs','Balls','4s','6s','SR']).sort_values('Runs', ascending=False)
-                        st.markdown("### Performance by Bowling Style")
-                        st.table(style_df.style.format({"Runs":"{:,}","Balls":"{:,}","SR":"{:.1f}"}))
-                    else:
-                        st.info("No bowling style data for this batsman.")
-                else:
-                    st.info("No 'bowl_style' column found; skipping Bowling Style table.")
-        
-                # --- Wagon Wheel: 8 sectors, percent of runs per sector (two decimals) ---
-                st.markdown("### Wagon Wheel — % runs per sector (aggregated across innings)")
-        
-                # prepare wagon zone
-                if col_wagon_zone not in player_df.columns:
-                    st.info("No wagonZone column; cannot draw wagon wheel.")
-                else:
-                    ww = player_df.copy()
-                    ww['wagon_zone_int'] = pd.to_numeric(ww[col_wagon_zone], errors='coerce').astype('Int64')
-                    grouped = ww.groupby('wagon_zone_int').agg(
-                        Runs = (col_batruns, 'sum'),
-                        Balls = (col_batruns, 'size'),
-                        Fours = (col_batruns, lambda s: int((s==4).sum())),
-                        Sixes = (col_batruns, lambda s: int((s==6).sum()))
-                    ).reset_index().rename(columns={'wagon_zone_int':'Sector'}).fillna(0)
-                    # ensure sectors 1..8 present
-                    all_sectors = pd.DataFrame({'Sector': list(range(1,9))})
-                    grouped = all_sectors.merge(grouped, on='Sector', how='left').fillna(0)
-                    grouped[['Runs','Balls','Fours','Sixes']] = grouped[['Runs','Balls','Fours','Sixes']].astype(int)
-                    total_runs = int(grouped['Runs'].sum())
-                    grouped['Pct'] = grouped['Runs'].apply(lambda r: (r/total_runs*100) if total_runs>0 else 0.0)
-                    grouped['Pct'] = grouped['Pct'].round(2)
-        
-                    # sector labels (as requested)
-                    sector_labels = {
-                        1: "Third Man",
-                        2: "Point",
-                        3: "Covers",
-                        4: "Mid Off",
-                        5: "Mid On",
-                        6: "Mid Wicket",
-                        7: "Square Leg",
-                        8: "Fine Leg"
-                    }
-        
-                    # sector angle mapping (user requested clock-position mapped sectors)
-                    def sector_angle_rad(zone, batting_style_val):
-                        # Base angles (degrees) as you specified: ThirdMan top-left etc.
-                        base_angles = {
-                            1: 112.5,   # Third Man
-                            2: 157.5,   # Point
-                            3: 202.5,   # Covers
-                            4: 247.5,   # Mid Off
-                            5: 292.5,   # Mid On
-                            6: 337.5,   # Mid Wicket
-                            7: 22.5,    # Square Leg
-                            8: 67.5     # Fine Leg
-                        }
-                        ang = base_angles.get(int(zone), 0.0)
-                        if str(batting_style_val).strip().upper().startswith('L'):
-                            ang = (ang + 180.0) % 360.0
-                        return math.radians(ang)
-        
-                    def draw_wagon_zones_plot(grouped_df, batsman_name):
-                        fig, ax = plt.subplots(figsize=(12,12))
-                        ax.set_aspect('equal'); ax.axis('off')
-                        # field base
-                        ax.add_patch(Circle((0,0), 1.0, color='#1f7a1f', zorder=1))
-                        ax.add_patch(Circle((0,0), 1.0, fill=False, edgecolor='black', linewidth=3, zorder=2))
-                        ax.add_patch(Circle((0,0), 0.5, color='#66bb6a', zorder=3))
-                        ax.add_patch(Circle((0,0), 0.5, fill=False, edgecolor='white', linewidth=1, zorder=4))
-                        # pitch rectangle
-                        ax.add_patch(Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', zorder=10))
-                        # title
-                        plt.title(f"{batsman_name}'s Scoring Zones", pad=24, fontsize=18, color='white', fontweight='bold')
-                        # compute batting style if available
-                        bat_style_vals = player_df[col_bat_hand].dropna().unique()
-                        bat_style = bat_style_vals[0] if len(bat_style_vals)>0 else ''
-                        # annotate each sector
-                        for _, row in grouped_df.iterrows():
-                            sec = int(row['Sector'])
-                            runs = int(row['Runs'])
-                            pct = float(row['Pct'])
-                            angle = sector_angle_rad(sec, bat_style)
-                            # position for percent and runs
-                            label_r = 0.62
-                            name_r = 0.85
-                            x = label_r * math.cos(angle); y = label_r * math.sin(angle)
-                            ax.text(x, y+0.03, f"{pct:.2f}%", ha='center', va='center', fontsize=18, fontweight='bold', color='white')
-                            ax.text(x, y-0.06, f"{runs} runs", ha='center', va='center', fontsize=11, color='white')
-                            sx = name_r * math.cos(angle); sy = name_r * math.sin(angle)
-                            ax.text(sx, sy, sector_labels.get(sec, f"Sec {sec}"), ha='center', va='center', fontsize=10, color='white')
-                        ax.set_xlim(-1.25,1.25); ax.set_ylim(-1.25,1.25)
-                        plt.tight_layout(pad=0)
-                        return fig
-        
-                    fig_ww = draw_wagon_zones_plot(grouped, player_name)
-                    safe_st_pyplot(fig_ww, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-        
-                    # show table of sectors below
-                    display_df = grouped.copy()
-                    display_df['Sector Name'] = display_df['Sector'].map(sector_labels)
-                    display_df = display_df[['Sector','Sector Name','Runs','Pct','Fours','Sixes','Balls']].rename(columns={'Pct':'Pct of Runs'})
-                    display_df['Pct of Runs'] = display_df['Pct of Runs'].apply(lambda x: f"{x:.2f}%")
-                    st.dataframe(display_df, use_container_width=True)
-        
-                # --- Pitchmaps: Dots vs Scoring (bigger height) ---
-                st.markdown("### Pitchmaps")
-                run_grid = np.zeros((5,5), dtype=float)
-                dot_grid = np.zeros((5,5), dtype=int)
-                if col_line in player_df.columns and col_length in player_df.columns:
-                    plot_df = player_df[[col_line,col_length,col_batruns]].copy().dropna(subset=[col_line,col_length])
-                    for _, r in plot_df.iterrows():
-                        li = line_map.get(r[col_line], None)
-                        le = length_map.get(r[col_length], None)
-                        if li is None or le is None: 
-                            continue
-                        runs_here = int(r[col_batruns])
-                        run_grid[le, li] += runs_here
-                        if runs_here == 0:
-                            dot_grid[le, li] += 1
-        
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.markdown("**Dot Balls (count)**")
-                        fig1, ax1 = plt.subplots(figsize=(6,9))
-                        im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
-                        ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
-                        ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-                        ax1.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                        for i in range(5):
-                            for j in range(5):
-                                ax1.text(j, i, int(dot_grid[i,j]), ha='center', va='center', color='black', fontsize=12)
-                        fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-                        safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                    with c2:
-                        st.markdown("**Scoring Balls (runs)**")
-                        fig2, ax2 = plt.subplots(figsize=(6,9))
-                        im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
-                        ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
-                        ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-                        ax2.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                        for i in range(5):
-                            for j in range(5):
-                                ax2.text(j, i, int(run_grid[i,j]), ha='center', va='center', color='black', fontsize=12)
-                        fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-                        safe_st_pyplot(fig2, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                else:
-                    st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
-        
-        # ---------- BOWLING ----------
+            st.markdown(f"Against: {bowler_selected}")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.write("**Summary**")
+            st.write(f"Runs: {total_runs}")
+            st.write(f"Balls: {total_balls}")
+        with c2:
+            st.write("**Rates**")
+            st.write(f"Strike Rate: {strike_rate:.2f}")
+
+        # scoring shots table (colorful)
+        scoring_table = pd.DataFrame([
+            {"Shot": "0s", "Count": counts[0], "Pct (balls)": f"{counts_pct_balls[0]:.2f}%"},
+            {"Shot": "1s", "Count": counts[1], "Pct (balls)": f"{counts_pct_balls[1]:.2f}%"},
+            {"Shot": "2s", "Count": counts[2], "Pct (balls)": f"{counts_pct_balls[2]:.2f}%"},
+            {"Shot": "3s", "Count": counts[3], "Pct (balls)": f"{counts_pct_balls[3]:.2f}%"},
+            {"Shot": "4s", "Count": counts[4], "Pct (balls)": f"{counts_pct_balls[4]:.2f}%"},
+            {"Shot": "6s", "Count": counts[6], "Pct (balls)": f"{counts_pct_balls[6]:.2f}%"},
+        ])
+        def style_scoring(df_table):
+            sty = df_table.style.set_table_styles([
+                {'selector':'thead','props':[('background-color','#fff7e6'),('color','#000'),('font-weight','600')]},
+            ]).format({"Count":"{:,}"})
+            color_map = {"0s":"#f0f0f0","1s":"#cfe8ff","2s":"#cfe8ff","3s":"#cfe8ff","4s":"#fff3b0","6s":"#e6d0ff"}
+            for i, v in enumerate(df_table['Shot']):
+                clr = color_map.get(v, "#ffffff")
+                sty = sty.set_properties(subset=pd.IndexSlice[i, :], **{"background-color": clr, "color":"#000"})
+            return sty
+
+        st.markdown("#### Scoring Shots")
+        st.dataframe(style_scoring(scoring_table), use_container_width=True)
+
+        # -------------------------
+        # Wagon Wheel: 8 sectors -> percent of runs per sector
+        # Use sector-angle mapping user specified: 1:135,2:90,3:45,4:0,5:315,6:270,7:225,8:180
+        # -------------------------
+        st.markdown("### Wagon Wheel — % runs per sector (two decimals)")
+
+        if col_wagon_zone not in final_df.columns:
+            st.info("wagonZone column not available for wagon wheel.")
         else:
-            # For a chosen bowler: cumulative performance against LHB/RHB and pitchmaps for both
-            bowler_name = player_name  # in this mode the selector was the bowler name
-            bow_df = df_main[df_main[col_bowl] == bowler_name].copy()
-            if bow_df.empty:
-                st.info("No data for selected bowler.")
-            else:
-                st.markdown(f"## Bowling: {bowler_name}")
-        
-                # compute cumulative performance split by batsman handedness
-                if col_bat_hand in bow_df.columns:
-                    grouped = bow_df.groupby(col_bat_hand).agg(
-                        Runs = (col_batruns, 'sum'),
-                        Balls = (col_batruns, 'size'),
-                        Wickets = ('is_wkt', 'sum')
-                    ).reset_index().rename(columns={col_bat_hand:'Batting Style'}).fillna(0)
-                    grouped['Econ'] = grouped.apply(lambda r: (r['Runs']*6.0 / r['Balls']) if r['Balls']>0 else np.nan, axis=1)
-                    st.markdown("### Performance vs Batting Styles (LHB / RHB)")
-                    st.table(grouped[['Batting Style','Runs','Balls','Wickets','Econ']].style.format({"Runs":"{:,}","Balls":"{:,}","Econ":"{:.2f}"}))
-                else:
-                    st.info("No batting-hand column found to split bowling performance.")
-        
-                # pitchmaps for bowler vs LHB and RHB
-                st.markdown("### Pitchmaps vs LHB & RHB")
-                lhb_df = bow_df[bow_df[col_bat_hand].str.upper().str.startswith('L', na=False)]
-                rhb_df = bow_df[bow_df[col_bat_hand].str.upper().str.startswith('R', na=False)]
-        
-                def build_pitch_grids(df_local):
-                    run_grid = np.zeros((5,5), dtype=float)
-                    dot_grid = np.zeros((5,5), dtype=int)
-                    if col_line in df_local.columns and col_length in df_local.columns:
-                        plot_df = df_local[[col_line,col_length,col_batruns]].copy().dropna(subset=[col_line,col_length])
-                        for _, r in plot_df.iterrows():
-                            li = line_map.get(r[col_line], None)
-                            le = length_map.get(r[col_length], None)
-                            if li is None or le is None: continue
-                            runs_here = int(r[col_batruns])
-                            run_grid[le, li] += runs_here
-                            if runs_here == 0:
-                                dot_grid[le, li] += 1
-                    return dot_grid, run_grid
-        
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.markdown("**Against LHB**")
-                    dg, rg = build_pitch_grids(lhb_df)
-                    fig1, ax1 = plt.subplots(figsize=(6,9))
-                    im1 = ax1.imshow(dg, origin='lower', cmap='Blues')
-                    ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
-                    ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-                    ax1.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                    for i in range(5):
-                        for j in range(5):
-                            ax1.text(j, i, int(dg[i,j]), ha='center', va='center', color='black', fontsize=12)
-                    fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-                    safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                with c2:
-                    st.markdown("**Against RHB**")
-                    dg2, rg2 = build_pitch_grids(rhb_df)
-                    fig2, ax2 = plt.subplots(figsize=(6,9))
-                    im2 = ax2.imshow(dg2, origin='lower', cmap='Blues')
-                    ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
-                    ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-                    ax2.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                    for i in range(5):
-                        for j in range(5):
-                            ax2.text(j, i, int(dg2[i,j]), ha='center', va='center', color='black', fontsize=12)
-                    fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-                    safe_st_pyplot(fig2, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-        
-                # Also show runs grid side-by-side
-                st.markdown("### Runs Given Heatmaps")
-                c3, c4 = st.columns(2)
-                with c3:
-                    st.markdown("**Against LHB (runs)**")
-                    fig3, ax3 = plt.subplots(figsize=(6,9))
-                    im3 = ax3.imshow(rg, origin='lower', cmap='Reds')
-                    ax3.set_xticks(range(5)); ax3.set_yticks(range(5))
-                    ax3.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-                    ax3.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                    for i in range(5):
-                        for j in range(5):
-                            ax3.text(j, i, int(rg[i,j]), ha='center', va='center', color='black', fontsize=12)
-                    fig3.colorbar(im3, ax=ax3, fraction=0.046, pad=0.04)
-                    safe_st_pyplot(fig3, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                with c4:
-                    st.markdown("**Against RHB (runs)**")
-                    fig4, ax4 = plt.subplots(figsize=(6,9))
-                    im4 = ax4.imshow(rg2, origin='lower', cmap='Reds')
-                    ax4.set_xticks(range(5)); ax4.set_yticks(range(5))
-                    ax4.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
-                    ax4.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                    for i in range(5):
-                        for j in range(5):
-                            ax4.text(j, i, int(rg2[i,j]), ha='center', va='center', color='black', fontsize=12)
-                    fig4.colorbar(im4, ax=ax4, fraction=0.046, pad=0.04)
-                    safe_st_pyplot(fig4, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+            ww = final_df.copy()
+            ww['wagon_zone_int'] = pd.to_numeric(ww[col_wagon_zone], errors='coerce').astype('Int64')
+            group = ww.groupby('wagon_zone_int')
+
+            runs_series = group[col_batruns].sum()
+            balls_series = group.size()
+            fours_series = group[col_batruns].apply(lambda s: int((s==4).sum()))
+            sixes_series = group[col_batruns].apply(lambda s: int((s==6).sum()))
+
+            # assemble DataFrame ensuring all sectors 1..8 present
+            grouped = pd.DataFrame({
+                'Sector': list(runs_series.index.astype('Int64')),
+                'Runs': runs_series.values,
+            })
+            # handle missing sectors by reindexing
+            grouped = grouped.set_index('Sector').reindex(range(1,9), fill_value=0).reset_index()
+            grouped = grouped.rename(columns={'index':'Sector'}).rename(columns={'index':'Sector'}, errors='ignore')
+            # fill Runs correctly (above may have duplicates), build safer:
+            runs_map = runs_series.to_dict()
+            balls_map = balls_series.to_dict()
+            fours_map = fours_series.to_dict()
+            sixes_map = sixes_series.to_dict()
+            rows = []
+            for s in range(1,9):
+                r = int(runs_map.get(s, 0))
+                b = int(balls_map.get(s, 0))
+                f = int(fours_map.get(s, 0))
+                x6 = int(sixes_map.get(s, 0))
+                rows.append({'Sector': s, 'Runs': r, 'Balls': b, 'Fours': f, 'Sixes': x6})
+            grouped = pd.DataFrame(rows)
+            total_runs = int(grouped['Runs'].sum())
+            grouped['Pct'] = grouped['Runs'].apply(lambda r: (r/total_runs*100) if total_runs>0 else 0.0)
+            grouped['Pct'] = grouped['Pct'].round(2)
+
+            sector_labels = {
+                1: "Third Man",
+                2: "Point",
+                3: "Covers",
+                4: "Mid Off",
+                5: "Mid On",
+                6: "Mid Wicket",
+                7: "Square Leg",
+                8: "Fine Leg"
+            }
+
+            # sector angle mapping (degrees): 1:135,2:90,3:45,4:0,5:315,6:270,7:225,8:180
+            def sector_angle_rad(zone, batting_style_val):
+                base = {
+                    1: 135.0,
+                    2: 90.0,
+                    3: 45.0,
+                    4: 0.0,
+                    5: 315.0,
+                    6: 270.0,
+                    7: 225.0,
+                    8: 180.0
+                }
+                ang = base.get(int(zone), 0.0)
+                if str(batting_style_val).strip().upper().startswith('L'):
+                    ang = (ang + 180.0) % 360.0
+                return math.radians(ang)
+
+            def draw_wagon_zones_plot(grouped_df, batsman_name):
+                fig, ax = plt.subplots(figsize=(12,12))
+                ax.set_aspect('equal'); ax.axis('off')
+                ax.add_patch(Circle((0,0), 1.0, color='#1f7a1f', zorder=1))
+                ax.add_patch(Circle((0,0), 1.0, fill=False, edgecolor='black', linewidth=3, zorder=2))
+                ax.add_patch(Circle((0,0), 0.5, color='#66bb6a', zorder=3))
+                ax.add_patch(Circle((0,0), 0.5, fill=False, edgecolor='white', linewidth=1, zorder=4))
+                # pitch rectangle
+                ax.add_patch(Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', zorder=10))
+                plt.title(f"{batsman_name}'s Scoring Zones", pad=24, fontsize=18, color='white', fontweight='bold')
+
+                bat_style_vals = final_df[col_bat_hand].dropna().unique()
+                bat_style = bat_style_vals[0] if len(bat_style_vals)>0 else ''
+
+                for _, row in grouped_df.iterrows():
+                    sec = int(row['Sector'])
+                    runs = int(row['Runs'])
+                    pct = float(row['Pct'])
+                    angle = sector_angle_rad(sec, bat_style)
+                    # positions
+                    label_r = 0.62
+                    name_r = 0.85
+                    x = label_r * math.cos(angle); y = label_r * math.sin(angle)
+                    ax.text(x, y+0.03, f"{pct:.2f}%", ha='center', va='center', fontsize=18, fontweight='bold', color='white')
+                    ax.text(x, y-0.06, f"{runs} runs", ha='center', va='center', fontsize=11, color='white')
+                    sx = name_r * math.cos(angle); sy = name_r * math.sin(angle)
+                    ax.text(sx, sy, sector_labels.get(sec, f"Sec {sec}"), ha='center', va='center', fontsize=10, color='white')
+                ax.set_xlim(-1.25,1.25); ax.set_ylim(-1.25,1.25)
+                plt.tight_layout(pad=0)
+                return fig
+
+            fig_ww = draw_wagon_zones_plot(grouped, batsman_selected)
+            safe_st_pyplot(fig_ww, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+
+            # table below wheel
+            display_df = grouped.copy()
+            display_df['Sector Name'] = display_df['Sector'].map(sector_labels)
+            display_df = display_df[['Sector','Sector Name','Runs','Pct','Fours','Sixes','Balls']].rename(columns={'Pct':'Pct of Runs'})
+            display_df['Pct of Runs'] = display_df['Pct of Runs'].apply(lambda x: f"{x:.2f}%")
+            st.dataframe(display_df, use_container_width=True)
+
+        # -------------------------
+        # Pitchmaps below Wagon: Dot balls (left) and Scoring runs (right)
+        # Increased height to look like 22 yards (taller)
+        # -------------------------
+        st.markdown("### Pitchmaps")
+        run_grid = np.zeros((5,5), dtype=float)
+        dot_grid = np.zeros((5,5), dtype=int)
+
+        if col_line in final_df.columns and col_length in final_df.columns:
+            plot_df = final_df[[col_line,col_length,col_batruns]].copy().dropna(subset=[col_line,col_length])
+            for _, r in plot_df.iterrows():
+                li = line_map.get(r[col_line], None)
+                le = length_map.get(r[col_length], None)
+                if li is None or le is None:
+                    continue
+                runs_here = int(r[col_batruns])
+                run_grid[le, li] += runs_here
+                if runs_here == 0:
+                    dot_grid[le, li] += 1
+
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**Dot Balls (count)**")
+                fig1, ax1 = plt.subplots(figsize=(6,10))  # taller
+                im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
+                ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
+                ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
+                ax1.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+                for i in range(5):
+                    for j in range(5):
+                        ax1.text(j, i, int(dot_grid[i,j]), ha='center', va='center', color='black', fontsize=12)
+                fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+                safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+            with c2:
+                st.markdown("**Scoring Balls (runs)**")
+                fig2, ax2 = plt.subplots(figsize=(6,10))  # taller
+                im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
+                ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
+                ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
+                ax2.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+                for i in range(5):
+                    for j in range(5):
+                        ax2.text(j, i, int(run_grid[i,j]), ha='center', va='center', color='black', fontsize=12)
+                fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+                safe_st_pyplot(fig2, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+        else:
+            st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+
+# ---------------------------
+# Bowler Analysis
+# ---------------------------
+else:
+    # treat the player selector as bowler name
+    bowler_selected = st.selectbox("Select Bowler", options=sorted(match_rows[col_bowl].dropna().unique().tolist()))
+    if not bowler_selected:
+        st.info("No bowlers found.")
+    else:
+        filtered_df = match_rows[match_rows[col_bowl] == bowler_selected].copy()
+        st.markdown(f"### Bowling Analysis for {bowler_selected}")
+
+        # legal balls
+        filtered_df['noball'] = pd.to_numeric(filtered_df.get('noball',0), errors='coerce').fillna(0).astype(int)
+        filtered_df['wide'] = pd.to_numeric(filtered_df.get('wide',0), errors='coerce').fillna(0).astype(int)
+        filtered_df['legal_ball'] = ((filtered_df['noball'] == 0) & (filtered_df['wide'] == 0)).astype(int)
+        balls_bowled = int(filtered_df['legal_ball'].sum())
+
+        # runs conceded excluding byes/legbyes when possible
+        if 'score' in filtered_df.columns:
+            cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes',0).astype(bool))
+            runs_given = int(filtered_df.loc[cond, 'score'].sum() if 'score' in filtered_df.columns else 0)
+        elif 'batruns' in filtered_df.columns:
+            cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes',0).astype(bool))
+            runs_given = int(filtered_df.loc[cond, 'batruns'].sum())
+        else:
+            runs_given = int(filtered_df.get('bowlruns', filtered_df.get('total_runs', 0)).sum())
+
+        wickets = int(filtered_df['is_wkt'].sum()) if 'is_wkt' in filtered_df.columns else 0
+        econ = (runs_given * 6.0 / balls_bowled) if balls_bowled>0 else float('nan')
+        avg = (runs_given / wickets) if wickets>0 else float('nan')
+        sr = (balls_bowled / wickets) if wickets>0 else float('nan')
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"Runs conceded: {runs_given}")
+            st.write(f"Balls (legal): {balls_bowled}")
+            st.write(f"Wickets (credited): {wickets}")
+        with col2:
+            st.write(f"Econ: {econ:.2f}" if not np.isnan(econ) else "Econ: -")
+            st.write(f"Avg: {avg:.2f}" if not np.isnan(avg) else "Avg: -")
+            st.write(f"SR (balls/wicket): {sr:.2f}" if not np.isnan(sr) else "SR: -")
+
+        # Pitchmaps split by batting handedness
+        st.markdown("### Pitchmaps vs Batting Hand")
+        lhb_df = filtered_df[filtered_df[col_bat_hand].str.upper().str.startswith('L', na=False)]
+        rhb_df = filtered_df[filtered_df[col_bat_hand].str.upper().str.startswith('R', na=False)]
+
+        def build_pitch_grids(df_local):
+            run_grid = np.zeros((5,5), dtype=float)
+            dot_grid = np.zeros((5,5), dtype=int)
+            if col_line in df_local.columns and col_length in df_local.columns:
+                plot_df = df_local[[col_line,col_length,col_batruns]].copy().dropna(subset=[col_line,col_length])
+                for _, r in plot_df.iterrows():
+                    li = line_map.get(r[col_line], None)
+                    le = length_map.get(r[col_length], None)
+                    if li is None or le is None:
+                        continue
+                    rv = int(r[col_batruns])
+                    run_grid[le, li] += rv
+                    if rv == 0:
+                        dot_grid[le, li] += 1
+            return dot_grid, run_grid
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Against LHB**")
+            dg, rg = build_pitch_grids(lhb_df)
+            fig1, ax1 = plt.subplots(figsize=(6,10))
+            im1 = ax1.imshow(dg, origin='lower', cmap='Blues')
+            ax1.set_xticks(range(5)); ax1.set_yticks(range(5))
+            ax1.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
+            ax1.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+            for i in range(5):
+                for j in range(5):
+                    ax1.text(j, i, int(dg[i,j]), ha='center', va='center', color='black', fontsize=12)
+            fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+            safe_st_pyplot(fig1, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+        with c2:
+            st.markdown("**Against RHB**")
+            dg2, rg2 = build_pitch_grids(rhb_df)
+            fig2, ax2 = plt.subplots(figsize=(6,10))
+            im2 = ax2.imshow(dg2, origin='lower', cmap='Blues')
+            ax2.set_xticks(range(5)); ax2.set_yticks(range(5))
+            ax2.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
+            ax2.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+            for i in range(5):
+                for j in range(5):
+                    ax2.text(j, i, int(dg2[i,j]), ha='center', va='center', color='black', fontsize=12)
+            fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+            safe_st_pyplot(fig2, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+
+        # also show runs heatmaps
+        st.markdown("### Runs Heatmaps vs Batting Hand")
+        c3, c4 = st.columns(2)
+        with c3:
+            st.markdown("**Against LHB (runs)**")
+            fig3, ax3 = plt.subplots(figsize=(6,10))
+            im3 = ax3.imshow(rg, origin='lower', cmap='Reds')
+            ax3.set_xticks(range(5)); ax3.set_yticks(range(5))
+            ax3.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
+            ax3.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+            for i in range(5):
+                for j in range(5):
+                    ax3.text(j, i, int(rg[i,j]), ha='center', va='center', color='black', fontsize=12)
+            fig3.colorbar(im3, ax=ax3, fraction=0.046, pad=0.04)
+            safe_st_pyplot(fig3, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+        with c4:
+            st.markdown("**Against RHB (runs)**")
+            fig4, ax4 = plt.subplots(figsize=(6,10))
+            im4 = ax4.imshow(rg2, origin='lower', cmap='Reds')
+            ax4.set_xticks(range(5)); ax4.set_yticks(range(5))
+            ax4.set_xticklabels(['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg'], rotation=45, ha='right')
+            ax4.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+            for i in range(5):
+                for j in range(5):
+                    ax4.text(j, i, int(rg2[i,j]), ha='center', va='center', color='black', fontsize=12)
+            fig4.colorbar(im4, ax=ax4, fraction=0.046, pad=0.04)
+            safe_st_pyplot(fig4, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
 
