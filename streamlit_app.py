@@ -2567,12 +2567,12 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             col1, col2 = st.columns(2)
             with col1:
                 st.write(f"Runs conceded: {runs_given}")
-                st.write(f"Balls (legal): {balls_bowled}")
-                st.write(f"Wickets (credited): {wickets}")
+                st.write(f"Balls: {balls_bowled}")
+                st.write(f"Wickets: {wickets}")
             with col2:
                 st.write(f"Econ: {econ:.2f}" if not np.isnan(econ) else "Econ: -")
                 st.write(f"Avg: {avg:.2f}" if not np.isnan(avg) else "Avg: -")
-                st.write(f"SR (balls/wicket): {sr:.2f}" if not np.isnan(sr) else "SR: -")
+                st.write(f"SR: {sr:.2f}" if not np.isnan(sr) else "SR: -")
     
             # pitchmap and heatmaps for bowler (reuse same mapping)
             if line_col in filtered_df.columns and length_col in filtered_df.columns:
