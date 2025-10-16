@@ -2147,12 +2147,12 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     
     # -------------------------
     # Defensive check: df must be present
-    # -------------------------
-    try:
-        df
-    except NameError:
-        st.error("Raw ball-by-ball dataframe 'df' not found. Load your data first.")
-        st.stop()
+    # # -------------------------
+    # try:
+    #     df
+    # except NameError:
+    #     st.error("Raw ball-by-ball dataframe 'df' not found. Load your data first.")
+    #     st.stop()
     
     bdf = as_dataframe(df)
     
@@ -2288,7 +2288,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 st.write(f"Runs: {total_runs}")
                 st.write(f"Balls: {total_balls}")
             with col2:
-                st.write("**Rates**")
+                # st.write("**Rates**")
                 st.write(f"Strike Rate: {strike_rate:.2f}")
     
             # -------------------------
@@ -2462,9 +2462,9 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 st.markdown(f"<div style='text-align:center; margin-top:6px;'><strong>{batsman_selected}'s Wagon Chart ({side_label})</strong></div>", unsafe_allow_html=True)
     
                 # show table below wheel
-                st.dataframe(ww_display.style.set_table_styles([
-                    {"selector":"thead th", "props":[("background-color","#e6f2ff"),("font-weight","600")]},
-                ]), use_container_width=True)
+                # st.dataframe(ww_display.style.set_table_styles([
+                #     {"selector":"thead th", "props":[("background-color","#e6f2ff"),("font-weight","600")]},
+                # ]), use_container_width=True)
     
             # -------------------------
             # Pitchmaps below Wagon: two heatmaps (dots vs scoring) - increased height
@@ -2497,7 +2497,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 c1, c2 = st.columns([1, 1])
                 
                 with c1:
-                    st.markdown("**Dot Balls (count)**")
+                    st.markdown("**Dot Balls**")
                     fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5))
@@ -2513,7 +2513,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     st.pyplot(fig1)
                 
                 with c2:
-                    st.markdown("**Scoring Balls (runs)**")
+                    st.markdown("**Scoring Balls**")
                     fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5))
