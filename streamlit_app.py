@@ -2624,7 +2624,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     else:
         st.info("Choose a valid analysis option.")
 else:
-# strength_weakness_full.pyelse:
     st.header("Strength and Weakness Analysis")
     player_name = st.selectbox("Search for a player", idf['batsman'].unique())
     
@@ -2637,6 +2636,11 @@ else:
         result_df = pd.DataFrame()
     
         final_df = pdf[pdf['batsman'] == player_name]
+        
+        # Split data for pace and spin
+        pace_df = final_df[final_df['bowl_kind'] == 'pace bowler']
+        spin_df = final_df[final_df['bowl_kind'] == 'spin bowler']
+        
         result_df = pd.DataFrame()
         i = 0
         
@@ -2674,19 +2678,11 @@ else:
         result_df.columns = [col.upper().replace('_', ' ') for col in result_df.columns]
         columns_to_convert = ['RUNS']
         
-        # Fill NaN values with 0
-        # result_df[columns_to_convert] = result_df[columns_to_convert].fillna(0)
-        
-        # Convert the specified columns to integer type
-        # result_df[columns_to_convert] = result_df[columns_to_convert].astype(int)
         result_df = round_up_floats(result_df)
         
         # Specify the desired order with 'bowl_kind' first
         cols = result_df.columns.tolist()
-        # new_order = ['BOWL KIND', 'INNINGS'] + [col for col in cols if col not in ['BOWL KIND', 'INNINGS']]
         
-        # Reindex the DataFrame with the new column order
-        # result_df = result_df[new_order]
         result_df['BOWL KIND'] = result_df['BOWL KIND'].str.capitalize()
         st.markdown("### Performance Against Bowling Types (Pace vs Spin)")
         st.table(result_df.style.set_table_attributes("style='font-weight: bold;'"))
@@ -2910,7 +2906,7 @@ else:
             
             
 
-            st.markdown("**Runs Scored**")
+            st.markdown("<p style='margin-bottom: -20px;'><b>Runs Scored</b></p>", unsafe_allow_html=True)
             # Display the runs count grid
             st.plotly_chart(create_heatmap(run_count_grid, "Runs", run_count_grid), use_container_width=True)
          
@@ -3067,14 +3063,14 @@ else:
         bat_hand = final_df['batting_style'].iloc[0]
         # Display each plot in the respective column
         with col1:
-            st.markdown("**Wickets vs Pace**")
+            st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Pace</b></p>", unsafe_allow_html=True)
             if pace_df.empty:
                 st.write("No data available")
             else:
                 st.plotly_chart(create_pitch_map(pace_df, bat_hand), use_container_width=True)
         
         with col2:
-            st.markdown("**Wickets vs Spin**")
+            st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Spin</b></p>", unsafe_allow_html=True)
             if spin_df.empty:
                 st.write("No data available")
             else:
@@ -3298,14 +3294,14 @@ else:
             
             # Display each plot in the respective column
             with col1:
-                st.markdown("**Wickets vs Left-Handed Batsmen**")
+                st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Left-Handed Batsmen</b></p>", unsafe_allow_html=True)
                 if lhb_data.empty:
                     st.write("No data available")
                 else:
                     st.plotly_chart(create_pitch_map(lhb_data, 'LHB'), key="LHB", use_container_width=True)
             
             with col2:
-                st.markdown("**Wickets vs Right-Handed Batsmen**")
+                st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Right-Handed Batsmen</b></p>", unsafe_allow_html=True)
                 if rhb_data.empty:
                     st.write("No data available")
                 else:
@@ -3397,13 +3393,13 @@ else:
             
             # First Column - Wicket Heatmap
             with col1:
-                st.markdown("**Wicket Distribution**")
+                st.markdown("<p style='margin-bottom: -20px;'><b>Wicket Distribution</b></p>", unsafe_allow_html=True)
                 wicket_fig = create_heatmap(wicket_count_grid, "Wickets", wicket_count_grid)
                 st.plotly_chart(wicket_fig, use_container_width=True)
             
             # Second Column - Run Distribution for Bowler
             with col2:
-                st.markdown("**Runs Given**")
+                st.markdown("<p style='margin-bottom: -20px;'><b>Runs Given</b></p>", unsafe_allow_html=True)
                 run_fig_bowler = create_heatmap(run_count_grid_bowler, "Runs", run_count_grid_bowler)
                 st.plotly_chart(run_fig_bowler, use_container_width=True)
         else:
