@@ -2630,29 +2630,11 @@ else:
         # Strength & Weakness sidebar/page - Batting focus
 # Strength & Weakness: Batting section
         # match_strength_weakness.py
-        import streamlit as st
-        import pandas as pd
-        import numpy as np
-        import math
-        import matplotlib.pyplot as plt
-        from matplotlib.patches import Circle, Rectangle
-        from io import BytesIO
-        import base64
-        from PIL import Image
-        import warnings
-        
-        # -------------------------
-        # Config & display heights
-        # -------------------------
-        warnings.filterwarnings("ignore")
-        st.set_page_config(layout="wide")
-        HEIGHT_WAGON_PX = 700        # displayed pixel height for each wagon wheel
-        HEIGHT_PITCHMAP_PX = 1200    # displayed pixel height for each pitchmap
-        
-        # -------------------------
-        # Helper: embed matplotlib fig as fixed-height HTML <img>
-        # -------------------------
-        def display_figure_fixed_height_html(fig, height_px=1200, bg='white'):
+# --------- Compact display helper (small top/bottom margin) ----------
+        def display_figure_fixed_height_html_compact(fig, height_px=800, bg='white', margin_px=4):
+            """
+            Same as display_figure_fixed_height_html but uses a small vertical margin to reduce gap.
+            """
             buf = BytesIO()
             fig.savefig(buf, format='png', bbox_inches='tight', dpi=200, facecolor=fig.get_facecolor())
             buf.seek(0)
@@ -2664,202 +2646,38 @@ else:
             out_buf = BytesIO()
             img.save(out_buf, format='PNG')
             b64 = base64.b64encode(out_buf.getvalue()).decode('ascii')
-            html = f'<img src="data:image/png;base64,{b64}" style="height:{int(height_px)}px; max-width:100%; width:auto; display:block; margin-left:auto; margin-right:auto;" />'
+            # small top/bottom margin to reduce gap
+            html = (
+                f'<img src="data:image/png;base64,{b64}" '
+                f'style="height:{int(height_px)}px; max-width:100%; width:auto; display:block; margin:{margin_px}px auto;" />'
+            )
             st.markdown(f'<div style="max-width:100%;">{html}</div>', unsafe_allow_html=True)
             plt.close(fig)
         
-        # -------------------------
-        # Small helpers
-        # -------------------------
-        def as_dataframe(x):
-            if isinstance(x, pd.Series):
-                return x.to_frame().T.reset_index(drop=True)
-            elif isinstance(x, pd.DataFrame):
-                return x.copy()
-            else:
-                return pd.DataFrame(x)
-        
-        def safe_get_col(df_local, candidates, default=None):
-            for c in candidates:
-                if c in df_local.columns:
-                    return c
-            return default
         
         # -------------------------
-        # Ensure df exists
+        # Two Wagon Wheels (compact headers, smaller title padding)
         # -------------------------
-
+        st.write("Wagon — Pace", unsafe_allow_html=True)  # left header for context (we will place two wheels side-by-side)
+        c1, c2 = st.columns(2)
         
-        bdf = as_dataframe(df)
-        bdf=bdf[bdf['bowl_kind']!='mixture/unknown']
-        
-        # -------------------------
-        # Column detection
-        # -------------------------
-        match_col = safe_get_col(bdf, ['p_match','match_id'])
-        batter_col = safe_get_col(bdf, ['bat','batsman'])
-        bowler_col = safe_get_col(bdf, ['bowl','bowler'])
-        bat_hand_col = safe_get_col(bdf, ['bat_hand','batting_style'], default='bat_hand')
-        bowl_kind_col = safe_get_col(bdf, ['bowl_kind','bowling_kind','type'], default='bowl_kind')
-        bowl_style_col = safe_get_col(bdf, ['bowl_style','bowling_style'], default='bowl_style')
-        run_col = safe_get_col(bdf, ['batruns','batsman_runs','score','runs'], default='batruns')
-        line_col = safe_get_col(bdf, ['line'])
-        length_col = safe_get_col(bdf, ['length'])
-        dismissal_col = safe_get_col(bdf, ['dismissal'])
-        out_col = safe_get_col(bdf, ['out'])
-        
-        # Basic checks
-        if batter_col is None:
-            st.error("No batter column found in dataframe (expected 'bat' or 'batsman').")
-            st.stop()
-        
-        # -------------------------
-        # UI: select player and analysis
-        # -------------------------
-        st.header("Strength and Weakness Analysis")
-        player_list = sorted([x for x in bdf[batter_col].dropna().unique() if str(x).strip() not in ('','0')])
-        if not player_list:
-            st.error("No players found in dataframe.")
-            st.stop()
-        
-        player_selected = st.selectbox("Select Player", player_list, index=0)
-        dimension = st.radio("Select Analysis", ["Batting", "Bowling"], index=0)
-        
-        if dimension != "Batting":
-            st.info("Bowling section will be implemented after you confirm the batting layout. Choose 'Batting' to view the batting strength & weakness.")
-            st.stop()
-        
-        # -------------------------
-        # Prepare player frame (pf)
-        # -------------------------
-        pf = bdf[bdf[batter_col] == player_selected].copy()
-        if pf.empty:
-            st.info("No data rows for this player.")
-            st.stop()
-        
-        # normalize run column and flags
-        pf[run_col] = pd.to_numeric(pf[run_col], errors='coerce').fillna(0).astype(int)
-        pf['is_boundary'] = pf[run_col].isin([4,6]).astype(int)
-        if out_col in pf.columns:
-            pf['out_flag'] = pd.to_numeric(pf[out_col], errors='coerce').fillna(0).astype(int)
-        else:
-            pf['out_flag'] = 0
-        if dismissal_col in pf.columns:
-            pf['dismissal_clean'] = pf[dismissal_col].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
-        else:
-            pf['dismissal_clean'] = ''
-        special_runout_types = set(['run out','runout','retired','retired not out','retired out','obstructing the field'])
-        pf['is_wkt'] = pf.apply(lambda r: 1 if (int(r.get('out_flag',0))==1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip()!='') else 0, axis=1)
-        
-        # determine if batter is LHB for mirroring
-        is_lhb = False
-        if bat_hand_col in pf.columns:
-            nonull = pf[bat_hand_col].dropna()
-            if not nonull.empty and str(nonull.iloc[0]).strip().upper().startswith('L'):
-                is_lhb = True
-        
-        # -------------------------
-        # Aggregated metrics by bowl_kind and bowl_style
-        # -------------------------
-        def compute_metrics(gdf):
-            runs = int(gdf[run_col].sum())
-            balls = int(gdf.shape[0])
-            fours = int((gdf[run_col] == 4).sum())
-            sixes = int((gdf[run_col] == 6).sum())
-            wkts = int(gdf['is_wkt'].sum())
-            avg = (runs / wkts) if wkts>0 else np.nan
-            sr = (runs / balls * 100) if balls>0 else np.nan
-            bound_pct = ((fours + sixes) / balls * 100) if balls>0 else 0.0
-            return {
-                'Runs': runs,
-                'Balls': balls,
-                '4s': fours,
-                '6s': sixes,
-                'Dismissals': wkts,
-                'Avg': np.round(avg,2) if not np.isnan(avg) else '-',
-                'SR': np.round(sr,2) if not np.isnan(sr) else '-',
-                'Bound%': f"{bound_pct:.2f}%"
-            }
-        
-        # bowl_kind summary
-        if bowl_kind_col in pf.columns:
-            pf[bowl_kind_col] = pf[bowl_kind_col].astype(str).str.lower().fillna('unknown')
-            kind_vals = sorted(pf[bowl_kind_col].dropna().unique().tolist())
-        else:
-            kind_vals = []
-        
-        bk_rows = []
-        for k in (kind_vals if kind_vals else ['unknown']):
-            sub = pf[pf[bowl_kind_col] == k] if bowl_kind_col in pf.columns else pf.copy()
-            m = compute_metrics(sub)
-            m['bowl_kind'] = k
-            bk_rows.append(m)
-        bk_df = pd.DataFrame(bk_rows).set_index('bowl_kind')
-        st.markdown("### Performance by bowling kind (pace vs spin)")
-        st.dataframe(bk_df, use_container_width=True)
-        
-        # bowl_style summary
-        if bowl_style_col in pf.columns:
-            pf[bowl_style_col] = pf[bowl_style_col].astype(str).fillna('unknown')
-            bs_rows = []
-            for bs in sorted(pf[bowl_style_col].dropna().unique().tolist()):
-                sub = pf[pf[bowl_style_col] == bs]
-                m = compute_metrics(sub)
-                m['bowl_style'] = bs
-                bs_rows.append(m)
-            bs_df = pd.DataFrame(bs_rows).set_index('bowl_style')
-            st.markdown("### Performance by bowling style")
-            st.dataframe(bs_df, use_container_width=True)
-        else:
-            st.info("No bowling style column found; skipping bowl_style breakdown.")
-        
-        # -------------------------
-        # Two wagon wheels side-by-side: Left = Pace, Right = Spin (ALL runs)
-        # -------------------------
-        st.markdown("### Wagon Wheels — Pace (left) vs Spin (right) — All runs shown")
-        
-        # sector mapping and base angles (Third Man center 112.5°, then CCW left by 45°)
-        sector_names = {
-            1: "Third Man", 2: "Point", 3: "Covers", 4: "Mid Off",
-            5: "Mid On", 6: "Mid Wicket", 7: "Square Leg", 8: "Fine Leg"
-        }
-        base_angles = {
-            1: 112.5, 2: 157.5, 3: 202.5, 4: 247.5,
-            5: 292.5, 6: 337.5, 7: 22.5, 8: 67.5
-        }
-        
-        def get_sector_angle(zone, batting_style_is_lhb: bool):
-            angle = float(base_angles.get(int(zone), 0.0))
-            if batting_style_is_lhb:
-                # mirror across vertical axis for LHB
-                angle = (180.0 - angle) % 360.0
-            return math.radians(angle)
-        
-        def draw_wagon(df_local, batsman_name, batting_style_is_lhb, title_suffix=''):
-            fig, ax = plt.subplots(figsize=(8,8))
+        def draw_wagon_compact(df_local, batsman_name, batting_style_is_lhb, title_suffix=''):
+            fig, ax = plt.subplots(figsize=(7.5,7.5))
             ax.set_aspect('equal'); ax.axis('off')
-            # field base
             ax.add_patch(Circle((0,0),1, fill=True, color='#228B22', alpha=1))
             ax.add_patch(Circle((0,0),1, fill=False, color='black', linewidth=3))
             ax.add_patch(Circle((0,0),0.5, fill=True, color='#66bb6a'))
             ax.add_patch(Circle((0,0),0.5, fill=False, color='white', linewidth=1))
             pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
             ax.add_patch(pitch_rect)
-            # radial lines
             angles = np.linspace(0,2*np.pi,9)[:-1]
             for a in angles:
                 ax.plot([0, math.cos(a)], [0, math.sin(a)], color='white', alpha=0.25, linewidth=1)
         
-            # determine wagon zone column
-            zcol = None
-            possible_zcols = ['wagonZone','wagon_zone','wagon_zone_id']
-            for c in possible_zcols:
-                if c in df_local.columns:
-                    zcol = c
-                    break
+            zcol = next((c for c in ['wagonZone','wagon_zone','wagon_zone_id'] if c in df_local.columns), None)
             if zcol is None:
-                # no wagon zones: return empty fig with message
-                ax.text(0,0, "No wagonZone column", ha='center', va='center', color='white')
+                ax.text(0,0, "No wagonZone", ha='center', va='center', color='white', fontsize=12)
+                plt.tight_layout(pad=0)
                 return fig
         
             tmp = df_local.copy()
@@ -2869,158 +2687,96 @@ else:
             sixes_by_zone = tmp.groupby('zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
             total_runs = sum(int(v) for v in runs_by_zone.values())
         
-            plt.title(f"{batsman_name}{(' — ' + title_suffix) if title_suffix else ''}", pad=16, color='white', fontsize=12, fontweight='bold')
+            # smaller title padding to reduce gap
+            ax.set_title(f"{('vs ' + title_suffix) if title_suffix else ''}", pad=6, color='white', fontsize=11, fontweight='bold')
         
             for zone in range(1,9):
-                angle_mid = get_sector_angle(zone, batting_style_is_lhb)
+                # base_angles from earlier context (assumes base_angles dict exists)
+                angle_mid = get_sector_angle(zone, 'LHB' if batting_style_is_lhb else 'RHB') if 'get_sector_angle' in globals() else get_sector_angle(zone, batting_style_is_lhb)
                 x = 0.60*math.cos(angle_mid)
                 y = 0.60*math.sin(angle_mid)
                 runs = int(runs_by_zone.get(zone, 0))
                 pct = (runs / total_runs * 100) if total_runs>0 else 0.0
-                ax.text(x, y+0.03, f"{pct:.2f}%", ha='center', va='center', color='white', fontweight='bold', fontsize=14)
-                ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
+                ax.text(x, y+0.025, f"{pct:.1f}%", ha='center', va='center', color='white', fontweight='bold', fontsize=12)
+                ax.text(x, y-0.02, f"{runs}", ha='center', va='center', color='white', fontsize=9)
                 fcount = int(fours_by_zone.get(zone,0))
                 scount = int(sixes_by_zone.get(zone,0))
-                ax.text(x, y-0.12, f"4s: {fcount}  6s: {scount}", ha='center', va='center', color='white', fontsize=9)
+                ax.text(x, y-0.085, f"4s:{fcount} 6s:{scount}", ha='center', va='center', color='white', fontsize=8)
                 sx = 0.80*math.cos(angle_mid); sy = 0.80*math.sin(angle_mid)
-                ax.text(sx, sy, sector_names.get(zone, f"Sector {zone}"), ha='center', va='center', color='white', fontsize=8)
+                ax.text(sx, sy, sector_names.get(zone, f"S{zone}"), ha='center', va='center', color='white', fontsize=7)
         
             ax.set_xlim(-1.2,1.2); ax.set_ylim(-1.2,1.2)
             plt.tight_layout(pad=0)
             return fig
         
-        # split pf into pace and spin subsets
-        if bowl_kind_col in pf.columns:
-            bk_ser = pf[bowl_kind_col].astype(str).str.lower().fillna('')
-            pf_pace = pf[bk_ser.str.contains('pace', na=False)].copy()
-            pf_spin = pf[bk_ser.str.contains('spin', na=False)].copy()
-        else:
-            pf_pace = pf.iloc[0:0].copy()
-            pf_spin = pf.iloc[0:0].copy()
-        
-        c1, c2 = st.columns(2)
+        # left: Pace wagon
         with c1:
-            st.markdown("**Wagon — vs Pace (All runs)**")
-            fig_pace_wagon = draw_wagon(pf_pace, player_selected, is_lhb, title_suffix='vs Pace')
-            display_figure_fixed_height_html(fig_pace_wagon, height_px=HEIGHT_WAGON_PX, bg='white')
+            st.write("Wagon — Pace")
+            fig_pace = draw_wagon_compact(pf_pace, player_selected, is_lhb, title_suffix='Pace')
+            display_figure_fixed_height_html_compact(fig_pace, height_px=HEIGHT_WAGON_PX, margin_px=4)
+        
+        # right: Spin wagon
         with c2:
-            st.markdown("**Wagon — vs Spin (All runs)**")
-            fig_spin_wagon = draw_wagon(pf_spin, player_selected, is_lhb, title_suffix='vs Spin')
-            display_figure_fixed_height_html(fig_spin_wagon, height_px=HEIGHT_WAGON_PX, bg='white')
+            st.write("Wagon — Spin")
+            fig_spin = draw_wagon_compact(pf_spin, player_selected, is_lhb, title_suffix='Spin')
+            display_figure_fixed_height_html_compact(fig_spin, height_px=HEIGHT_WAGON_PX, margin_px=4)
+        
         
         # -------------------------
-        # Pitchmaps — Boundaries & Dismissals (Pace vs Spin) with mirroring for LHB
+        # Pitchmaps — compact headers + reduced header->plot gap
         # -------------------------
-        st.subheader("Pitchmaps — Boundaries & Dismissals (Pace vs Spin)")
+        st.write("Pitchmaps — Boundaries / Dismissals")
         
-        # mapping used previously
-        line_map = {
-            'WIDE_OUTSIDE_OFFSTUMP': 0,
-            'OUTSIDE_OFFSTUMP': 1,
-            'ON_THE_STUMPS': 2,
-            'DOWN_LEG': 3,
-            'WIDE_DOWN_LEG': 4
-        }
-        length_map = {
-            'SHORT': 0,
-            'SHORT_OF_A_GOOD_LENGTH': 1,
-            'GOOD_LENGTH': 2,
-            'FULL': 3,
-            'YORKER': 4,
-            'FULL_TOSS': 4
-        }
+        # small title padding inside plots and compact headers above columns
+        c1, c2 = st.columns(2)
         
-        col_line = line_col
-        col_length = length_col
-        col_batruns = run_col
-        col_is_wkt = 'is_wkt'
-        col_bowl_kind = bowl_kind_col
+        xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+        yticks = ['Short','Back of Length','Good','Full','Yorker']
         
-        # guard
-        if col_line not in pf.columns or col_length not in pf.columns:
-            st.info("Pitchmaps require both 'line' and 'length' columns in the dataset. Skipping pitchmaps.")
-        else:
-            # helpers to build grids
-            def build_boundaries_grid(df_local):
-                grid = np.zeros((5,5), dtype=int)
-                if df_local.shape[0] == 0:
-                    return grid
-                plot_df = df_local[[col_line, col_length, col_batruns]].dropna(subset=[col_line, col_length])
-                for _, r in plot_df.iterrows():
-                    li = line_map.get(r[col_line], None)
-                    le = length_map.get(r[col_length], None)
-                    if li is None or le is None:
-                        continue
-                    try:
-                        runs_here = int(r[col_batruns])
-                    except Exception:
-                        runs_here = 0
-                    if runs_here in (4, 6):
-                        grid[le, li] += 1
-                return grid
+        def plot_grid_compact(grid, title, cmap_name='Oranges'):
+            disp_grid = np.fliplr(grid) if is_lhb else grid.copy()
+            xticks = list(reversed(xticks_base)) if is_lhb else xticks_base
         
-            def build_dismissals_grid(df_local):
-                grid = np.zeros((5,5), dtype=int)
-                if df_local.shape[0] == 0:
-                    return grid
-                plot_df = df_local[[col_line, col_length, col_is_wkt]].dropna(subset=[col_line, col_length])
-                for _, r in plot_df.iterrows():
-                    li = line_map.get(r[col_line], None)
-                    le = length_map.get(r[col_length], None)
-                    if li is None or le is None:
-                        continue
-                    isw = int(r.get(col_is_wkt, 0))
-                    if isw == 1:
-                        grid[le, li] += 1
-                return grid
+            fig, ax = plt.subplots(figsize=(6,10), dpi=150)
+            im = ax.imshow(disp_grid, origin='lower', cmap=cmap_name)
+            ax.set_xticks(range(5)); ax.set_yticks(range(5))
+            ax.set_xticklabels(xticks, rotation=45, ha='right', fontsize=9)
+            ax.set_yticklabels(yticks, fontsize=9)
+            for i in range(5):
+                for j in range(5):
+                    ax.text(j, i, int(disp_grid[i, j]), ha='center', va='center', color='black', fontsize=11)
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+            ax.set_title(title, pad=6, fontsize=11)
+            plt.tight_layout(pad=1)
+            return fig
         
-            # produce pace & spin splits (already done above)
-            # pf_pace, pf_spin exist
+        # Top row: Boundaries
+        with c1:
+            st.write("Bounds — Pace")
+            grid_pace_bound = build_boundaries_grid(pf_pace)
+            fig_pb = plot_grid_compact(grid_pace_bound, f"{player_selected} — Bounds (Pace)", cmap_name='Oranges')
+            display_figure_fixed_height_html_compact(fig_pb, height_px=HEIGHT_PITCHMAP_PX, margin_px=4)
         
-            # plotting helper that mirrors horizontally if is_lhb True
-            def plot_grid_and_show(grid, title, cmap_name='Oranges'):
-                # if LHB, flip horizontally to mirror pitchmap
-                disp_grid = np.fliplr(grid) if is_lhb else grid.copy()
-                # xticklabels order should also be reversed when mirrored
-                xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-                xticks = list(reversed(xticks_base)) if is_lhb else xticks_base
+        with c2:
+            st.write("Bounds — Spin")
+            grid_spin_bound = build_boundaries_grid(pf_spin)
+            fig_sb = plot_grid_compact(grid_spin_bound, f"{player_selected} — Bounds (Spin)", cmap_name='Oranges')
+            display_figure_fixed_height_html_compact(fig_sb, height_px=HEIGHT_PITCHMAP_PX, margin_px=4)
         
-                fig, ax = plt.subplots(figsize=(6,12), dpi=150)
-                im = ax.imshow(disp_grid, origin='lower', cmap=cmap_name)
-                ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                ax.set_xticklabels(xticks, rotation=45, ha='right')
-                ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                for i in range(5):
-                    for j in range(5):
-                        ax.text(j, i, int(disp_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-                fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-                plt.title(title)
-                plt.tight_layout(pad=3.0)
-                display_figure_fixed_height_html(fig, height_px=HEIGHT_PITCHMAP_PX, bg='white')
+        # Bottom row: Dismissals
+        c3, c4 = st.columns(2)
+        with c3:
+            st.write("Wkts — Pace")
+            grid_pace_wkt = build_dismissals_grid(pf_pace)
+            fig_pw = plot_grid_compact(grid_pace_wkt, f"{player_selected} — Wkts (Pace)", cmap_name='Reds')
+            display_figure_fixed_height_html_compact(fig_pw, height_px=HEIGHT_PITCHMAP_PX, margin_px=4)
         
-            # Boundaries row
-            c1, c2 = st.columns(2)
-            with c1:
-                st.markdown("**Boundaries vs Pace**")
-                grid_pace_bound = build_boundaries_grid(pf_pace)
-                plot_grid_and_show(grid_pace_bound, title=f"{player_selected} — Boundaries vs Pace", cmap_name='Oranges')
-            with c2:
-                st.markdown("**Boundaries vs Spin**")
-                grid_spin_bound = build_boundaries_grid(pf_spin)
-                plot_grid_and_show(grid_spin_bound, title=f"{player_selected} — Boundaries vs Spin", cmap_name='Oranges')
-        
-            # Dismissals row
-            c3, c4 = st.columns(2)
-            with c3:
-                st.markdown("**Dismissals vs Pace**")
-                grid_pace_wkt = build_dismissals_grid(pf_pace)
-                plot_grid_and_show(grid_pace_wkt, title=f"{player_selected} — Dismissals vs Pace", cmap_name='Reds')
-            with c4:
-                st.markdown("**Dismissals vs Spin**")
-                grid_spin_wkt = build_dismissals_grid(pf_spin)
-                plot_grid_and_show(grid_spin_wkt, title=f"{player_selected} — Dismissals vs Spin", cmap_name='Reds')
-        
-        # End of script
+        with c4:
+            st.write("Wkts — Spin")
+            grid_spin_wkt = build_dismissals_grid(pf_spin)
+            fig_sw = plot_grid_compact(grid_spin_wkt, f"{player_selected} — Wkts (Spin)", cmap_name='Reds')
+            display_figure_fixed_height_html_compact(fig_sw, height_px=HEIGHT_PITCHMAP_PX, margin_px=4)
+
         
         
         # If user chooses Bowling role, provide a placeholder (or extend later)
