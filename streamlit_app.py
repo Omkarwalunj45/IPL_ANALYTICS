@@ -2631,6 +2631,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 # with the code below:
 else:
     st.header("Strength and Weakness Analysis")
+    pdf=df
     player_name = st.selectbox("Search for a player", idf['batsman'].unique())
     
     # Dropdown for Batting or Bowling selection
