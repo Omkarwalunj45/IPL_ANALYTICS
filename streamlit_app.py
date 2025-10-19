@@ -103,7 +103,8 @@ def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
 df = rename_rcb(df)
 df['is_wicket'] = df['out'].astype(int)
 df['venue']=df['ground']
-
+df['batsman']=df['bat']
+df['bowler']=df['bowl']
 
 # -----------------------
 # Utility helpers
