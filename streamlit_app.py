@@ -84,6 +84,7 @@ def load_data():
     return df
 
 df = load_data()    
+DF_gen=df
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
     """
     Renames 'Royal Challengers Bangalore' to 'Royal Challengers Bengaluru' in team_bat, team_bowl, and winner columns.
@@ -2631,7 +2632,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 # with the code below:
 else:
     st.header("Strength and Weakness Analysis")
-    pdf=df
+    pdf=DF_gen
+    
     player_name = st.selectbox("Search for a player", idf['batsman'].unique())
     
     # Dropdown for Batting or Bowling selection
