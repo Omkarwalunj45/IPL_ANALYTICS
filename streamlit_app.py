@@ -2630,6 +2630,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 # with the code below:
 else:
         # st.header("Strength and Weakness Analysis")/
+        pdf=df
         import streamlit as st
         import pandas as pd
         import numpy as np
