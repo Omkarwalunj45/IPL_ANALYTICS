@@ -2630,7 +2630,7 @@ else:
         # Strength & Weakness sidebar/page - Batting focus
 # Strength & Weakness: Batting section
         # match_strength_weakness.py
-# --------- Compact display helper (small top/bottom margin) ----------
+        # --------- Compact display helper (small top/bottom margin) ----------
         def display_figure_fixed_height_html_compact(fig, height_px=800, bg='white', margin_px=4):
             """
             Same as display_figure_fixed_height_html but uses a small vertical margin to reduce gap.
