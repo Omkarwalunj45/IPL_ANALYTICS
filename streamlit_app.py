@@ -2629,6 +2629,25 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 # Then REPLACE the entire section from that line down to the next major section
 # with the code below:
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+
+# Custom CSS to reduce spacing around plots
+st.markdown("""
+    <style>
+        .stPlotlyChart, .stPyplot {
+            margin-top: -20px !important;
+            padding-top: 0px !important;
+        }
+        .stMarkdown p {
+            margin-bottom: -30px !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 st.header("Strength and Weakness Analysis")
 player_name = st.selectbox("Search for a player", idf['batsman'].unique())
 
@@ -2637,7 +2656,6 @@ option = st.selectbox("Select Role", ("Batting", "Bowling"))
 
 if option == "Batting":          
     # Apply the function to add the 'bowl_kind' column
-    
     result_df = pd.DataFrame()
 
     final_df = pdf[pdf['batsman'] == player_name]
@@ -2791,7 +2809,7 @@ if option == "Batting":
         ax.add_patch(boundary)
         ax.add_patch(boundary_line)
         ax.add_patch(inner_circle)
-        ax.add_patch(inner_circle_line)
+        ax.add_patch(inner_circle_line urban)
         
         # Draw sector lines
         angles = np.linspace(0, 2*np.pi, 9)[:-1]
@@ -2833,13 +2851,13 @@ if option == "Batting":
     col1, col2 = st.columns(2)
 
     with col1:
-        st.markdown("<p style='margin-bottom: -20px;'><b>Wagon Chart</b></p>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: -30px;'><b>Wagon Chart</b></p>", unsafe_allow_html=True)
         fig = draw_cricket_field_with_run_totals(final_df)
         st.pyplot(fig, use_container_width=True)
         
 
     with col2:
-         # Set up line and length mapping
+        # Set up line and length mapping
         import plotly.graph_objects as go          
         line_positions = {
             'WIDE_OUTSIDE_OFFSTUMP': 0,
@@ -2909,9 +2927,7 @@ if option == "Batting":
             )
             return fig
         
-        
-
-        st.markdown("<p style='margin-bottom: -20px;'><b>Runs Scored</b></p>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: -30px;'><b>Runs Scored</b></p>", unsafe_allow_html=True)
         st.plotly_chart(create_heatmap(run_count_grid, "Runs", run_count_grid), use_container_width=True)
      
     @st.cache_data
@@ -3062,19 +3078,18 @@ if option == "Batting":
     bat_hand = final_df['batting_style'].iloc[0]
     
     with col1:
-        st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Pace</b></p>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: -30px;'><b>Wickets vs Pace</b></p>", unsafe_allow_html=True)
         if pace_df.empty:
             st.write("No data available")
         else:
             st.plotly_chart(create_pitch_map(pace_df, bat_hand), use_container_width=True)
     
     with col2:
-        st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Spin</b></p>", unsafe_allow_html=True)
+        st.markdown("<p style='margin-bottom: -30px;'><b>Wickets vs Spin</b></p>", unsafe_allow_html=True)
         if spin_df.empty:
             st.write("No data available")
         else:
             st.plotly_chart(create_pitch_map(spin_df, bat_hand), use_container_width=True)
-            
             
 else:
     final_df=pdf[pdf['bowler']==player_name]  
@@ -3262,14 +3277,14 @@ else:
 
         
         with col1:
-            st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Left-Handed Batsmen</b></p>", unsafe_allow_html=True)
+            st.markdown("<p style='margin-bottom: -30px;'><b>Wickets vs Left-Handed Batsmen</b></p>", unsafe_allow_html=True)
             if lhb_data.empty:
                 st.write("No data available")
             else:
                 st.plotly_chart(create_pitch_map(lhb_data, 'LHB'), key="LHB", use_container_width=True)
         
         with col2:
-            st.markdown("<p style='margin-bottom: -20px;'><b>Wickets vs Right-Handed Batsmen</b></p>", unsafe_allow_html=True)
+            st.markdown("<p style='margin-bottom: -30px;'><b>Wickets vs Right-Handed Batsmen</b></p>", unsafe_allow_html=True)
             if rhb_data.empty:
                 st.write("No data available")
             else:
@@ -3346,12 +3361,12 @@ else:
         col1, col2 = st.columns(2)
         
         with col1:
-            st.markdown("<p style='margin-bottom: -20px;'><b>Wicket Distribution</b></p>", unsafe_allow_html=True)
+            st.markdown("<p style='margin-bottom: -30px;'><b>Wicket Distribution</b></p>", unsafe_allow_html=True)
             wicket_fig = create_heatmap(wicket_count_grid, "Wickets", wicket_count_grid)
             st.plotly_chart(wicket_fig, use_container_width=True)
         
         with col2:
-            st.markdown("<p style='margin-bottom: -20px;'><b>Runs Given</b></p>", unsafe_allow_html=True)
+            st.markdown("<p style='margin-bottom: -30px;'><b>Runs Given</b></p>", unsafe_allow_html=True)
             run_fig_bowler = create_heatmap(run_count_grid_bowler, "Runs", run_count_grid_bowler)
             st.plotly_chart(run_fig_bowler, use_container_width=True)
     else:
