@@ -2688,13 +2688,10 @@ else:
         # -------------------------
         # Ensure df exists
         # -------------------------
-        try:
-            df
-        except NameError:
-            st.error("Provide the ball-by-ball DataFrame in variable `df` before running this app.")
-            st.stop()
+
         
         bdf = as_dataframe(df)
+        bdf=bdf[bdf['bowl_kind']!='mixture/unknown']
         
         # -------------------------
         # Column detection
