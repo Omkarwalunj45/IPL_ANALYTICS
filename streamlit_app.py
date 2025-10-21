@@ -2635,7 +2635,7 @@ else:
     pdf=DF_gen
     pdf['batsman']=pdf['bat']
     pdf['bowler']=pdf['bowl']
-    print(pdf.head())
+    st.write(pdf.head())
     # pdf = as_dataframe(df)
     
     player_name = st.selectbox("Search for a player", idf['batsman'].unique())
