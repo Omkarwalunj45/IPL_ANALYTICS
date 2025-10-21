@@ -2633,6 +2633,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 else:
     st.header("Strength and Weakness Analysis")
     # strength_weakness_streamlit.py
+    # strength_weakness_streamlit_broadcast.py
     import streamlit as st
     import pandas as pd
     import numpy as np
@@ -2648,13 +2649,18 @@ else:
     st.set_page_config(layout="wide")
     
     # ---------- Display sizes (tweakable) ----------
-    HEIGHT_WAGON_PX = 700
-    HEIGHT_PITCHMAP_PX = 1100
+    HEIGHT_WAGON_PX = 640
+    HEIGHT_PITCHMAP_PX = 880
     
     # ---------- HTML embed helper (renders matplotlib figure at fixed pixel height) ----------
-    def display_figure_fixed_height_html(fig, height_px=1200, bg='white', margin_px=6):
+    def display_figure_fixed_height_html(fig, height_px=800, bg='white', margin_px=0):
+        """
+        Save fig to PNG with no padding and embed into HTML <img> with minimal margins.
+        This reduces additional white space above/below the image in Streamlit.
+        """
         buf = BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight', dpi=200, facecolor=fig.get_facecolor())
+        # Save with no pad_inches to reduce whitespace
+        fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, dpi=200, facecolor=fig.get_facecolor())
         buf.seek(0)
         img = Image.open(buf).convert('RGBA')
         if bg is not None:
@@ -2664,11 +2670,12 @@ else:
         out_buf = BytesIO()
         img.save(out_buf, format='PNG')
         b64 = base64.b64encode(out_buf.getvalue()).decode('ascii')
+        # minimal margin and block-centred image
         html = (
             f'<img src="data:image/png;base64,{b64}" '
             f'style="height:{int(height_px)}px; max-width:100%; width:auto; display:block; margin:{margin_px}px auto;" />'
         )
-        st.markdown(f'<div style="max-width:100%;">{html}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="max-width:100%; padding:0; margin:0;">{html}</div>', unsafe_allow_html=True)
         plt.close(fig)
     
     # ---------- Small helpers ----------
@@ -2693,11 +2700,10 @@ else:
         st.error("Please provide the ball-by-ball DataFrame in the variable `df` before running this app.")
         st.stop()
     
-    # make a working copy
+    # work on a copy
     bdf = as_dataframe(df)
     
     # ---------- Column names (explicitly mapped to your provided schema) ----------
-    # (these will be used throughout; they are the exact names you provided)
     COL_BAT = 'bat'                  # batsman column
     COL_BOWL = 'bowl'                # bowler column
     COL_BAT_HAND = 'bat_hand'        # batting handedness (LHB/RHB)
@@ -2709,18 +2715,17 @@ else:
     COL_LENGTH = 'length'            # length (SHORT, GOOD_LENGTH, etc.)
     COL_OUT = 'out'                  # out flag (0/1)
     COL_DISMISSAL = 'dismissal'      # dismissal text
-    # NOTE: your dataframe also contains many other columns; above are the ones we use.
     
     # sanity checks
     if COL_BAT not in bdf.columns or COL_BOWL not in bdf.columns:
         st.error(f"Expected columns '{COL_BAT}' and '{COL_BOWL}' in the DataFrame.")
         st.stop()
     
-    # ---------- UI: header and player selection ----------
-    st.header("Strength and Weakness Analysis")
-    role = st.selectbox("Select Role", ["Batting", "Bowling"])
+    # ---------- UI header and player selection ----------
+    st.title("📺 Strength & Weakness — Broadcast View")
     
-    # Player name selection depending on role
+    role = st.selectbox("Select Role", ["Batting", "Bowling"], index=0)
+    
     if role == "Batting":
         players = sorted([x for x in bdf[COL_BAT].dropna().unique() if str(x).strip() not in ("", "0")])
     else:
@@ -2732,8 +2737,7 @@ else:
     
     player_selected = st.selectbox("Search for a player", players, index=0)
     
-    # ---------- Prepare working frame & normalize columns ----------
-    # Use `pf` as the player-level ball-by-ball subset
+    # ---------- Prepare player frame ----------
     if role == "Batting":
         pf = bdf[bdf[COL_BAT] == player_selected].copy()
     else:
@@ -2743,18 +2747,16 @@ else:
         st.info("No ball-by-ball rows for the selected player.")
         st.stop()
     
-    # normalize columns we will rely on
+    # normalize runs and flags
     if COL_RUNS in pf.columns:
         pf[COL_RUNS] = pd.to_numeric(pf[COL_RUNS], errors='coerce').fillna(0).astype(int)
     else:
-        # fallback to 'score' if batruns isn't present
         alt = safe_get_col(pf, ['score','runs'])
         if alt:
             pf[COL_RUNS] = pd.to_numeric(pf[alt], errors='coerce').fillna(0).astype(int)
         else:
             pf[COL_RUNS] = 0
     
-    # out / dismissal -> is_wkt
     if COL_OUT in pf.columns:
         pf['out_flag'] = pd.to_numeric(pf[COL_OUT], errors='coerce').fillna(0).astype(int)
     else:
@@ -2763,10 +2765,9 @@ else:
         pf['dismissal_clean'] = pf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
     else:
         pf['dismissal_clean'] = ''
+    
     special_runout_types = set(['run out','runout','retired','retired not out','retired out','obstructing the field'])
     pf['is_wkt'] = pf.apply(lambda r: 1 if (int(r.get('out_flag',0))==1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip()!='') else 0, axis=1)
-    
-    # boundary flag
     pf['is_boundary'] = pf[COL_RUNS].isin([4,6]).astype(int)
     
     # detect LHB for mirroring
@@ -2776,7 +2777,7 @@ else:
         if not nonull.empty and str(nonull.iloc[0]).strip().upper().startswith('L'):
             is_lhb = True
     
-    # ---------- small metrics functions ----------
+    # ---------- Metrics helpers ----------
     def compute_batting_metrics(gdf, run_col=COL_RUNS):
         runs = int(gdf[run_col].sum())
         balls = int(gdf.shape[0])
@@ -2790,12 +2791,11 @@ else:
                 'Avg': np.round(avg,2) if not np.isnan(avg) else '-', 'SR': np.round(sr,2) if not np.isnan(sr) else '-', 'Bound%': f"{bound_pct:.2f}%"}
     
     def compute_bowling_metrics(gdf, run_col=COL_RUNS):
-        # runs conceded (use 'score' / 'bowlruns' fallback if necessary)
-        if 'score' in gdf.columns and 'byes' in gdf.columns and 'legbyes' in gdf.columns:
+        if 'bowlruns' in gdf.columns:
+            runs = int(gdf['bowlruns'].sum())
+        elif 'score' in gdf.columns:
             cond = (~gdf.get('byes',0).astype(bool)) & (~gdf.get('legbyes',0).astype(bool))
             runs = int(gdf.loc[cond, 'score'].sum()) if 'score' in gdf.columns else int(gdf[run_col].sum())
-        elif 'bowlruns' in gdf.columns:
-            runs = int(gdf['bowlruns'].sum())
         else:
             runs = int(gdf[run_col].sum())
         balls = int(((gdf.get('noball',0).fillna(0).astype(int) == 0) & (gdf.get('wide',0).fillna(0).astype(int) == 0)).sum())
@@ -2806,12 +2806,10 @@ else:
         return {'Runs': runs, 'Balls': balls, 'Wkts': wkts, 'Econ': np.round(econ,2) if not np.isnan(econ) else '-', 'Avg': np.round(avg,2) if not np.isnan(avg) else '-', 'SR': np.round(sr,2) if not np.isnan(sr) else '-'}
     
     # ---------- Visual building blocks ----------
-    # sector mapping for wagon wheel (we use your requested sector arrangement)
     sector_names = {
         1: "Third Man", 2: "Point", 3: "Covers", 4: "Mid Off",
         5: "Mid On", 6: "Mid Wicket", 7: "Square Leg", 8: "Fine Leg"
     }
-    # base angles so zone 1 (Third Man) is top-left then CCW 45° each
     base_angles = {1: 112.5, 2:157.5, 3:202.5, 4:247.5, 5:292.5, 6:337.5, 7:22.5, 8:67.5}
     def sector_angle_rad(zone, is_lhb_local):
         a = float(base_angles.get(int(zone), 0.0))
@@ -2822,15 +2820,14 @@ else:
     def draw_wagon(df_local, label, is_lhb_local):
         fig, ax = plt.subplots(figsize=(8,8))
         ax.set_aspect('equal'); ax.axis('off')
-        ax.add_patch(Circle((0,0),1, fill=True, color='#228B22', alpha=1))
+        ax.add_patch(Circle((0,0),1, fill=True, color='#1b8f1b', alpha=1))
         ax.add_patch(Circle((0,0),1, fill=False, color='black', linewidth=3))
-        ax.add_patch(Circle((0,0),0.5, fill=True, color='#66bb6a'))
-        ax.add_patch(Circle((0,0),0.5, fill=False, color='white', linewidth=1))
+        ax.add_patch(Circle((0,0),0.52, fill=True, color='#66bb6a'))
+        ax.add_patch(Circle((0,0),0.52, fill=False, color='white', linewidth=1))
         ax.add_patch(Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8))
         for a in np.linspace(0,2*np.pi,9)[:-1]:
             ax.plot([0, math.cos(a)], [0, math.sin(a)], color='white', alpha=0.25, linewidth=1)
-        # get wagon zone column name exactly as in schema
-        zcol = COL_WAGON_ZONE if COL_WAGON_ZONE in df_local.columns else (safe_get_col(df_local, ['wagon_zone','wagon_zone_id']) )
+        zcol = COL_WAGON_ZONE if COL_WAGON_ZONE in df_local.columns else safe_get_col(df_local, ['wagon_zone','wagon_zone_id'])
         if zcol is None:
             ax.text(0,0, "No wagonZone column", ha='center', va='center', color='white')
             return fig
@@ -2840,7 +2837,7 @@ else:
         fours_by_zone = tmp.groupby('zone_int')[COL_RUNS].apply(lambda s: int((s==4).sum())).to_dict()
         sixes_by_zone = tmp.groupby('zone_int')[COL_RUNS].apply(lambda s: int((s==6).sum())).to_dict()
         total_runs = sum(int(v) for v in runs_by_zone.values())
-        plt.title(label, pad=8, color='white', fontsize=12)
+        # do NOT set in-figure title (we use Streamlit header above) — keeps top whitespace small
         for zone in range(1,9):
             ang = sector_angle_rad(zone, is_lhb_local)
             x = 0.60*math.cos(ang)
@@ -2849,14 +2846,16 @@ else:
             pct = (runs/total_runs*100) if total_runs>0 else 0.0
             ax.text(x, y+0.03, f"{pct:.2f}%", ha='center', va='center', color='white', fontweight='bold', fontsize=14)
             ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
-            ax.text(x, y-0.12, f"4s:{fours_by_zone.get(zone,0)} 6s:{sixes_by_zone.get(zone,0)}", ha='center', va='center', color='white', fontsize=9)
+            ax.text(x, y-0.12, f"4s:{fours_by_zone.get(zone,0)} 6s:{sixes_by_zone.get(zone,0)}", ha='center', va='center', color='white', fontsize=8)
             sx = 0.80*math.cos(ang); sy = 0.80*math.sin(ang)
             ax.text(sx, sy, sector_names[zone], ha='center', va='center', color='white', fontsize=8)
         ax.set_xlim(-1.2,1.2); ax.set_ylim(-1.2,1.2)
+        # tighten and remove top/bottom white pad
         plt.tight_layout(pad=0)
+        fig.subplots_adjust(top=0.99, bottom=0.01, left=0.01, right=0.99)
         return fig
     
-    # pitchmap helpers (5x5 grid)
+    # pitchmap helpers
     LINE_MAP = {
         'WIDE_OUTSIDE_OFFSTUMP': 0,
         'OUTSIDE_OFFSTUMP': 1,
@@ -2904,27 +2903,29 @@ else:
                 grid[le, li] += 1
         return grid
     
-    def plot_grid_mat(grid, title, cmap='Oranges', mirror=is_lhb):
+    def plot_grid_mat(grid, title, cmap='Oranges', mirror=False):
         disp = np.fliplr(grid) if mirror else grid.copy()
         xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
         xticks = list(reversed(xticks_base)) if mirror else xticks_base
-        fig, ax = plt.subplots(figsize=(6,10), dpi=150)
+        fig, ax = plt.subplots(figsize=(6,9), dpi=150)
         im = ax.imshow(disp, origin='lower', cmap=cmap)
         ax.set_xticks(range(5)); ax.set_yticks(range(5))
-        ax.set_xticklabels(xticks, rotation=45, ha='right')
+        ax.set_xticklabels(xticks, rotation=40, ha='right')
         ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
         for i in range(5):
             for j in range(5):
                 ax.text(j, i, int(disp[i,j]), ha='center', va='center', color='black', fontsize=11)
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-        ax.set_title(title, pad=6, fontsize=11)
-        plt.tight_layout(pad=1)
+        # Avoid in-figure title; Streamlit will display caption/header above image
+        plt.tight_layout(pad=0)
+        fig.subplots_adjust(top=0.99, bottom=0.01, left=0.06, right=0.99)
         return fig
     
-    # ---------- Render Batting view ----------
+    # ---------- Render Batting or Bowling views ----------
     if role == "Batting":
-        st.subheader(f"Batting — {player_selected}")
-        # --- Performance by bowl_kind (pace / spin)
+        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Batting — {player_selected}</div>", unsafe_allow_html=True)
+    
+        # Performance by bowl_kind
         if COL_BOWL_KIND in pf.columns:
             pf[COL_BOWL_KIND] = pf[COL_BOWL_KIND].astype(str).str.lower().fillna('unknown')
             kinds = sorted(pf[COL_BOWL_KIND].dropna().unique().tolist())
@@ -2938,32 +2939,31 @@ else:
                 m['bowl_kind'] = k
                 rows.append(m)
         else:
-            # fallback: treat everything as unknown
             m = compute_batting_metrics(pf)
             m['bowl_kind'] = 'unknown'
             rows.append(m)
         bk_df = pd.DataFrame(rows).set_index('bowl_kind')
-        st.markdown("**Performance by bowl_kind**")
+        st.markdown("<div style='font-weight:700; font-size:15px;'>📊 Performance by bowling type</div>", unsafe_allow_html=True)
         st.dataframe(bk_df, use_container_width=True)
     
-        # --- Performance by bowl_style
+        # Performance by bowl_style
         if COL_BOWL_STYLE in pf.columns:
             styles = sorted([s for s in pf[COL_BOWL_STYLE].dropna().unique() if str(s).strip()!=''])
-            bs_rows = []
-            for s in styles:
-                g = pf[pf[COL_BOWL_STYLE] == s]
-                m = compute_batting_metrics(g)
-                m['bowl_style'] = s
-                bs_rows.append(m)
-            bs_df = pd.DataFrame(bs_rows).set_index('bowl_style')
-            st.markdown("**Performance by bowl_style**")
-            st.dataframe(bs_df, use_container_width=True)
+            if styles:
+                bs_rows = []
+                for s in styles:
+                    g = pf[pf[COL_BOWL_STYLE] == s]
+                    m = compute_batting_metrics(g)
+                    m['bowl_style'] = s
+                    bs_rows.append(m)
+                bs_df = pd.DataFrame(bs_rows).set_index('bowl_style')
+                st.markdown("<div style='font-weight:700; font-size:15px;'>📌 Performance by bowling style</div>", unsafe_allow_html=True)
+                st.dataframe(bs_df, use_container_width=True)
         else:
             st.info("No bowl_style column found; skipping bowl_style table.")
     
-        # --- Two Wagon wheels side-by-side (Pace vs Spin) showing ALL runs
-        st.markdown("**Wagon wheels — vs Pace (left) and vs Spin (right)**")
-        # prepare subsets
+        # Two wagon wheels side-by-side (ALL runs)
+        st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'>🎥 Wagon wheels — Pace (left) & Spin (right)</div>", unsafe_allow_html=True)
         if COL_BOWL_KIND in pf.columns:
             pf_pace = pf[pf[COL_BOWL_KIND].str.contains('pace', na=False)].copy()
             pf_spin = pf[pf[COL_BOWL_KIND].str.contains('spin', na=False)].copy()
@@ -2971,55 +2971,53 @@ else:
             pf_pace = pf.iloc[0:0].copy()
             pf_spin = pf.iloc[0:0].copy()
     
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns([1,1], gap="large")
         with c1:
-            st.write("Pace")
+            # broadcasting header
+            st.markdown(f"<div style='font-size:14px; font-weight:800;'>▶️ {player_selected} — vs Pace (Wagon)</div>", unsafe_allow_html=True)
             fig_p = draw_wagon(pf_pace, f"{player_selected} — vs Pace", is_lhb)
-            display_figure_fixed_height_html(fig_p, height_px=HEIGHT_WAGON_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_p, height_px=HEIGHT_WAGON_PX, margin_px=0)
         with c2:
-            st.write("Spin")
+            st.markdown(f"<div style='font-size:14px; font-weight:800;'>▶️ {player_selected} — vs Spin (Wagon)</div>", unsafe_allow_html=True)
             fig_s = draw_wagon(pf_spin, f"{player_selected} — vs Spin", is_lhb)
-            display_figure_fixed_height_html(fig_s, height_px=HEIGHT_WAGON_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_s, height_px=HEIGHT_WAGON_PX, margin_px=0)
     
-        # --- Pitchmaps: Boundaries & Dismissals (Pace vs Spin)
-        st.subheader("Pitchmaps — Boundaries & Dismissals (Pace vs Spin)")
-        # Build grids
+        # Pitchmaps — Boundaries & Dismissals (Pace vs Spin)
+        st.markdown("<div style='font-size:16px; font-weight:800; margin-top:6px;'>📍 Pitchmaps — Boundaries & Dismissals</div>", unsafe_allow_html=True)
         grid_pace_bound = build_boundaries_grid_local(pf_pace)
         grid_spin_bound = build_boundaries_grid_local(pf_spin)
         grid_pace_wkt = build_dismissals_grid_local(pf_pace)
         grid_spin_wkt = build_dismissals_grid_local(pf_spin)
     
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns([1,1], gap="large")
         with c1:
-            st.write("Bounds — Pace")
+            st.markdown(f"<div style='font-weight:800;'>🏁 Boundaries — Pace</div>", unsafe_allow_html=True)
             fig_b1 = plot_grid_mat(grid_pace_bound, f"{player_selected} — Boundaries vs Pace", cmap='Oranges', mirror=is_lhb)
-            display_figure_fixed_height_html(fig_b1, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_b1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c2:
-            st.write("Bounds — Spin")
+            st.markdown(f"<div style='font-weight:800;'>🏁 Boundaries — Spin</div>", unsafe_allow_html=True)
             fig_b2 = plot_grid_mat(grid_spin_bound, f"{player_selected} — Boundaries vs Spin", cmap='Oranges', mirror=is_lhb)
-            display_figure_fixed_height_html(fig_b2, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_b2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
-        c3, c4 = st.columns(2)
+        c3, c4 = st.columns([1,1], gap="large")
         with c3:
-            st.write("Wkts — Pace")
+            st.markdown(f"<div style='font-weight:800;'>💥 Dismissals — Pace</div>", unsafe_allow_html=True)
             fig_w1 = plot_grid_mat(grid_pace_wkt, f"{player_selected} — Dismissals vs Pace", cmap='Reds', mirror=is_lhb)
-            display_figure_fixed_height_html(fig_w1, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_w1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c4:
-            st.write("Wkts — Spin")
+            st.markdown(f"<div style='font-weight:800;'>💥 Dismissals — Spin</div>", unsafe_allow_html=True)
             fig_w2 = plot_grid_mat(grid_spin_wkt, f"{player_selected} — Dismissals vs Spin", cmap='Reds', mirror=is_lhb)
-            display_figure_fixed_height_html(fig_w2, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_w2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
-    # ---------- Render Bowling view ----------
     else:
-        st.subheader(f"Bowling — {player_selected}")
-        # We'll compute bowling metrics vs batting styles (LHB / RHB)
-        # prepare a frame for the bowler - use df rows where 'bowl' == player_selected
+        # Bowling view
+        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Bowling — {player_selected}</div>", unsafe_allow_html=True)
         bf = bdf[bdf[COL_BOWL] == player_selected].copy()
         if bf.empty:
             st.info("No bowling rows for this bowler.")
             st.stop()
     
-        # normalize runs conceded
+        # normalize runs conceded column
         if 'bowlruns' in bf.columns:
             bf_runs_col = 'bowlruns'
             bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
@@ -3030,28 +3028,28 @@ else:
             bf_runs_col = COL_RUNS
             bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
     
-        # compute metrics for LHB and RHB
-        for_hand = []
-        for hand in ['LHB', 'RHB']:
-            g = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.contains(hand.split('H')[0], na=False)] if COL_BAT_HAND in bf.columns else bf.iloc[0:0]
-            if g.shape[0] == 0:
-                for_hand.append({'batting_style': hand, 'Runs': 0, 'Balls': 0, 'Wkts': 0, 'Econ':'-', 'Avg':'-', 'SR':'-'})
-                continue
-            m = compute_bowling_metrics(g, run_col=bf_runs_col)
-            m['batting_style'] = hand
-            for_hand.append(m)
-        bow_df = pd.DataFrame(for_hand).set_index('batting_style')
-        st.markdown("**Bowling performance vs batting handedness**")
+        # metrics vs LHB/RHB
+        results = []
+        if COL_BAT_HAND in bf.columns:
+            for hand_label, hand_test in [('LHB','L'), ('RHB','R')]:
+                g = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith(hand_test)]
+                m = compute_bowling_metrics(g, run_col=bf_runs_col) if g.shape[0] > 0 else {'Runs':0,'Balls':0,'Wkts':0,'Econ':'-','Avg':'-','SR':'-'}
+                m['batting_style'] = hand_label
+                results.append(m)
+        else:
+            results.append({'batting_style':'LHB','Runs':0,'Balls':0,'Wkts':0,'Econ':'-','Avg':'-','SR':'-'})
+            results.append({'batting_style':'RHB','Runs':0,'Balls':0,'Wkts':0,'Econ':'-','Avg':'-','SR':'-'})
+    
+        bow_df = pd.DataFrame(results).set_index('batting_style')
+        st.markdown("<div style='font-weight:700; font-size:15px;'>📊 Bowling vs handedness</div>", unsafe_allow_html=True)
         st.dataframe(bow_df, use_container_width=True)
     
-        # Pitch maps for this bowler: show wickets & runs given (5x5)
-        # Build 5x5 grids based on lines / length mapping (same mapping as batting pitchmaps)
+        # pitchmaps vs LHB/RHB for this bowler
         def build_bowler_grids(df_local, runs_col):
             run_grid = np.zeros((5,5))
             wkt_grid = np.zeros((5,5))
             if df_local.shape[0] == 0: return run_grid, wkt_grid
-            if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns:
-                return run_grid, wkt_grid
+            if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns: return run_grid, wkt_grid
             for _, r in df_local.iterrows():
                 if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]): continue
                 li = LINE_MAP.get(r[COL_LINE], None)
@@ -3062,11 +3060,10 @@ else:
                 except:
                     rv = 0.0
                 run_grid[le, li] += rv
-                if int(r.get('is_wkt', 0)) == 1:
+                if int(r.get('is_wkt',0)) == 1:
                     wkt_grid[le, li] += 1
             return run_grid, wkt_grid
     
-        # get LHB and RHB subsets for this bowler
         if COL_BAT_HAND in bf.columns:
             bf_lhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('L')].copy()
             bf_rhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('R')].copy()
@@ -3077,27 +3074,28 @@ else:
         run_grid_lhb, wkt_grid_lhb = build_bowler_grids(bf_lhb, bf_runs_col)
         run_grid_rhb, wkt_grid_rhb = build_bowler_grids(bf_rhb, bf_runs_col)
     
-        c1, c2 = st.columns(2)
+        c1, c2 = st.columns([1,1], gap="large")
         with c1:
-            st.write("Runs conceded — vs LHB")
+            st.markdown("<div style='font-weight:800;'>🟥 Runs conceded — vs LHB</div>", unsafe_allow_html=True)
             fig_rlhb = plot_grid_mat(run_grid_lhb, f"{player_selected} — Runs vs LHB", cmap='Reds', mirror=False)
-            display_figure_fixed_height_html(fig_rlhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_rlhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c2:
-            st.write("Wkts — vs LHB")
+            st.markdown("<div style='font-weight:800;'>🎯 Wickets — vs LHB</div>", unsafe_allow_html=True)
             fig_wlhb = plot_grid_mat(wkt_grid_lhb, f"{player_selected} — Wkts vs LHB", cmap='Reds', mirror=False)
-            display_figure_fixed_height_html(fig_wlhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_wlhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
-        c3, c4 = st.columns(2)
+        c3, c4 = st.columns([1,1], gap="large")
         with c3:
-            st.write("Runs conceded — vs RHB")
+            st.markdown("<div style='font-weight:800;'>🟥 Runs conceded — vs RHB</div>", unsafe_allow_html=True)
             fig_rrhb = plot_grid_mat(run_grid_rhb, f"{player_selected} — Runs vs RHB", cmap='Reds', mirror=False)
-            display_figure_fixed_height_html(fig_rrhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_rrhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c4:
-            st.write("Wkts — vs RHB")
+            st.markdown("<div style='font-weight:800;'>🎯 Wickets — vs RHB</div>", unsafe_allow_html=True)
             fig_wrhb = plot_grid_mat(wkt_grid_rhb, f"{player_selected} — Wkts vs RHB", cmap='Reds', mirror=False)
-            display_figure_fixed_height_html(fig_wrhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=6)
+            display_figure_fixed_height_html(fig_wrhb, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
-    st.success("Done — Strength & Weakness analysis rendered.")
+    st.success("Rendered Strength & Weakness — Broadcast view.")
+
 
         
         # If user chooses Bowling role, provide a placeholder (or extend later)
