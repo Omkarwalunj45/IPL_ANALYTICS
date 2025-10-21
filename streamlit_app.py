@@ -2683,7 +2683,7 @@ else:
         
         # Display the final result_df
         st.write(result_df.head())
-        result_df = result_df.drop(columns=['batsman', 'debut_year', 'final_year','hundreds','fifties','thirties','highest_score','matches'])
+        result_df = result_df.drop(columns=['batsman','100s','50s','30s,'HS'])
         result_df.columns = [col.upper().replace('_', ' ') for col in result_df.columns]
         columns_to_convert = ['RUNS']
         
