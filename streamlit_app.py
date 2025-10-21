@@ -2633,6 +2633,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 else:
     st.header("Strength and Weakness Analysis")
     pdf=DF_gen
+    pdf['batsman']=pdf['bat']
+    pdf['bowler']=pdf['bowl']
     
     player_name = st.selectbox("Search for a player", idf['batsman'].unique())
     
