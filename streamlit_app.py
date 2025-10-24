@@ -2765,7 +2765,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 # 
 # Then REPLACE the entire section from that line down to the next major section
 # with the code below:
-else:
+elif sidebar_option == "Strength and Weakness Analysis":
     st.header("Strength and Weakness Analysis")
     # strength_weakness_streamlit.py
     # strength_weakness_streamlit_broadcast_wkt_fix.py
@@ -3689,100 +3689,100 @@ import pandas as pd
 import io
 
 # Sidebar UI
-with st.sidebar:
+else:
     st.markdown("## 🔗 Integrated Contextual Ratings")
     # Year selection (handle probable typo '203' as 2023)
-    year_choice = st.selectbox("Select year", options=["2023", "2024", "2025", "203"], index=2)
+    year_choice = st.selectbox("Select year", options=["2023", "2024", "2025"], index=2)
     # normalize if user picks '203'
     if str(year_choice).strip() == "203":
         year_choice = "2023"
     board_choice = st.radio("Leaderboard", options=["Batting Leaderboard", "Bowling Leaderboard"], index=0)
     show_top_n = st.number_input("Show top N rows (0 = all)", min_value=0, value=50, step=10)
 
-# helper to pick dataframe based on year & board
-def _get_icr_df_for_year(year_str):
-    """Return batting ICR DataFrame for year_str or None if not present."""
-    mapping = {
-        "2023": globals().get("icr_23"),
-        "2024": globals().get("icr_24"),
-        "2025": globals().get("icr_25")
-    }
-    return mapping.get(str(year_str))
-
-def _get_bicr_df_for_year(year_str):
-    """Return bowling BICR DataFrame for year_str or None if not present."""
-    mapping = {
-        "2023": globals().get("bicr_23"),
-        "2024": globals().get("bicr_24"),
-        "2025": globals().get("bicr_25")
-    }
-    return mapping.get(str(year_str))
-
-# load df based on user selection
-selected_year = str(year_choice)
-if board_choice.startswith("Bat"):
-    df_show = _get_icr_df_for_year(selected_year)
-    expected_label = "ICR"
-else:
-    df_show = _get_bicr_df_for_year(selected_year)
-    expected_label = "BICR"
-
-# Display / error handling
-st.markdown("---")
-st.markdown(f"### {board_choice} — {selected_year}")
-
-if df_show is None:
-    st.warning(f"No dataframe loaded for selection: {board_choice} in {selected_year}. "
-               f"Expected variable names: icr_23/icr_24/icr_25 (bat) or bicr_23/bicr_24/bicr_25 (bowl).")
-else:
-    # Make a defensive copy
-    df_disp = df_show.copy()
-
-    # Try to detect percentile column and standardize column names for display
-    # For batting: expect something like 'ICR percentile' or 'ICR Percentile'
-    # For bowling: expect something like 'BICR percentile' or 'BICR Percentile'
-    pct_candidates = [col for col in df_disp.columns if "percentile" in col.lower()]
-    # Prefer the one containing ICR/BICR if present
-    if len(pct_candidates) > 1:
-        chosen_pct = None
-        for c in pct_candidates:
-            if expected_label.lower() in c.lower():
-                chosen_pct = c
-                break
-        if chosen_pct is None:
+    # helper to pick dataframe based on year & board
+    def _get_icr_df_for_year(year_str):
+        """Return batting ICR DataFrame for year_str or None if not present."""
+        mapping = {
+            "2023": globals().get("icr_23"),
+            "2024": globals().get("icr_24"),
+            "2025": globals().get("icr_25")
+        }
+        return mapping.get(str(year_str))
+    
+    def _get_bicr_df_for_year(year_str):
+        """Return bowling BICR DataFrame for year_str or None if not present."""
+        mapping = {
+            "2023": globals().get("bicr_23"),
+            "2024": globals().get("bicr_24"),
+            "2025": globals().get("bicr_25")
+        }
+        return mapping.get(str(year_str))
+    
+    # load df based on user selection
+    selected_year = str(year_choice)
+    if board_choice.startswith("Bat"):
+        df_show = _get_icr_df_for_year(selected_year)
+        expected_label = "ICR"
+    else:
+        df_show = _get_bicr_df_for_year(selected_year)
+        expected_label = "BICR"
+    
+    # Display / error handling
+    st.markdown("---")
+    st.markdown(f"### {board_choice} — {selected_year}")
+    
+    if df_show is None:
+        st.warning(f"No dataframe loaded for selection: {board_choice} in {selected_year}. "
+                   f"Expected variable names: icr_23/icr_24/icr_25 (bat) or bicr_23/bicr_24/bicr_25 (bowl).")
+    else:
+        # Make a defensive copy
+        df_disp = df_show.copy()
+    
+        # Try to detect percentile column and standardize column names for display
+        # For batting: expect something like 'ICR percentile' or 'ICR Percentile'
+        # For bowling: expect something like 'BICR percentile' or 'BICR Percentile'
+        pct_candidates = [col for col in df_disp.columns if "percentile" in col.lower()]
+        # Prefer the one containing ICR/BICR if present
+        if len(pct_candidates) > 1:
+            chosen_pct = None
+            for c in pct_candidates:
+                if expected_label.lower() in c.lower():
+                    chosen_pct = c
+                    break
+            if chosen_pct is None:
+                chosen_pct = pct_candidates[0]
+        elif len(pct_candidates) == 1:
             chosen_pct = pct_candidates[0]
-    elif len(pct_candidates) == 1:
-        chosen_pct = pct_candidates[0]
-    else:
-        chosen_pct = None
-
-    # If percentile column found, sort by it descending; else show as-is
-    if chosen_pct is not None:
-        try:
-            df_disp[chosen_pct] = pd.to_numeric(df_disp[chosen_pct], errors='coerce')
-            df_disp = df_disp.sort_values(by=chosen_pct, ascending=False)
-        except Exception:
-            pass
-
-    # show a short descriptive header and the DataFrame (optionally truncated)
-    st.markdown(f"**Source:** `{selected_year}` — showing {board_choice.split()[0]} ratings")
-    if int(show_top_n) > 0:
-        to_display = df_disp.head(int(show_top_n))
-        st.dataframe(to_display.reset_index(drop=True), use_container_width=True)
-    else:
-        st.dataframe(df_disp.reset_index(drop=True), use_container_width=True)
-
-    # Provide CSV download
-    buffer = io.StringIO()
-    df_disp.to_csv(buffer, index=False)
-    buffer.seek(0)
-    csv_bytes = buffer.getvalue().encode("utf-8")
-    st.download_button(
-        label="Download CSV",
-        data=csv_bytes,
-        file_name=f"{board_choice.replace(' ', '_')}_{selected_year}.csv",
-        mime="text/csv"
-    )
+        else:
+            chosen_pct = None
+    
+        # If percentile column found, sort by it descending; else show as-is
+        if chosen_pct is not None:
+            try:
+                df_disp[chosen_pct] = pd.to_numeric(df_disp[chosen_pct], errors='coerce')
+                df_disp = df_disp.sort_values(by=chosen_pct, ascending=False)
+            except Exception:
+                pass
+    
+        # show a short descriptive header and the DataFrame (optionally truncated)
+        st.markdown(f"**Source:** `{selected_year}` — showing {board_choice.split()[0]} ratings")
+        if int(show_top_n) > 0:
+            to_display = df_disp.head(int(show_top_n))
+            st.dataframe(to_display.reset_index(drop=True), use_container_width=True)
+        else:
+            st.dataframe(df_disp.reset_index(drop=True), use_container_width=True)
+    
+        # Provide CSV download
+        buffer = io.StringIO()
+        df_disp.to_csv(buffer, index=False)
+        buffer.seek(0)
+        csv_bytes = buffer.getvalue().encode("utf-8")
+        st.download_button(
+            label="Download CSV",
+            data=csv_bytes,
+            file_name=f"{board_choice.replace(' ', '_')}_{selected_year}.csv",
+            mime="text/csv"
+        )
 
 # -------------------- end sidebar section --------------------
 
