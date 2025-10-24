@@ -3678,10 +3678,10 @@ else:
     icr_25['team_bat']=icr_25['Team']
     bicr_25['team_bowl']=bicr_25['Team']
     bicr_25['bowler']=bicr_25['Bowler']
-    icr_24['ICR percentile']=icr_24['ICR_percentile_final']
-    bicr_24['BICR percentile']=bicr_24['ICR_percentile_final']
-    icr_23['ICR percentile']=icr_23['ICR_percentile_final']
-    bicr_23['BICR percentile']=bicr_23['ICR_percentile_final']
+    icr_24['ICR percentile']=icr_24['icr_percentile_final']
+    bicr_24['BICR percentile']=bicr_24['icr_percentile_final']
+    icr_23['ICR percentile']=icr_23['icr_percentile_final']
+    bicr_23['BICR percentile']=bicr_23['icr_percentile_final']
     
     # -------------------- Integrated Contextual Ratings (sidebar) --------------------
     st.markdown("## 🔗 Integrated Contextual Ratings")
