@@ -3669,27 +3669,26 @@ elif sidebar_option == "Strength and Weakness Analysis":
             fig_dotpct_r = plot_grid_with_readable_labels(dot_pct_rhb, f"{player_selected} — Dot% vs RHB", cmap='Blues', mirror=False, fmt='pct', vmax=100.0)
             display_figure_fixed_height_html(fig_dotpct_r, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
 
-icr_25 = pd.read_excel("Datasets/Batting ICR IPL 2025.csv")
-bicr_25 = pd.read_excel("Datasets/Bowling ICR IPL 2025.csv")
-icr_24 = pd.read_excel("Datasets/icr_2024 (1).csv")
-bicr_24 = pd.read_excel("Datasets/bicr_2024.csv")
-icr_23 = pd.read_excel("Datasets/icr_2023.csv")
-bicr_23 = pd.read_excel("Datasets/bicr_2023.csv")
-icr_25['team_bat']=icr_25['Team']
-bicr_25['team_bowl']=bicr_25['Team']
-bicr_25['bowler']=bicr_25['Bowler']
-icr_24['ICR percentile']=icr_24['ICR_percentile_final']
-bicr_24['BICR percentile']=bicr_24['ICR_percentile_final']
-icr_23['ICR percentile']=icr_23['ICR_percentile_final']
-bicr_23['BICR percentile']=bicr_23['ICR_percentile_final']
 
-# -------------------- Integrated Contextual Ratings (sidebar) --------------------
-import streamlit as st
-import pandas as pd
-import io
 
 # Sidebar UI
 else:
+    import io
+    icr_25 = pd.read_excel("Datasets/Batting ICR IPL 2025.csv")
+    bicr_25 = pd.read_excel("Datasets/Bowling ICR IPL 2025.csv")
+    icr_24 = pd.read_excel("Datasets/icr_2024 (1).csv")
+    bicr_24 = pd.read_excel("Datasets/bicr_2024.csv")
+    icr_23 = pd.read_excel("Datasets/icr_2023.csv")
+    bicr_23 = pd.read_excel("Datasets/bicr_2023.csv")
+    icr_25['team_bat']=icr_25['Team']
+    bicr_25['team_bowl']=bicr_25['Team']
+    bicr_25['bowler']=bicr_25['Bowler']
+    icr_24['ICR percentile']=icr_24['ICR_percentile_final']
+    bicr_24['BICR percentile']=bicr_24['ICR_percentile_final']
+    icr_23['ICR percentile']=icr_23['ICR_percentile_final']
+    bicr_23['BICR percentile']=bicr_23['ICR_percentile_final']
+    
+    # -------------------- Integrated Contextual Ratings (sidebar) --------------------
     st.markdown("## 🔗 Integrated Contextual Ratings")
     # Year selection (handle probable typo '203' as 2023)
     year_choice = st.selectbox("Select year", options=["2023", "2024", "2025"], index=2)
