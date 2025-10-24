@@ -2532,6 +2532,135 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 
             else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+
+            # Adapted shot-productivity + control charts for your dataset (uses `bdf`)
+            import plotly.express as px
+            import pandas as pd
+            import numpy as np
+            import streamlit as st
+            bdf=df
+            
+            # Defensive checks
+            if 'bdf' not in globals():
+                st.error("`bdf` (the ball-by-ball DataFrame) was not found in the environment. Place your DataFrame in variable `bdf`.")
+            else:
+                df_local = bdf.copy()
+            
+                # detect run column (prefer the canonical names in your schema)
+                run_col = next((c for c in ['batruns', 'batsman_runs', 'score', 'runs'] if c in df_local.columns), None)
+                if run_col is None:
+                    st.error("No runs column found in the dataframe. Expected one of: 'batruns','batsman_runs','score','runs'.")
+                elif 'shot' not in df_local.columns:
+                    st.error("No 'shot' column found in the dataframe.")
+                else:
+                    # Drop rows missing shot or run value (we need both)
+                    df_local = df_local.dropna(subset=['shot', run_col]).copy()
+            
+                    # Compute total runs (guard against zero)
+                    total_runs = df_local[run_col].sum()
+                    if total_runs == 0:
+                        st.info("Total runs for this selection = 0. Productive-shot chart will show zeros.")
+            
+                    # -------------------------
+                    # Productive shots: % of total runs by shot
+                    # -------------------------
+                    productive_shot_df = (
+                        df_local.groupby('shot')[run_col]
+                        .sum()
+                        .reset_index(name='runs_by_shot')
+                        .sort_values('runs_by_shot', ascending=True)   # ascending so horizontal bars show biggest on top with categoryorder 'total ascending'
+                    )
+                    # percentage of total runs
+                    productive_shot_df['Percentage of Runs'] = productive_shot_df['runs_by_shot'].apply(
+                        lambda r: (r / total_runs * 100.0) if total_runs > 0 else 0.0
+                    )
+            
+                    # -------------------------
+                    # Control % by shot (if control column exists)
+                    # -------------------------
+                    has_control = 'control' in df_local.columns
+                    if has_control:
+                        # coerce control to numeric (1/0)
+                        df_local['control_num'] = pd.to_numeric(df_local['control'], errors='coerce').fillna(0).astype(int)
+                        control_df = (
+                            df_local.groupby('shot')
+                            .agg(total_shots=('control_num', 'size'), controlled_shots=('control_num', 'sum'))
+                            .reset_index()
+                        )
+                        control_df['Control Percentage'] = control_df.apply(
+                            lambda r: (r['controlled_shots'] / r['total_shots'] * 100.0) if r['total_shots'] > 0 else 0.0,
+                            axis=1
+                        )
+                        control_df = control_df.sort_values('Control Percentage', ascending=True)  # ascending so largest appears on top
+                    else:
+                        control_df = None
+            
+                    # -------------------------
+                    # Plotting: two side-by-side charts
+                    # -------------------------
+                    col1, col2 = st.columns(2)
+            
+                    # Productive shots chart (left)
+                    with col1:
+                        st.markdown("### 🔥 Most Productive Shots (share of runs)")
+                        fig1 = px.bar(
+                            productive_shot_df,
+                            x='Percentage of Runs',
+                            y='shot',
+                            orientation='h',
+                            color='Percentage of Runs',
+                            height=600,
+                            labels={'shot': 'Shot Type', 'Percentage of Runs': '% of Runs'}
+                        )
+                        fig1.update_layout(
+                            margin=dict(l=180, r=40, t=40, b=40),
+                            xaxis_title='Percentage of Runs',
+                            yaxis_title=None,
+                        )
+                        # show percentage inside bars with 2 decimals
+                        fig1.update_traces(texttemplate='%{x:.2f}%', textposition='inside', hovertemplate=None)
+                        # ensure ordering places the biggest at top
+                        fig1.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig1, use_container_width=True)
+            
+                    # Control % chart (right)
+                    with col2:
+                        if control_df is None:
+                            st.markdown("### 🎯 Control Percentage by Shot")
+                            st.info("No `control` column found in the dataset; skipping control percentage chart.")
+                        else:
+                            st.markdown("### 🎯 Control Percentage by Shot")
+                            fig2 = px.bar(
+                                control_df,
+                                x='Control Percentage',
+                                y='shot',
+                                orientation='h',
+                                color='Control Percentage',
+                                height=600,
+                                labels={'shot': 'Shot Type', 'Control Percentage': '% Controlled'}
+                            )
+                            fig2.update_layout(
+                                margin=dict(l=180, r=40, t=40, b=40),
+                                xaxis_title='Control Percentage',
+                                yaxis_title=None,
+                            )
+                            fig2.update_traces(texttemplate='%{x:.2f}%', textposition='inside', hovertemplate=None)
+                            fig2.update_yaxes(categoryorder='total ascending')
+                            st.plotly_chart(fig2, use_container_width=True)
+            
+                    # Optionally show underlying tables (rounded)
+                    st.markdown("#### Underlying numbers")
+                    prod_show = productive_shot_df[['shot', 'runs_by_shot', 'Percentage of Runs']].copy()
+                    prod_show['Percentage of Runs'] = prod_show['Percentage of Runs'].round(2)
+                    prod_show = prod_show.sort_values('Percentage of Runs', ascending=False).reset_index(drop=True)
+                    st.dataframe(prod_show.rename(columns={'shot':'Shot','runs_by_shot':'Runs'}), use_container_width=True)
+            
+                    if control_df is not None:
+                        ctrl_show = control_df[['shot','total_shots','controlled_shots','Control Percentage']].copy()
+                        ctrl_show['Control Percentage'] = ctrl_show['Control Percentage'].round(2)
+                        ctrl_show = ctrl_show.sort_values('Control Percentage', ascending=False).reset_index(drop=True)
+                        st.dataframe(ctrl_show.rename(columns={'shot':'Shot','total_shots':'Total Shots','controlled_shots':'Controlled Shots'}), use_container_width=True)
+
     
     # ---------------------------
     # Bowler Analysis (match-level)
