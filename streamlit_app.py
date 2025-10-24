@@ -3674,12 +3674,12 @@ elif sidebar_option == "Strength and Weakness Analysis":
 # Sidebar UI
 else:
     import io
-    icr_25 = pd.read_excel("Datasets/Batting ICR IPL 2025.csv")
-    bicr_25 = pd.read_excel("Datasets/Bowling ICR IPL 2025.csv")
-    icr_24 = pd.read_excel("Datasets/icr_2024 (1).csv")
-    bicr_24 = pd.read_excel("Datasets/bicr_2024.csv")
-    icr_23 = pd.read_excel("Datasets/icr_2023.csv")
-    bicr_23 = pd.read_excel("Datasets/bicr_2023.csv")
+    icr_25 = pd.read_csv("Datasets/Batting ICR IPL 2025.csv")
+    bicr_25 = pd.read_csv("Datasets/Bowling ICR IPL 2025.csv")
+    icr_24 = pd.read_csv("Datasets/icr_2024 (1).csv")
+    bicr_24 = pd.read_csv("Datasets/bicr_2024.csv")
+    icr_23 = pd.read_csv("Datasets/icr_2023.csv")
+    bicr_23 = pd.read_csv("Datasets/bicr_2023.csv")
     icr_25['team_bat']=icr_25['Team']
     bicr_25['team_bowl']=bicr_25['Team']
     bicr_25['bowler']=bicr_25['Bowler']
