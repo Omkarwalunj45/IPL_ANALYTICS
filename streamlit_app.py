@@ -1036,7 +1036,7 @@ def build_idf(df_local):
 
 sidebar_option = st.sidebar.radio(
     "Select an option:",
-    ("Player Profile", "Matchup Analysis", "Strength vs Weakness", "Match by Match Analysis")
+    ("Player Profile", "Matchup Analysis", "Strength vs Weakness", "Match by Match Analysis","Integrated Contextual Ratings")
 )
 
 if df is not None:
