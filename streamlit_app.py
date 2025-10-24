@@ -81,12 +81,7 @@ st.title('IPL Performance Analysis Portal')
 def load_data():
     path = "Datasets/ipl_bbb_21_25.xlsx"
     df = pd.read_excel(path)
-    icr_25 = pd.read_excel("Datasets/Batting ICR IPL 2025.csv")
-    bicr_25 = pd.read_excel("Datasets/Bowling ICR IPL 2025.csv")
-    icr_24 = pd.read_excel("Datasets/icr_2024 (1).csv")
-    bicr_24 = pd.read_excel("Datasets/bicr_2024.csv")
-    icr_23 = pd.read_excel("Datasets/icr_2023.csv")
-    bicr_23 = pd.read_excel("Datasets/bicr_2023.csv")
+
     return df
 
 df = load_data()    
