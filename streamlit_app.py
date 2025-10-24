@@ -2687,12 +2687,6 @@ else:
                 return c
         return default
     
-    # ---------- Ensure `df` exists ----------
-    try:
-        df
-    except NameError:
-        st.error("Please provide the ball-by-ball DataFrame in the variable `df` before running this app.")
-        st.stop()
     
     # work on a copy
     bdf = as_dataframe(df)
