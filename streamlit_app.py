@@ -3480,194 +3480,194 @@ if role == "Batting":
 
 
     
-else:
-    # ---------- Bowling view (rearranged) ----------
-    st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Bowling — {player_selected}</div>", unsafe_allow_html=True)
-    bf = bdf[bdf[COL_BOWL] == player_selected].copy()
-    if bf.empty:
-        st.info("No bowling rows for this bowler.")
-        st.stop()
-
-    # choose runs column for bowler frame
-    if 'bowlruns' in bf.columns:
-        bf_runs_col = 'bowlruns'
-        bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
-    elif 'score' in bf.columns:
-        bf_runs_col = 'score'
-        bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
     else:
-        bf_runs_col = COL_RUNS
-        bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
-
-    # Ensure dismissal / out / is_wkt in bowler frame
-    if COL_DISMISSAL in bf.columns:
-        bf['dismissal_clean'] = bf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
-    else:
-        bf['dismissal_clean'] = ''
-    if COL_OUT in bf.columns:
-        bf['out_flag'] = pd.to_numeric(bf[COL_OUT], errors='coerce').fillna(0).astype(int)
-    else:
-        bf['out_flag'] = 0
-    bf['is_wkt'] = bf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag',0), r.get('dismissal_clean','')) else 0, axis=1)
-
-    # split by batter handedness
-    if COL_BAT_HAND in bf.columns:
-        bf_lhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('L')].copy()
-        bf_rhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('R')].copy()
-    else:
-        bf_lhb = bf.iloc[0:0].copy()
-        bf_rhb = bf.iloc[0:0].copy()
-
-    # --- Helpers: build grids ---
-    def build_run_wkt_grids(df_local, runs_col):
-        """Return (run_grid, wkt_grid, balls_grid, dot_grid) for df_local"""
-        run_grid = np.zeros((5,5), dtype=float)
-        wkt_grid = np.zeros((5,5), dtype=int)
-        balls_grid = np.zeros((5,5), dtype=int)
-        dot_grid = np.zeros((5,5), dtype=int)
-        if df_local.shape[0] == 0:
-            return run_grid, wkt_grid, balls_grid, dot_grid
-        if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns:
-            return run_grid, wkt_grid, balls_grid, dot_grid
-
-        nob_col = 'noball' if 'noball' in df_local.columns else None
-        wide_col = 'wide' if 'wide' in df_local.columns else None
-
-        for _, r in df_local.iterrows():
-            linev = r.get(COL_LINE, None)
-            lengthv = r.get(COL_LENGTH, None)
-            if pd.isna(linev) or pd.isna(lengthv):
-                continue
-            li = LINE_MAP.get(linev, None)
-            le = LENGTH_MAP.get(lengthv, None)
-            if li is None or le is None:
-                continue
-
-            # check legality
-            nob = int(r.get(nob_col, 0)) if nob_col in r.index else 0
-            wid = int(r.get(wide_col, 0)) if wide_col in r.index else 0
-            legal = (nob == 0 and wid == 0)
-
-            # runs contributed to runs grid (include all deliveries' runs)
-            try:
-                rv = float(r.get(runs_col, 0) if r.get(runs_col, None) is not None else 0)
-            except:
-                rv = 0.0
-            run_grid[le, li] += rv
-
-            # balls / dots only count for legal deliveries
-            if legal:
-                balls_grid[le, li] += 1
-                if int(r.get(runs_col, 0)) == 0:
-                    dot_grid[le, li] += 1
-
-            # wickets credited to bowler (is_wkt computed earlier)
-            if int(r.get('is_wkt', 0)) == 1:
-                wkt_grid[le, li] += 1
-
-        return run_grid, wkt_grid, balls_grid, dot_grid
-
-    run_grid_lhb, wkt_grid_lhb, balls_lhb, dot_lhb = build_run_wkt_grids(bf_lhb, bf_runs_col)
-    run_grid_rhb, wkt_grid_rhb, balls_rhb, dot_rhb = build_run_wkt_grids(bf_rhb, bf_runs_col)
-
-    # compute Dot % grids (rounded to 2 decimals). safe divide
-    def compute_dot_pct(dot_grid, balls_grid):
-        pct = np.zeros_like(dot_grid, dtype=float)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            mask = balls_grid > 0
-            pct[mask] = (dot_grid[mask] / balls_grid[mask]) * 100.0
-        # round to 2 decimals for display
-        pct = np.round(pct, 2)
-        return pct
-
-    dot_pct_lhb = compute_dot_pct(dot_lhb, balls_lhb)
-    dot_pct_rhb = compute_dot_pct(dot_rhb, balls_rhb)
-
-    # --- Enhanced plotting function with readable annotations ---
-    import matplotlib.patheffects as mpatheffects
-
-    def plot_grid_with_readable_labels(grid, title, cmap='Reds', mirror=False, fmt='int', vmax=None):
-        """
-        grid: numeric 5x5 array
-        fmt: 'int', 'float', or 'pct' (percentage style)
-        mirror: when True, flip horizontally (used earlier for batter mirroring)
-        """
-        disp = np.fliplr(grid) if mirror else grid.copy()
-        # choose xticks order depending on mirror
-        xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
-        xticks = list(reversed(xticks_base)) if mirror else xticks_base
-
-        # set vmax default to grid.max() (avoid zero)
-        real_vmax = float(np.nanmax(disp)) if (not np.all(np.isnan(disp)) and np.nanmax(disp) > 0) else 1.0
-        vmax_use = float(vmax) if (vmax is not None and vmax > 0) else real_vmax
-
-        fig, ax = plt.subplots(figsize=(6,9), dpi=150)
-        im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
-        ax.set_xticks(range(5)); ax.set_yticks(range(5))
-        ax.set_xticklabels(xticks, rotation=40, ha='right')
-        ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-        # draw each label with adaptive color & stroke for readability
-        for i in range(5):
-            for j in range(5):
-                val = disp[i,j]
-                # formatting:
-                if fmt == 'pct':
-                    lab = f"{val:.2f}%" if (not np.isnan(val)) else "0.00%"
-                elif fmt == 'float':
-                    lab = f"{val:.2f}"
-                else:  # int
-                    try:
-                        lab = f"{int(val)}"
-                    except:
-                        lab = f"{val}"
-                # choose text color based on intensity relative to vmax_use
+        # ---------- Bowling view (rearranged) ----------
+        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Bowling — {player_selected}</div>", unsafe_allow_html=True)
+        bf = bdf[bdf[COL_BOWL] == player_selected].copy()
+        if bf.empty:
+            st.info("No bowling rows for this bowler.")
+            st.stop()
+    
+        # choose runs column for bowler frame
+        if 'bowlruns' in bf.columns:
+            bf_runs_col = 'bowlruns'
+            bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
+        elif 'score' in bf.columns:
+            bf_runs_col = 'score'
+            bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
+        else:
+            bf_runs_col = COL_RUNS
+            bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
+    
+        # Ensure dismissal / out / is_wkt in bowler frame
+        if COL_DISMISSAL in bf.columns:
+            bf['dismissal_clean'] = bf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+        else:
+            bf['dismissal_clean'] = ''
+        if COL_OUT in bf.columns:
+            bf['out_flag'] = pd.to_numeric(bf[COL_OUT], errors='coerce').fillna(0).astype(int)
+        else:
+            bf['out_flag'] = 0
+        bf['is_wkt'] = bf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag',0), r.get('dismissal_clean','')) else 0, axis=1)
+    
+        # split by batter handedness
+        if COL_BAT_HAND in bf.columns:
+            bf_lhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('L')].copy()
+            bf_rhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('R')].copy()
+        else:
+            bf_lhb = bf.iloc[0:0].copy()
+            bf_rhb = bf.iloc[0:0].copy()
+    
+        # --- Helpers: build grids ---
+        def build_run_wkt_grids(df_local, runs_col):
+            """Return (run_grid, wkt_grid, balls_grid, dot_grid) for df_local"""
+            run_grid = np.zeros((5,5), dtype=float)
+            wkt_grid = np.zeros((5,5), dtype=int)
+            balls_grid = np.zeros((5,5), dtype=int)
+            dot_grid = np.zeros((5,5), dtype=int)
+            if df_local.shape[0] == 0:
+                return run_grid, wkt_grid, balls_grid, dot_grid
+            if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns:
+                return run_grid, wkt_grid, balls_grid, dot_grid
+    
+            nob_col = 'noball' if 'noball' in df_local.columns else None
+            wide_col = 'wide' if 'wide' in df_local.columns else None
+    
+            for _, r in df_local.iterrows():
+                linev = r.get(COL_LINE, None)
+                lengthv = r.get(COL_LENGTH, None)
+                if pd.isna(linev) or pd.isna(lengthv):
+                    continue
+                li = LINE_MAP.get(linev, None)
+                le = LENGTH_MAP.get(lengthv, None)
+                if li is None or le is None:
+                    continue
+    
+                # check legality
+                nob = int(r.get(nob_col, 0)) if nob_col in r.index else 0
+                wid = int(r.get(wide_col, 0)) if wide_col in r.index else 0
+                legal = (nob == 0 and wid == 0)
+    
+                # runs contributed to runs grid (include all deliveries' runs)
                 try:
-                    intensity = float(val) / float(vmax_use) if vmax_use > 0 else 0.0
+                    rv = float(r.get(runs_col, 0) if r.get(runs_col, None) is not None else 0)
                 except:
-                    intensity = 0.0
-                txt_color = 'white' if intensity > 0.55 else 'black'
-                # place text with a thin stroke/background for extra clarity
-                txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
-                # add contrasting stroke
-                txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground='white' if txt_color=='black' else 'black'),
-                                      mpatheffects.Normal()])
-        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-        plt.title(title, pad=6, fontsize=12)
-        plt.tight_layout(pad=0)
-        fig.subplots_adjust(top=0.95, bottom=0.02, left=0.06, right=0.98)
-        return fig
-
-    # --- Row 1: Runs conceded (LHB left, RHB right) ---
-    st.markdown("<div style='font-weight:800; font-size:15px; margin-top:6px;'>🟥 Runs conceded</div>", unsafe_allow_html=True)
-    c1, c2 = st.columns([1,1], gap="large")
-    with c1:
-        st.markdown("<div style='font-weight:700;'>Left-handed batsmen</div>", unsafe_allow_html=True)
-        fig_runs_l = plot_grid_with_readable_labels(run_grid_lhb, f"{player_selected} — Runs vs LHB", cmap='Reds', mirror=False, fmt='float', vmax=max(np.max(run_grid_lhb), np.max(run_grid_rhb), 1.0))
-        display_figure_fixed_height_html(fig_runs_l, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-    with c2:
-        st.markdown("<div style='font-weight:700;'>Right-handed batsmen</div>", unsafe_allow_html=True)
-        fig_runs_r = plot_grid_with_readable_labels(run_grid_rhb, f"{player_selected} — Runs vs RHB", cmap='Reds', mirror=False, fmt='float', vmax=max(np.max(run_grid_lhb), np.max(run_grid_rhb), 1.0))
-        display_figure_fixed_height_html(fig_runs_r, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-
-    # --- Row 2: Wickets (LHB left, RHB right) ---
-    st.markdown("<div style='font-weight:800; font-size:15px; margin-top:4px;'>🎯 Wickets credited to bowler</div>", unsafe_allow_html=True)
-    c3, c4 = st.columns([1,1], gap="large")
-    with c3:
-        fig_wk_l = plot_grid_with_readable_labels(wkt_grid_lhb, f"{player_selected} — Wkts vs LHB", cmap='Reds', mirror=False, fmt='int', vmax=max(np.max(wkt_grid_lhb), np.max(wkt_grid_rhb), 1))
-        display_figure_fixed_height_html(fig_wk_l, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-    with c4:
-        fig_wk_r = plot_grid_with_readable_labels(wkt_grid_rhb, f"{player_selected} — Wkts vs RHB", cmap='Reds', mirror=False, fmt='int', vmax=max(np.max(wkt_grid_lhb), np.max(wkt_grid_rhb), 1))
-        display_figure_fixed_height_html(fig_wk_r, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-
-    # --- Row 3: Dot % (LHB left, RHB right) ---
-    st.markdown("<div style='font-weight:800; font-size:15px; margin-top:4px;'>⚫ Dot percentage (legal deliveries)</div>", unsafe_allow_html=True)
-    c5, c6 = st.columns([1,1], gap="large")
-    with c5:
-        fig_dotpct_l = plot_grid_with_readable_labels(dot_pct_lhb, f"{player_selected} — Dot% vs LHB", cmap='Blues', mirror=False, fmt='pct', vmax=100.0)
-        display_figure_fixed_height_html(fig_dotpct_l, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-    with c6:
-        fig_dotpct_r = plot_grid_with_readable_labels(dot_pct_rhb, f"{player_selected} — Dot% vs RHB", cmap='Blues', mirror=False, fmt='pct', vmax=100.0)
-        display_figure_fixed_height_html(fig_dotpct_r, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+                    rv = 0.0
+                run_grid[le, li] += rv
+    
+                # balls / dots only count for legal deliveries
+                if legal:
+                    balls_grid[le, li] += 1
+                    if int(r.get(runs_col, 0)) == 0:
+                        dot_grid[le, li] += 1
+    
+                # wickets credited to bowler (is_wkt computed earlier)
+                if int(r.get('is_wkt', 0)) == 1:
+                    wkt_grid[le, li] += 1
+    
+            return run_grid, wkt_grid, balls_grid, dot_grid
+    
+        run_grid_lhb, wkt_grid_lhb, balls_lhb, dot_lhb = build_run_wkt_grids(bf_lhb, bf_runs_col)
+        run_grid_rhb, wkt_grid_rhb, balls_rhb, dot_rhb = build_run_wkt_grids(bf_rhb, bf_runs_col)
+    
+        # compute Dot % grids (rounded to 2 decimals). safe divide
+        def compute_dot_pct(dot_grid, balls_grid):
+            pct = np.zeros_like(dot_grid, dtype=float)
+            with np.errstate(divide='ignore', invalid='ignore'):
+                mask = balls_grid > 0
+                pct[mask] = (dot_grid[mask] / balls_grid[mask]) * 100.0
+            # round to 2 decimals for display
+            pct = np.round(pct, 2)
+            return pct
+    
+        dot_pct_lhb = compute_dot_pct(dot_lhb, balls_lhb)
+        dot_pct_rhb = compute_dot_pct(dot_rhb, balls_rhb)
+    
+        # --- Enhanced plotting function with readable annotations ---
+        import matplotlib.patheffects as mpatheffects
+    
+        def plot_grid_with_readable_labels(grid, title, cmap='Reds', mirror=False, fmt='int', vmax=None):
+            """
+            grid: numeric 5x5 array
+            fmt: 'int', 'float', or 'pct' (percentage style)
+            mirror: when True, flip horizontally (used earlier for batter mirroring)
+            """
+            disp = np.fliplr(grid) if mirror else grid.copy()
+            # choose xticks order depending on mirror
+            xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
+            xticks = list(reversed(xticks_base)) if mirror else xticks_base
+    
+            # set vmax default to grid.max() (avoid zero)
+            real_vmax = float(np.nanmax(disp)) if (not np.all(np.isnan(disp)) and np.nanmax(disp) > 0) else 1.0
+            vmax_use = float(vmax) if (vmax is not None and vmax > 0) else real_vmax
+    
+            fig, ax = plt.subplots(figsize=(6,9), dpi=150)
+            im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
+            ax.set_xticks(range(5)); ax.set_yticks(range(5))
+            ax.set_xticklabels(xticks, rotation=40, ha='right')
+            ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+            # draw each label with adaptive color & stroke for readability
+            for i in range(5):
+                for j in range(5):
+                    val = disp[i,j]
+                    # formatting:
+                    if fmt == 'pct':
+                        lab = f"{val:.2f}%" if (not np.isnan(val)) else "0.00%"
+                    elif fmt == 'float':
+                        lab = f"{val:.2f}"
+                    else:  # int
+                        try:
+                            lab = f"{int(val)}"
+                        except:
+                            lab = f"{val}"
+                    # choose text color based on intensity relative to vmax_use
+                    try:
+                        intensity = float(val) / float(vmax_use) if vmax_use > 0 else 0.0
+                    except:
+                        intensity = 0.0
+                    txt_color = 'white' if intensity > 0.55 else 'black'
+                    # place text with a thin stroke/background for extra clarity
+                    txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
+                    # add contrasting stroke
+                    txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground='white' if txt_color=='black' else 'black'),
+                                          mpatheffects.Normal()])
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+            plt.title(title, pad=6, fontsize=12)
+            plt.tight_layout(pad=0)
+            fig.subplots_adjust(top=0.95, bottom=0.02, left=0.06, right=0.98)
+            return fig
+    
+        # --- Row 1: Runs conceded (LHB left, RHB right) ---
+        st.markdown("<div style='font-weight:800; font-size:15px; margin-top:6px;'>🟥 Runs conceded</div>", unsafe_allow_html=True)
+        c1, c2 = st.columns([1,1], gap="large")
+        with c1:
+            st.markdown("<div style='font-weight:700;'>Left-handed batsmen</div>", unsafe_allow_html=True)
+            fig_runs_l = plot_grid_with_readable_labels(run_grid_lhb, f"{player_selected} — Runs vs LHB", cmap='Reds', mirror=False, fmt='float', vmax=max(np.max(run_grid_lhb), np.max(run_grid_rhb), 1.0))
+            display_figure_fixed_height_html(fig_runs_l, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        with c2:
+            st.markdown("<div style='font-weight:700;'>Right-handed batsmen</div>", unsafe_allow_html=True)
+            fig_runs_r = plot_grid_with_readable_labels(run_grid_rhb, f"{player_selected} — Runs vs RHB", cmap='Reds', mirror=False, fmt='float', vmax=max(np.max(run_grid_lhb), np.max(run_grid_rhb), 1.0))
+            display_figure_fixed_height_html(fig_runs_r, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+    
+        # --- Row 2: Wickets (LHB left, RHB right) ---
+        st.markdown("<div style='font-weight:800; font-size:15px; margin-top:4px;'>🎯 Wickets credited to bowler</div>", unsafe_allow_html=True)
+        c3, c4 = st.columns([1,1], gap="large")
+        with c3:
+            fig_wk_l = plot_grid_with_readable_labels(wkt_grid_lhb, f"{player_selected} — Wkts vs LHB", cmap='Reds', mirror=False, fmt='int', vmax=max(np.max(wkt_grid_lhb), np.max(wkt_grid_rhb), 1))
+            display_figure_fixed_height_html(fig_wk_l, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        with c4:
+            fig_wk_r = plot_grid_with_readable_labels(wkt_grid_rhb, f"{player_selected} — Wkts vs RHB", cmap='Reds', mirror=False, fmt='int', vmax=max(np.max(wkt_grid_lhb), np.max(wkt_grid_rhb), 1))
+            display_figure_fixed_height_html(fig_wk_r, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+    
+        # --- Row 3: Dot % (LHB left, RHB right) ---
+        st.markdown("<div style='font-weight:800; font-size:15px; margin-top:4px;'>⚫ Dot percentage (legal deliveries)</div>", unsafe_allow_html=True)
+        c5, c6 = st.columns([1,1], gap="large")
+        with c5:
+            fig_dotpct_l = plot_grid_with_readable_labels(dot_pct_lhb, f"{player_selected} — Dot% vs LHB", cmap='Blues', mirror=False, fmt='pct', vmax=100.0)
+            display_figure_fixed_height_html(fig_dotpct_l, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        with c6:
+            fig_dotpct_r = plot_grid_with_readable_labels(dot_pct_rhb, f"{player_selected} — Dot% vs RHB", cmap='Blues', mirror=False, fmt='pct', vmax=100.0)
+            display_figure_fixed_height_html(fig_dotpct_r, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
 
 icr_25 = pd.read_excel("Datasets/Batting ICR IPL 2025.csv")
 bicr_25 = pd.read_excel("Datasets/Bowling ICR IPL 2025.csv")
