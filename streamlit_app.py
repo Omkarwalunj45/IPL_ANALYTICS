@@ -3469,21 +3469,23 @@ elif sidebar_option == "Strength vs Weakness":
 
         # -------------------- 4 pitchmaps: SR and Control % (Pace vs Spin) --------------------
         # ---------------- Improved pitchmaps: nicer colors + show '-' for empty cells ----------------
+        # ---------------- Light-colour pitchmaps (SR & Control) ----------------
         import numpy as np
         import matplotlib.pyplot as plt
         import matplotlib.patheffects as mpatheffects
-        from matplotlib import cm
+        from matplotlib.colors import LinearSegmentedColormap
+        import pandas as pd
         
-        # Ensure pf_pace/pf_spin exist (fallback to empty frames if not)
+        # Defensive existence / fallbacks
         if 'pf_pace' not in globals() or 'pf_spin' not in globals():
             if 'pf' in globals() and 'COL_BOWL_KIND' in globals():
                 pf_pace = pf[pf[COL_BOWL_KIND].astype(str).str.contains('pace', na=False)].copy()
                 pf_spin  = pf[pf[COL_BOWL_KIND].astype(str).str.contains('spin', na=False)].copy()
             else:
-                pf_pace = pf.iloc[0:0].copy() if 'pf' in globals() else pd.DataFrame()
-                pf_spin  = pf_pace.copy()
+                pf_pace = pd.DataFrame()
+                pf_spin = pd.DataFrame()
         
-        # local names
+        # column names / maps (use your app's names if different)
         COL_LINE = globals().get('COL_LINE', 'line')
         COL_LENGTH = globals().get('COL_LENGTH', 'length')
         COL_RUNS = globals().get('COL_RUNS', 'batruns')
@@ -3499,7 +3501,6 @@ elif sidebar_option == "Strength vs Weakness":
         })
         
         def _is_legal_row(r):
-            """Return True if row is a legal delivery (not wide, not noball)."""
             try:
                 if NOBALL_COL in r.index and int(r.get(NOBALL_COL, 0)) != 0:
                     return False
@@ -3513,7 +3514,6 @@ elif sidebar_option == "Strength vs Weakness":
             return True
         
         def build_sr_and_counts(df_local):
-            """Return sr_grid, counts_grid. sr is NaN where counts==0."""
             sr_grid = np.full((5,5), np.nan, dtype=float)
             runs_grid = np.zeros((5,5), dtype=float)
             balls_grid = np.zeros((5,5), dtype=int)
@@ -3545,12 +3545,10 @@ elif sidebar_option == "Strength vs Weakness":
         
             mask = balls_grid > 0
             sr_grid[mask] = (runs_grid[mask] / balls_grid[mask]) * 100.0
-            # round for display
             sr_grid[mask] = np.round(sr_grid[mask], 2)
             return sr_grid, balls_grid
         
         def _to_control_num(x):
-            """Robust coercion to 0/1 for control values."""
             if pd.isna(x):
                 return 0
             try:
@@ -3567,7 +3565,6 @@ elif sidebar_option == "Strength vs Weakness":
             return 1 if s != '' else 0
         
         def build_control_and_counts(df_local):
-            """Return control_pct_grid, total_shots_grid (control_pct is NaN where total==0)."""
             ctrl_grid = np.full((5,5), np.nan, dtype=float)
             total_grid = np.zeros((5,5), dtype=int)
             controlled_grid = np.zeros((5,5), dtype=int)
@@ -3603,29 +3600,34 @@ elif sidebar_option == "Strength vs Weakness":
             ctrl_grid[mask] = np.round(ctrl_grid[mask], 2)
             return ctrl_grid, total_grid
         
-        def plot_grid_improved(grid, counts_grid, title, cmap_name='viridis', mirror=False, fmt='float', vmax=None):
-            """Plot grid with NaNs shown as light gray and annotate '-' for empty cells."""
+        # Create soft/light colormaps
+        def make_light_cmap(name, colors):
+            return LinearSegmentedColormap.from_list(name, colors)
+        
+        # light skin / pink for SR, light blue for Control
+        cmap_sr_light = make_light_cmap('sr_light', ['#fff3e6', '#ffd6b3', '#ffc2a8'])   # soft skin / peach tones
+        cmap_ctrl_light = make_light_cmap('ctrl_light', ['#f0f8ff', '#d9efff', '#bfe6ff'])  # very light blues
+        
+        def plot_grid_light(grid, counts_grid, title, cmap, mirror=False, fmt='float', vmax=None):
             disp = np.fliplr(grid) if mirror else grid.copy()
             counts_disp = np.fliplr(counts_grid) if mirror else counts_grid.copy()
         
-            # prepare colormap and set bad (NaN) color to a neutral light gray
-            cmap = cm.get_cmap(cmap_name).copy()
-            cmap.set_bad('#eeeeee')
+            # set NaNs as light gray
+            cmap = cmap.copy()
+            cmap.set_bad('#f7f7f7')
         
-            # choose vmax: use provided or max of non-nan values or 1.0
             finite_vals = disp[np.isfinite(disp)]
             real_vmax = float(np.nanmax(finite_vals)) if finite_vals.size>0 else (vmax if vmax is not None else 1.0)
             vmax_use = float(vmax) if (vmax is not None and vmax>0) else (real_vmax if real_vmax>0 else 1.0)
         
             fig, ax = plt.subplots(figsize=(6,9), dpi=150)
-            # display - set vmin=0, vmax=vmax_use and let NaNs map to bad color
             im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
             ax.set_xticks(range(5)); ax.set_yticks(range(5))
             xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
             xticks = list(reversed(xticks_base)) if mirror else xticks_base
             ax.set_xticklabels(xticks, rotation=36, ha='right')
             ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-            # annotate: if counts_disp==0 => show '-', else show value formatted
+        
             for i in range(5):
                 for j in range(5):
                     val = disp[i,j]
@@ -3640,18 +3642,15 @@ elif sidebar_option == "Strength vs Weakness":
                             lab = f"{int(val)}"
                         else:
                             lab = f"{val:.2f}"
-                        # choose contrasting color relative to normalized intensity
                         try:
                             intensity = float(val) / float(vmax_use) if vmax_use>0 else 0.0
                         except:
                             intensity = 0.0
-                        txt_color = 'white' if intensity > 0.55 else 'black'
+                        txt_color = 'black' if intensity < 0.6 else 'white'
                     txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
-                    # add stroke so text pops on color
                     stroke_col = 'white' if txt_color=='black' else 'black'
                     txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground=stroke_col), mpatheffects.Normal()])
         
-            # colorbar only for cells with data
             cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
             cbar.ax.tick_params(labelsize=9)
             plt.title(title, pad=6, fontsize=12)
@@ -3665,32 +3664,33 @@ elif sidebar_option == "Strength vs Weakness":
         ctrl_pace, total_pace = build_control_and_counts(pf_pace)
         ctrl_spin, total_spin = build_control_and_counts(pf_spin)
         
-        # Determine vmax values (SR: use observed max or 200 as safety; Control: 100)
+        # vmax choices
         vmax_sr = max(np.nanmax(sr_pace[np.isfinite(sr_pace)]) if np.any(np.isfinite(sr_pace)) else 0,
                       np.nanmax(sr_spin[np.isfinite(sr_spin)]) if np.any(np.isfinite(sr_spin)) else 0, 10.0)
-        vmax_sr = max(vmax_sr, 10.0)
         vmax_ctrl = 100.0
         
-        # Display the 4 pitchmaps (SR Pace / SR Spin / Control Pace / Control Spin)
+        # Display maps
         c1, c2 = st.columns([1,1], gap="large")
         with c1:
             st.markdown("<div style='font-weight:800;'>🎯 Strike Rate (%) — Pace</div>", unsafe_allow_html=True)
-            fig_sr_pace = plot_grid_improved(sr_pace, counts_pace, f"{player_selected} — SR% vs Pace", cmap_name='viridis', mirror=is_lhb, fmt='float', vmax=vmax_sr)
+            fig_sr_pace = plot_grid_light(sr_pace, counts_pace, f"{player_selected} — SR% vs Pace", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
             display_figure_fixed_height_html(fig_sr_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c2:
             st.markdown("<div style='font-weight:800;'>🎯 Strike Rate (%) — Spin</div>", unsafe_allow_html=True)
-            fig_sr_spin = plot_grid_improved(sr_spin, counts_spin, f"{player_selected} — SR% vs Spin", cmap_name='viridis', mirror=is_lhb, fmt='float', vmax=vmax_sr)
+            fig_sr_spin = plot_grid_light(sr_spin, counts_spin, f"{player_selected} — SR% vs Spin", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
             display_figure_fixed_height_html(fig_sr_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         
         c3, c4 = st.columns([1,1], gap="large")
         with c3:
             st.markdown("<div style='font-weight:800;'>🎯 Control % — Pace</div>", unsafe_allow_html=True)
-            fig_ctrl_pace = plot_grid_improved(ctrl_pace, total_pace, f"{player_selected} — Control% vs Pace", cmap_name='YlGnBu', mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
+            fig_ctrl_pace = plot_grid_light(ctrl_pace, total_pace, f"{player_selected} — Control% vs Pace", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
             display_figure_fixed_height_html(fig_ctrl_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c4:
             st.markdown("<div style='font-weight:800;'>🎯 Control % — Spin</div>", unsafe_allow_html=True)
-            fig_ctrl_spin = plot_grid_improved(ctrl_spin, total_spin, f"{player_selected} — Control% vs Spin", cmap_name='YlGnBu', mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
+            fig_ctrl_spin = plot_grid_light(ctrl_spin, total_spin, f"{player_selected} — Control% vs Spin", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
             display_figure_fixed_height_html(fig_ctrl_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        # ---------------- end light-colour pitchmaps ----------------
+
 # ---------------- end improved pitchmaps snippet ----------------
 
         
