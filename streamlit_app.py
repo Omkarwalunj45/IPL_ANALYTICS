@@ -2760,7 +2760,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 # 
 # Then REPLACE the entire section from that line down to the next major section
 # with the code below:
-elif sidebar_option == "Strength vs Weakness Analysis":
+elif sidebar_option == "Strength vs Weakness":
     st.header("Strength vs Weakness Analysis")
     # strength_weakness_streamlit.py
     # strength_weakness_streamlit_broadcast_wkt_fix.py
