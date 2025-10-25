@@ -3466,6 +3466,185 @@ elif sidebar_option == "Strength vs Weakness":
                 ctrl_show = ctrl_show.sort_values('Control Percentage', ascending=False).reset_index(drop=True)
                 ctrl_show = ctrl_show.rename(columns={'shot':'Shot','total_shots':'Total Shots','controlled_shots':'Controlled Shots','Control Percentage':'% Controlled'})
                 st.dataframe(ctrl_show, use_container_width=True)
+
+        # -------------------- 4 pitchmaps: SR and Control % (Pace vs Spin) --------------------
+        import numpy as np
+        
+        # fallbacks for column names (these are usually defined earlier in your script)
+        COL_LINE = globals().get('COL_LINE', 'line')
+        COL_LENGTH = globals().get('COL_LENGTH', 'length')
+        COL_RUNS = globals().get('COL_RUNS', 'batruns')   # ensure batruns used
+        NOBALL_COL = 'noball'
+        WIDE_COL = 'wide'
+        CONTROL_COL = 'control'
+        
+        # ensure player frames exist; create pf_pace/pf_spin if missing
+        if 'pf' not in globals():
+            st.error("`pf` (player frame) not in scope. Paste snippet after you build `pf` for the selected batter.")
+            st.stop()
+        
+        if 'pf_pace' not in globals() or 'pf_spin' not in globals():
+            if COL_BOWL_KIND in pf.columns:
+                pf_pace = pf[pf[COL_BOWL_KIND].astype(str).str.contains('pace', na=False)].copy()
+                pf_spin  = pf[pf[COL_BOWL_KIND].astype(str).str.contains('spin', na=False)].copy()
+            else:
+                pf_pace = pf.iloc[0:0].copy()
+                pf_spin  = pf.iloc[0:0].copy()
+        
+        # maps (should match your existing maps)
+        LINE_MAP = globals().get('LINE_MAP', {
+            'WIDE_OUTSIDE_OFFSTUMP': 0,
+            'OUTSIDE_OFFSTUMP': 1,
+            'ON_THE_STUMPS': 2,
+            'DOWN_LEG': 3,
+            'WIDE_DOWN_LEG': 4
+        })
+        LENGTH_MAP = globals().get('LENGTH_MAP', {
+            'SHORT': 0,
+            'SHORT_OF_A_GOOD_LENGTH': 1,
+            'GOOD_LENGTH': 2,
+            'FULL': 3,
+            'YORKER': 4,
+            'FULL_TOSS': 4
+        })
+        
+        # helper: determine legal delivery
+        def is_legal_row(r):
+            if NOBALL_COL in r.index:
+                try:
+                    if int(r.get(NOBALL_COL, 0)) != 0:
+                        return False
+                except:
+                    pass
+            if WIDE_COL in r.index:
+                try:
+                    if int(r.get(WIDE_COL, 0)) != 0:
+                        return False
+                except:
+                    pass
+            return True
+        
+        # build SR grid (runs per legal ball * 100)
+        def build_sr_grid(df_local):
+            runs_grid = np.zeros((5,5), dtype=float)
+            balls_grid = np.zeros((5,5), dtype=int)
+            if df_local.shape[0] == 0:
+                return np.zeros((5,5), dtype=float)
+            if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns or COL_RUNS not in df_local.columns:
+                return np.zeros((5,5), dtype=float)
+            plot_df = df_local[[COL_LINE, COL_LENGTH, COL_RUNS] + ([NOBALL_COL] if NOBALL_COL in df_local.columns else []) + ([WIDE_COL] if WIDE_COL in df_local.columns else [])].copy()
+            for _, r in plot_df.iterrows():
+                if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
+                    continue
+                # skip illegal deliveries
+                if not is_legal_row(r):
+                    continue
+                li = LINE_MAP.get(r[COL_LINE], None)
+                le = LENGTH_MAP.get(r[COL_LENGTH], None)
+                if li is None or le is None:
+                    continue
+                try:
+                    runs_here = float(r.get(COL_RUNS, 0) or 0)
+                except:
+                    runs_here = 0.0
+                runs_grid[le, li] += runs_here
+                balls_grid[le, li] += 1
+            # compute SR per cell
+            sr_grid = np.zeros((5,5), dtype=float)
+            mask = balls_grid > 0
+            sr_grid[mask] = (runs_grid[mask] / balls_grid[mask]) * 100.0
+            # round to 2 decimals for neatness
+            sr_grid = np.round(sr_grid, 2)
+            return sr_grid
+        
+        # robust control coercion (returns 0/1)
+        def to_control_num_val(x):
+            if pd.isna(x):
+                return 0
+            try:
+                n = float(x)
+                if np.isfinite(n):
+                    return 1 if int(n) != 0 else 0
+            except:
+                pass
+            s = str(x).strip().lower()
+            if s in ('1','true','t','y','yes','controlled','c','ok'):
+                return 1
+            if s in ('0','false','f','n','no','uncontrolled','u'):
+                return 0
+            return 1 if s != '' else 0
+        
+        # build Control % grid (controlled_shots / legal_shots * 100)
+        def build_control_grid(df_local):
+            total_grid = np.zeros((5,5), dtype=int)
+            controlled_grid = np.zeros((5,5), dtype=int)
+            if df_local.shape[0] == 0:
+                return np.zeros((5,5), dtype=float)
+            if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns:
+                return np.zeros((5,5), dtype=float)
+            cols_needed = [COL_LINE, COL_LENGTH]
+            if CONTROL_COL in df_local.columns:
+                cols_needed.append(CONTROL_COL)
+            if NOBALL_COL in df_local.columns:
+                cols_needed.append(NOBALL_COL)
+            if WIDE_COL in df_local.columns:
+                cols_needed.append(WIDE_COL)
+            plot_df = df_local[cols_needed].copy()
+            for _, r in plot_df.iterrows():
+                if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
+                    continue
+                if not is_legal_row(r):
+                    continue
+                li = LINE_MAP.get(r[COL_LINE], None)
+                le = LENGTH_MAP.get(r[COL_LENGTH], None)
+                if li is None or le is None:
+                    continue
+                total_grid[le, li] += 1
+                if CONTROL_COL in plot_df.columns:
+                    if to_control_num_val(r.get(CONTROL_COL, 0)) == 1:
+                        controlled_grid[le, li] += 1
+            # control percent
+            ctrl_pct = np.zeros((5,5), dtype=float)
+            mask = total_grid > 0
+            ctrl_pct[mask] = (controlled_grid[mask] / total_grid[mask]) * 100.0
+            ctrl_pct = np.round(ctrl_pct, 2)
+            return ctrl_pct
+        
+        # compute four grids
+        sr_pace  = build_sr_grid(pf_pace)
+        sr_spin  = build_sr_grid(pf_spin)
+        ctrl_pace = build_control_grid(pf_pace)
+        ctrl_spin = build_control_grid(pf_spin)
+        
+        # sensible vmax values
+        vmax_sr = max(np.nanmax(sr_pace), np.nanmax(sr_spin), 10.0)   # at least 10
+        vmax_ctrl = 100.0  # control is percent, max 100
+        
+        # display top row: SR maps
+        c1, c2 = st.columns([1,1], gap="large")
+        with c1:
+            st.markdown("<div style='font-weight:800;'>🎯 Strike Rate (%) — Pace</div>", unsafe_allow_html=True)
+            fig_sr_pace = plot_grid_with_readable_labels(sr_pace, f"{player_selected} — SR% vs Pace", cmap='viridis', mirror=is_lhb, fmt='float', vmax=vmax_sr)
+            display_figure_fixed_height_html(fig_sr_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        with c2:
+            st.markdown("<div style='font-weight:800;'>🎯 Strike Rate (%) — Spin</div>", unsafe_allow_html=True)
+            fig_sr_spin = plot_grid_with_readable_labels(sr_spin, f"{player_selected} — SR% vs Spin", cmap='viridis', mirror=is_lhb, fmt='float', vmax=vmax_sr)
+            display_figure_fixed_height_html(fig_sr_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        
+        # display bottom row: Control % maps
+        c3, c4 = st.columns([1,1], gap="large")
+        with c3:
+            st.markdown("<div style='font-weight:800;'>🎯 Control % — Pace</div>", unsafe_allow_html=True)
+            fig_ctrl_pace = plot_grid_with_readable_labels(ctrl_pace, f"{player_selected} — Control% vs Pace", cmap='Blues', mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
+            display_figure_fixed_height_html(fig_ctrl_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        with c4:
+            st.markdown("<div style='font-weight:800;'>🎯 Control % — Spin</div>", unsafe_allow_html=True)
+            fig_ctrl_spin = plot_grid_with_readable_labels(ctrl_spin, f"{player_selected} — Control% vs Spin", cmap='Blues', mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
+            display_figure_fixed_height_html(fig_ctrl_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+        
+        # -------------------- end pitchmaps snippet --------------------
+
+        
     # -------------------- end snippet --------------------
     
     
