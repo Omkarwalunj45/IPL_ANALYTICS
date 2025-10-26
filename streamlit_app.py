@@ -3208,8 +3208,8 @@ elif sidebar_option == "Strength vs Weakness":
             else:
                 # can't compute top7; create placeholder
                 bdf['top7_flag'] = 0
-    else:
-        st.warning("Global `bdf` not found — RAA/DAA will be omitted (tables will show '-')")
+    # else:
+    #     st.warning("Global `bdf` not found — RAA/DAA will be omitted (tables will show '-')")
 
     # ---------- compute RAA/DAA helper ----------
     def compute_RAA_DAA_for_group_column(group_col):
