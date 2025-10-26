@@ -3405,28 +3405,38 @@ elif sidebar_option == "Strength vs Weakness":
         
             # ---------- Plot charts side-by-side ----------
             col1, col2 = st.columns(2)
-        
-            # Productive shots chart (left)
-            with col1:
-                st.markdown("### 🔥 Most Productive Shots (share of runs — using `batruns`)")
-                fig1 = px.bar(
-                    productive_shot_df,
-                    x='Percentage of Runs',
-                    y='shot',
-                    orientation='h',
-                    color='Percentage of Runs',
-                    labels={'shot': 'Shot Type', 'Percentage of Runs': '% of Runs'},
-                    height=520
-                )
-                fig1.update_layout(
-                    margin=dict(l=160, r=30, t=40, b=40),
-                    xaxis_title='Percentage of Runs',
-                    yaxis_title=None,
-                )
-                # show percent inside bar; 2 decimals
-                fig1.update_traces(texttemplate='%{x:.2f}%', textposition='inside', hovertemplate=None)
-                fig1.update_yaxes(categoryorder='total ascending')
-                st.plotly_chart(fig1, use_container_width=True)
+            
+                with col1:
+                    st.markdown("### 🔥 Most Productive Shots (share of runs — using `batruns`)")
+                    if productive_shot_df.empty:
+                        st.info("No shot data to plot.")
+                    else:
+                        fig1 = px.bar(
+                            productive_shot_df,
+                            x='% of Runs',
+                            y='shot',
+                            orientation='h',
+                            color='% of Runs',
+                            labels={'shot': 'Shot Type', '% of Runs': '% of Runs'},
+                            height=600,
+                            hover_data={
+                                'runs_by_shot': True,
+                                'balls': True,
+                                'SR': True,
+                                'dismissals': True,
+                                'BallsPerDismissal': True,
+                                '% of Runs': ':.2f'
+                            }
+                        )
+                        fig1.update_layout(
+                            margin=dict(l=180, r=40, t=40, b=40),
+                            xaxis_title='% of Runs',
+                            yaxis_title=None,
+                        )
+                        # show percentage inside bars with 2 decimals
+                        fig1.update_traces(texttemplate='%{x:.2f}%', textposition='inside', hovertemplate=None)
+                        fig1.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig1, use_container_width=True)
         
             # Control % chart (right)
             with col2:
