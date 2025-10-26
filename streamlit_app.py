@@ -3392,82 +3392,103 @@ elif sidebar_option == "Strength vs Weakness":
             display_figure_fixed_height_html(fig_d2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
         # -------------------- Shot productivity & control for selected batter (pf) --------------------
+        # ---------- Shot productivity + SR + Dismissals + BallsPerDismissal (for selected batter only) ----------
         import plotly.express as px
+        import pandas as pd
+        import numpy as np
         
-        # Defensive: ensure player frame exists
-        # try:
-        #     pf
-        # except NameError:
-        #     st.error("Player frame `pf` not found. Make sure you filtered the dataframe for the selected batsman into `pf`.")
-        #     st.stop()
+        # Defensive checks
+        if 'pf' not in globals():
+            st.error("Player frame `pf` not found. Filter your DataFrame for the selected batsman into `pf` first.")
+            st.stop()
         
-        # require batruns & shot in pf
+        # Ensure required columns exist
         if 'batruns' not in pf.columns:
-            st.error("`batruns` column not found in player's data (pf). This snippet requires 'batruns'.")
-        elif 'shot' not in pf.columns:
-            st.error("`shot` column not found in player's data (pf).")
+            st.error("Column 'batruns' is required but not found in player frame `pf`.")
+            st.stop()
+        if 'shot' not in pf.columns:
+            st.error("Column 'shot' is required but not found in player frame `pf`.")
+            st.stop()
+        
+        # Build working df for this batter (keep rows that have shot info)
+        df_local = pf.dropna(subset=['shot']).copy()
+        if df_local.empty:
+            st.info("No deliveries with 'shot' recorded for this batsman.")
         else:
-            # work on a copy of the player's deliveries
-            df_local = pf.copy()
+            # Ensure numeric batruns
+            df_local['batruns'] = pd.to_numeric(df_local['batruns'], errors='coerce').fillna(0).astype(int)
         
-            # drop rows without a shot value (we want shot-level stats)
-            df_local = df_local.dropna(subset=['shot']).copy()
-        
-            # total runs (batruns only) for this batter
-            total_runs = int(df_local['batruns'].sum())
-            if total_runs == 0:
-                st.info(f"{player_selected} has 0 runs in `batruns` for this selection — productive-shot chart will show zeros.")
-        
-            # ---------- Productive shots: % of total runs by shot (batruns only) ----------
-            productive_shot_df = (
-                df_local.groupby('shot')['batruns']
-                .sum()
-                .reset_index(name='runs_by_shot')
-            )
-            productive_shot_df['Percentage of Runs'] = productive_shot_df['runs_by_shot'].apply(
-                lambda r: (r / total_runs * 100.0) if total_runs > 0 else 0.0
-            )
-            # sort ascending so biggest appears at top for horizontal bars with categoryorder='total ascending'
-            productive_shot_df = productive_shot_df.sort_values('Percentage of Runs', ascending=True)
-        
-            # ---------- Control % by shot (if control column exists in pf) ----------
-            control_df = None
-            if 'control' in df_local.columns:
-                # robust coercion of control values to 0/1
-                def to_control_num(x):
-                    if pd.isna(x):
-                        return 0
-                    # numeric first
-                    try:
-                        n = float(x)
-                        if np.isfinite(n):
-                            return 1 if int(n) != 0 else 0
-                    except Exception:
-                        pass
-                    # common truthy strings
-                    s = str(x).strip().lower()
-                    if s in ('1','true','t','y','yes','controlled','c','ok'):
-                        return 1
-                    if s in ('0','false','f','n','no','uncontrolled','u'):
-                        return 0
-                    # fallback: treat any non-empty as 1
-                    return 1 if s != '' else 0
-        
-                df_local['control_num'] = df_local['control'].apply(to_control_num).astype(int)
-                control_df = (
-                    df_local.groupby('shot')
-                    .agg(total_shots=('control_num', 'size'), controlled_shots=('control_num', 'sum'))
-                    .reset_index()
-                )
-                control_df['Control Percentage'] = control_df.apply(
-                    lambda r: (r['controlled_shots'] / r['total_shots'] * 100.0) if r['total_shots'] > 0 else 0.0,
+            # Compute dismissal flag (is_wkt) if not already present
+            if 'is_wkt' not in df_local.columns:
+                # compute out_flag and dismissal_clean locally
+                df_local['out_flag'] = pd.to_numeric(df_local.get('out', 0), errors='coerce').fillna(0).astype(int)
+                df_local['dismissal_clean'] = df_local.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+                special_runout_types = set(['run out','runout','retired','retired not out','retired out','obstructing the field'])
+                df_local['is_wkt'] = df_local.apply(
+                    lambda r: 1 if (int(r.get('out_flag',0)) == 1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip() != '') else 0,
                     axis=1
                 )
-                control_df = control_df.sort_values('Control Percentage', ascending=True)
+            else:
+                df_local['is_wkt'] = pd.to_numeric(df_local['is_wkt'], errors='coerce').fillna(0).astype(int)
         
-            # ---------- Plot charts side-by-side ----------
+            # Total runs (batruns) by this batter (used for percentage)
+            total_runs = df_local['batruns'].sum()
+        
+            # Group by shot to compute runs, balls, dismissals
+            shot_grp = df_local.groupby('shot').agg(
+                runs_by_shot = ('batruns', 'sum'),
+                balls = ('shot', 'size'),
+                dismissals = ('is_wkt', 'sum')
+            ).reset_index()
+        
+            # Compute derived metrics
+            shot_grp['% of Runs'] = shot_grp['runs_by_shot'].apply(lambda r: (r / total_runs * 100.0) if total_runs > 0 else 0.0)
+            shot_grp['SR'] = shot_grp.apply(lambda r: (r['runs_by_shot'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
+            # Balls per dismissal: if dismissals == 0 -> NaN (we'll show '-' later)
+            shot_grp['BallsPerDismissal'] = shot_grp.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
+        
+            # Round nicely for display
+            shot_grp['% of Runs'] = shot_grp['% of Runs'].round(2)
+            shot_grp['SR'] = shot_grp['SR'].round(2)
+            shot_grp['BallsPerDismissal'] = shot_grp['BallsPerDismissal'].round(2)
+        
+            # Sort for plotting (so the biggest % of runs appear at top)
+            productive_shot_df = shot_grp.sort_values('% of Runs', ascending=True)
+        
+            # -------------------------
+            # Control % (if control column exists)
+            # -------------------------
+            control_df = None
+            if 'control' in df_local.columns:
+                # normalize control (robust coercion to 0/1)
+                def _to_control_num(x):
+                    if pd.isna(x):
+                        return 0
+                    try:
+                        n = float(x)
+                        return 1 if int(n) != 0 else 0
+                    except:
+                        s = str(x).strip().lower()
+                        if s in ('1','true','t','y','yes','controlled','c','ok'):
+                            return 1
+                        return 0
+                df_local['control_num'] = df_local['control'].apply(_to_control_num).astype(int)
+                control_grp = df_local.groupby('shot').agg(
+                    total_shots = ('control_num','size'),
+                    controlled_shots = ('control_num','sum')
+                ).reset_index()
+                control_grp['Control Percentage'] = control_grp.apply(
+                    lambda r: (r['controlled_shots'] / r['total_shots'] * 100.0) if r['total_shots']>0 else 0.0,
+                    axis=1
+                )
+                control_grp['Control Percentage'] = control_grp['Control Percentage'].round(2)
+                control_df = control_grp.sort_values('Control Percentage', ascending=True)
+        
+            # -------------------------
+            # Plotting: left = Productive Shots (% of runs) with hover showing SR, Dismissals & BallsPerDismissal
+            # -------------------------
             col1, col2 = st.columns(2)
-            
+        
             with col1:
                 st.markdown("### 🔥 Most Productive Shots (share of runs — using `batruns`)")
                 if productive_shot_df.empty:
@@ -3499,9 +3520,10 @@ elif sidebar_option == "Strength vs Weakness":
                     fig1.update_traces(texttemplate='%{x:.2f}%', textposition='inside', hovertemplate=None)
                     fig1.update_yaxes(categoryorder='total ascending')
                     st.plotly_chart(fig1, use_container_width=True)
-
         
-            # Control % chart (right)
+            # -------------------------
+            # Plotting: right = Control % by shot (if available)
+            # -------------------------
             with col2:
                 st.markdown("### 🎯 Control Percentage by Shot")
                 if control_df is None:
@@ -3514,7 +3536,8 @@ elif sidebar_option == "Strength vs Weakness":
                         orientation='h',
                         color='Control Percentage',
                         labels={'shot': 'Shot Type', 'Control Percentage': '% Controlled'},
-                        height=520
+                        height=520,
+                        hover_data={'total_shots': True, 'controlled_shots': True, 'Control Percentage': ':.2f'}
                     )
                     fig2.update_layout(
                         margin=dict(l=160, r=30, t=40, b=40),
@@ -3525,20 +3548,38 @@ elif sidebar_option == "Strength vs Weakness":
                     fig2.update_yaxes(categoryorder='total ascending')
                     st.plotly_chart(fig2, use_container_width=True)
         
-            # ---------- Underlying tables (rounded) ----------
+            # ---------- Underlying numbers (rounded) ----------
             st.markdown("#### Underlying numbers (rounded)")
-            prod_show = productive_shot_df[['shot', 'runs_by_shot', 'Percentage of Runs']].copy()
-            prod_show['Percentage of Runs'] = prod_show['Percentage of Runs'].round(2)
-            prod_show = prod_show.sort_values('Percentage of Runs', ascending=False).reset_index(drop=True)
-            prod_show = prod_show.rename(columns={'shot':'Shot','runs_by_shot':'Runs (batruns)','Percentage of Runs':'% of Runs'})
+            prod_show = productive_shot_df[['shot', 'runs_by_shot', 'balls', 'SR', 'dismissals', 'BallsPerDismissal', '% of Runs']].copy()
+            prod_show = prod_show.rename(columns={
+                'shot': 'Shot',
+                'runs_by_shot': 'Runs (batruns)',
+                'balls': 'Balls',
+                'SR': 'SR (%)',
+                'dismissals': 'Dismissals',
+                'BallsPerDismissal': 'Balls per Dismissal',
+                '% of Runs': '% of Runs'
+            })
+            # Replace NaN BallsPerDismissal with '-' for display
+            prod_show['Balls per Dismissal'] = prod_show['Balls per Dismissal'].apply(lambda x: '-' if pd.isna(x) else (round(x,2) if not isinstance(x,str) else x))
+            prod_show['SR (%)'] = prod_show['SR (%)'].apply(lambda x: '-' if pd.isna(x) else round(x,2))
+            prod_show['% of Runs'] = prod_show['% of Runs'].round(2)
+            prod_show = prod_show.sort_values('% of Runs', ascending=False).reset_index(drop=True)
+        
             st.dataframe(prod_show, use_container_width=True)
         
+            # If control table exists, show it too
             if control_df is not None:
                 ctrl_show = control_df[['shot','total_shots','controlled_shots','Control Percentage']].copy()
-                ctrl_show['Control Percentage'] = ctrl_show['Control Percentage'].round(2)
-                ctrl_show = ctrl_show.sort_values('Control Percentage', ascending=False).reset_index(drop=True)
-                ctrl_show = ctrl_show.rename(columns={'shot':'Shot','total_shots':'Total Shots','controlled_shots':'Controlled Shots','Control Percentage':'% Controlled'})
+                ctrl_show = ctrl_show.rename(columns={
+                    'shot': 'Shot',
+                    'total_shots': 'Total Shots',
+                    'controlled_shots': 'Controlled Shots',
+                    'Control Percentage': '% Controlled'
+                })
                 st.dataframe(ctrl_show, use_container_width=True)
+# ---------- end shot productivity snippet ----------
+
 
         # -------------------- 4 pitchmaps: SR and Control % (Pace vs Spin) --------------------
         # ---------------- Improved pitchmaps: nicer colors + show '-' for empty cells ----------------
