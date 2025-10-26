@@ -3134,70 +3134,179 @@ elif sidebar_option == "Strength vs Weakness":
     # ---------- Render Batting or Bowling views ----------
 # --- Updated Batting block: add Dot Balls vs Pace & Spin (use alongside your existing helpers) ---
 # ---------------------- Batting block (paste where role == "Batting") ----------------------
-    if role == "Batting":
-        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Batting — {player_selected}</div>", unsafe_allow_html=True)
-    
-        # ensure pf exists in scope (player frame)
-        try:
-            pf
-        except NameError:
+# ---------------------- Enhanced Batting Tables with RAA & DAA ----------------------
+        import numpy as np
+        import pandas as pd
+        
+        # Safety checks: pf (player frame) and bdf (master ball-by-ball) must exist
+        if 'pf' not in globals():
             st.error("Player frame `pf` not found. Make sure you filtered the dataframe for the selected batsman into `pf`.")
             st.stop()
-    
-        # compute is_lhb for mirroring decisions
-        is_lhb = False
-        if 'bat_hand' in pf.columns:
-            first_hand = pf['bat_hand'].dropna().astype(str)
-            if not first_hand.empty and first_hand.iloc[0].strip().upper().startswith('L'):
-                is_lhb = True
-    
-        # --- performance by bowl_kind ---
-        if COL_BOWL_KIND in pf.columns:
-            pf[COL_BOWL_KIND] = pf[COL_BOWL_KIND].astype(str).str.lower().fillna('unknown')
-            kinds = sorted(pf[COL_BOWL_KIND].dropna().unique().tolist())
+        if 'bdf' not in globals():
+            # try to fallback to df
+            if 'df' in globals():
+                master_df = as_dataframe(df)
+            else:
+                st.error("Master ball-by-ball dataframe `bdf` not found (and `df` not available).")
+                st.stop()
         else:
-            kinds = []
-    
-        rows = []
-        # fallback compute_batting_metrics if missing
-        if 'compute_batting_metrics' not in globals():
-            def compute_batting_metrics(gdf):
-                runs = int(gdf[COL_RUNS].sum()) if COL_RUNS in gdf.columns else 0
-                balls = int(gdf.shape[0])
-                fours = int((gdf[COL_RUNS] == 4).sum()) if COL_RUNS in gdf.columns else 0
-                sixes = int((gdf[COL_RUNS] == 6).sum()) if COL_RUNS in gdf.columns else 0
-                sr = (runs / balls * 100) if balls>0 else np.nan
-                return {'Runs': runs, 'Balls': balls, '4s': fours, '6s': sixes, 'SR': np.round(sr,2) if not np.isnan(sr) else '-'}
-    
-        if kinds:
-            for k in kinds:
-                g = pf[pf[COL_BOWL_KIND] == k]
-                m = compute_batting_metrics(g)
-                m['bowl_kind'] = k
-                rows.append(m)
+            master_df = as_dataframe(bdf)
+        
+        # canonical column names (adapt to your dataset)
+        MATCH_COL = 'p_match'
+        BATTER_COL = 'bat'          # original column in your df (you earlier created 'batsman' alias sometimes)
+        RUNS_COL = 'batruns'
+        BALL_ID_COL = 'ball_id'     # used to determine first appearance when available
+        BOWL_KIND_COL = COL_BOWL_KIND if 'COL_BOWL_KIND' in globals() else 'bowl_kind'
+        BOWL_STYLE_COL = COL_BOWL_STYLE if 'COL_BOWL_STYLE' in globals() else 'bowl_style'
+        OUT_COL = 'out'
+        DISMISSAL_COL = 'dismissal'
+        NOBALL_COL = 'noball'
+        WIDE_COL = 'wide'
+        
+        player_key = player_selected if 'player_selected' in globals() else None
+        if player_key is None:
+            st.error("`player_selected` is not present in scope.")
+            st.stop()
+        
+        # 1) compute batting order per match (first appearance)
+        tmp = master_df.reset_index(drop=False).rename(columns={'index':'orig_index'})
+        # choose ordering key: ball_id if present else orig_index
+        if BALL_ID_COL in master_df.columns:
+            tmp['appearance_key'] = pd.to_numeric(tmp.get(BALL_ID_COL), errors='coerce')
+            # fallback to orig_index for NaNs
+            tmp['appearance_key'] = tmp['appearance_key'].fillna(tmp['orig_index'])
         else:
-            m = compute_batting_metrics(pf)
-            m['bowl_kind'] = 'unknown'
-            rows.append(m)
-        bk_df = pd.DataFrame(rows).set_index('bowl_kind')
-        st.markdown("<div style='font-weight:700; font-size:15px;'>📊 Performance by bowling type</div>", unsafe_allow_html=True)
-        st.dataframe(bk_df, use_container_width=True)
-    
-        # --- performance by bowl_style ---
-        if COL_BOWL_STYLE in pf.columns:
-            styles = sorted([s for s in pf[COL_BOWL_STYLE].dropna().unique() if str(s).strip()!=''])
-            if styles:
-                bs_rows = []
-                for s in styles:
-                    g = pf[pf[COL_BOWL_STYLE] == s]
-                    m = compute_batting_metrics(g)
-                    m['bowl_style'] = s
-                    bs_rows.append(m)
-                bs_df = pd.DataFrame(bs_rows).set_index('bowl_style')
-                st.markdown("<div style='font-weight:700; font-size:15px;'>📌 Performance by bowling style</div>", unsafe_allow_html=True)
-                st.dataframe(bs_df, use_container_width=True)
+            tmp['appearance_key'] = tmp['orig_index']
+        
+        # compute first appearance per match & batter
+        first_appear = tmp.groupby([MATCH_COL, BATTER_COL])['appearance_key'].min().reset_index().rename(columns={'appearance_key':'first_appearance'})
+        
+        # rank within match to assign batting order
+        first_appear['bat_order'] = first_appear.groupby(MATCH_COL)['first_appearance'].rank(method='first').astype(int)
+        
+        # merge 'bat_order' back into master_df
+        master_df = master_df.merge(first_appear[[MATCH_COL, BATTER_COL, 'bat_order']], on=[MATCH_COL, BATTER_COL], how='left')
+        master_df['bat_order'] = master_df['bat_order'].fillna(999).astype(int)
+        master_df['is_top7'] = (master_df['bat_order'] <= 7).astype(int)
+        
+        # 2) compute wicket flags in master_df (for batter dismissals)
+        # Use your rule: out is True and dismissal in set {bowled, caught, hit wicket, stumped, leg before wicket}
+        bowler_wkt_types = set(['bowled','caught','hit wicket','stumped','leg before wicket','lbw','leg before wicket'])  # include common variants
+        master_df['dismissal_clean'] = master_df.get(DISMISSAL_COL, "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+        master_df['out_flag'] = pd.to_numeric(master_df.get(OUT_COL, 0), errors='coerce').fillna(0).astype(int)
+        # batter_dismissed flag = out_flag==1
+        master_df['batter_dismissed'] = master_df.apply(
+            lambda r: 1 if (int(r.get('out_flag',0)) == 1 and str(r.get('dismissal_clean','')).strip() != '') else 0,
+            axis=1
+        )
+        
+        # Helper aggregator: per-batter metrics for given rows (uses batruns and excludes wides/noballs from legal balls)
+        def per_batter_agg(df_rows):
+            has_nob = NOBALL_COL in df_rows.columns
+            has_wide = WIDE_COL in df_rows.columns
+            # legal deliveries: exclude rows where noball != 0 or wide != 0 if those columns exist
+            if has_nob or has_wide:
+                mask_illegal = np.zeros(len(df_rows), dtype=bool)
+                if has_nob:
+                    mask_illegal = mask_illegal | (pd.to_numeric(df_rows.get(NOBALL_COL), errors='coerce').fillna(0).astype(int) != 0)
+                if has_wide:
+                    mask_illegal = mask_illegal | (pd.to_numeric(df_rows.get(WIDE_COL), errors='coerce').fillna(0).astype(int) != 0)
+                legal_df = df_rows.loc[~mask_illegal]
+            else:
+                legal_df = df_rows
+            runs = int(pd.to_numeric(df_rows.get(RUNS_COL, 0), errors='coerce').fillna(0).sum())
+            balls = int(len(legal_df))
+            fours = int((pd.to_numeric(df_rows.get(RUNS_COL, 0), errors='coerce').fillna(0) == 4).sum())
+            sixes = int((pd.to_numeric(df_rows.get(RUNS_COL, 0), errors='coerce').fillna(0) == 6).sum())
+            dismissals = int(pd.to_numeric(df_rows.get('batter_dismissed', 0), errors='coerce').fillna(0).sum())
+            sr = (runs / balls * 100.0) if balls > 0 else np.nan
+            bpd = (balls / dismissals) if dismissals > 0 else np.nan
+            return {'runs': runs, 'balls': balls, '4s': fours, '6s': sixes, 'dismissals': dismissals, 'sr': sr, 'bpd': bpd}
+        
+        # Build baseline averages (avg SR and avg BPD) across top-7 batters per group_value
+        def build_baseline_for_group(group_col):
+            # group_col is string, e.g. 'bowl_kind' or 'bowl_style'
+            df = master_df.copy()
+            df[group_col] = df.get(group_col, '').astype(str).fillna('unknown')
+            # restrict to top7 batters deliveries
+            top7_df = df[df['is_top7'] == 1].copy()
+            # compute per-batter metrics grouped by group_col & batter
+            per_batter = []
+            for (gval, batter), sub in top7_df.groupby([group_col, BATTER_COL]):
+                agg = per_batter_agg(sub)
+                agg.update({group_col: gval, BATTER_COL: batter})
+                per_batter.append(agg)
+            per_batter_df = pd.DataFrame(per_batter)
+            if per_batter_df.empty:
+                return pd.DataFrame(columns=[group_col, 'avg_sr_top7', 'avg_bpd_top7'])
+            # average the per-batter metrics across batters for each group_val (unweighted mean)
+            baseline = per_batter_df.groupby(group_col).agg(
+                avg_sr_top7 = ('sr', lambda s: float(np.nanmean(s.dropna())) if len(s.dropna())>0 else np.nan),
+                avg_bpd_top7 = ('bpd', lambda s: float(np.nanmean(s.dropna())) if len(s.dropna())>0 else np.nan)
+            ).reset_index()
+            return baseline
+        
+        # compute baseline for bowl_kind and bowl_style
+        baseline_bk = build_baseline_for_group(BOWL_KIND_COL)
+        baseline_bs = build_baseline_for_group(BOWL_STYLE_COL)
+        
+        # compute selected batter metrics grouped by group_col
+        def compute_selected_metrics_for_group(sel_df, group_col, baseline_df):
+            sel_df = sel_df.copy()
+            sel_df[group_col] = sel_df.get(group_col, '').astype(str).fillna('unknown')
+            rows = []
+            for gval, sub in sel_df.groupby(group_col):
+                agg = per_batter_agg(sub)
+                agg[group_col] = gval
+                rows.append(agg)
+            sel_metrics = pd.DataFrame(rows)
+            if sel_metrics.empty:
+                return pd.DataFrame(columns=[group_col, 'Runs','Balls','4s','6s','SR','Dismissals','BallsPerDismissal','RAA','DAA'])
+            # merge with baseline
+            merged = sel_metrics.merge(baseline_df, on=group_col, how='left')
+            # compute RAA and DAA: selected - baseline
+            merged['RAA'] = merged.apply(lambda r: (r['sr'] - r.get('avg_sr_top7')) if (not pd.isna(r.get('sr'))) and (not pd.isna(r.get('avg_sr_top7'))) else np.nan, axis=1)
+            merged['DAA'] = merged.apply(lambda r: (r['bpd'] - r.get('avg_bpd_top7')) if (not pd.isna(r.get('bpd'))) and (not pd.isna(r.get('avg_bpd_top7'))) else np.nan, axis=1)
+            # format columns
+            display = merged[[group_col,'runs','balls','4s','6s','sr','dismissals','bpd','RAA','DAA']].copy()
+            display.columns = [group_col, 'Runs','Balls','4s','6s','SR','Dismissals','BallsPerDismissal','RAA','DAA']
+            # round numeric columns
+            for c in ['SR','BallsPerDismissal','RAA','DAA']:
+                if c in display.columns:
+                    display[c] = display[c].apply(lambda x: (round(float(x),2) if (not pd.isna(x)) else np.nan))
+            # Replace NaN with '-' for readability
+            display = display.fillna('-')
+            # sort by Runs desc
+            display = display.sort_values('Runs', ascending=False).reset_index(drop=True)
+            return display
+        
+        # prepare selected batter frame (pf may already be filtered for the chosen batter)
+        sel_pf = pf.copy()
+        # If pf contains different batter name column, try to ensure consistency: map 'bat' to BATTER_COL if needed
+        if BATTER_COL not in sel_pf.columns and 'batsman' in sel_pf.columns:
+            sel_pf[BATTER_COL] = sel_pf['batsman']
+        # compute baseline and selected metrics and show tables
+        bk_display = compute_selected_metrics_for_group(sel_pf, BOWL_KIND_COL, baseline_bk)
+        bs_display = compute_selected_metrics_for_group(sel_pf, BOWL_STYLE_COL, baseline_bs)
+        
+        # Present results
+        st.markdown("<div style='font-weight:700; font-size:15px;'>📊 Performance by bowling type (with RAA & DAA)</div>", unsafe_allow_html=True)
+        if bk_display.empty:
+            st.info("No bowl_kind data available for this batter.")
         else:
-            st.info("No bowl_style column found; skipping bowl_style table.")
+            st.dataframe(bk_display, use_container_width=True)
+        
+        st.markdown("<div style='font-weight:700; font-size:15px;'>📌 Performance by bowling style (with RAA & DAA)</div>", unsafe_allow_html=True)
+        if bs_display.empty:
+            st.info("No bowl_style data available for this batter.")
+        else:
+            st.dataframe(bs_display, use_container_width=True)
+        
+        # store updated master_df back to bdf in case later code expects bat_order/is_top7
+        globals()['bdf'] = master_df
+        # ---------------------------------------------------------------------------------
+
     
         # --- Wagon wheels: Pace (left) & Spin (right) ---
         st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'>🎥 Wagon wheels — Pace (left) & Spin (right)</div>", unsafe_allow_html=True)
