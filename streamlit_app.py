@@ -107,6 +107,30 @@ df['is_wicket'] = df['out'].astype(int)
 df['venue']=df['ground']
 df['batsman']=df['bat']
 df['bowler']=df['bowl']
+# Mapping similar bowling styles together
+bowl_style_map = {
+    'LB': 'Leg break',
+    'LBG': 'Leg break',
+    'LF': 'Left-arm Fast',
+    'LFM': 'Left-arm Fast-Medium',
+    'LM': 'Left-arm Medium-Fast',
+    'LMF': 'Left-arm Medium-Fast',
+    'LWS': 'Left-arm Wrist Spin',
+    'OB': 'Off break',
+    'OB/LB': 'Offbreak/Legbreak',
+    'RF': 'Right-arm Fast',
+    'RFM': 'Right-arm Fast-Medium',
+    'RM': 'Right-arm Medium-Fast',
+    'RM/OB': 'Right-arm Medium',
+    'RMF': 'Right-arm Medium-Fast',
+    'SLA': 'Slow Left-arm Orthodox'
+}
+
+# Apply mapping to your dataframe
+df['bowl_style_grouped'] = df['bowl_style'].map(bowl_style_map)
+df['bowl_style_org']=df['bowl_style']
+df['bowl_style']=df['bowl_style_grouped']
+
 
 # -----------------------
 # Utility helpers
