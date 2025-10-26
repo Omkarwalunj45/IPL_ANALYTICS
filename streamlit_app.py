@@ -128,8 +128,8 @@ bowl_style_map = {
 
 # Apply mapping to your dataframe
 df['bowl_style_grouped'] = df['bowl_style'].map(bowl_style_map)
-df['bowl_style_org']=df['bowl_style']
-df['bowl_style']=df['bowl_style_grouped']
+# df['bowl_style_org']=df['bowl_style']
+# df['bowl_style']=df['bowl_style_grouped']
 
 
 # -----------------------
