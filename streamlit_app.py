@@ -3434,180 +3434,185 @@ elif sidebar_option == "Strength vs Weakness":
     
             st.markdown("<div style='font-weight:700; font-size:15px;'>📌 Performance by bowling style (with RAA / DAA)</div>", unsafe_allow_html=True)
             st.dataframe(bs_df, use_container_width=True)
+
+
+
+
+            
+            import plotly.express as px
+            
+            # defensive checks
+            if 'bdf' not in globals():
+                st.error("Global `bdf` not found. This snippet requires your ball-by-ball DataFrame in variable `bdf`.")
+            else:
+                runs_col = 'batruns'
+                if runs_col not in bdf.columns:
+                    st.error(f"Runs column '{runs_col}' not found in bdf.")
+                else:
+                    # ensure minimal preprocessing
+                    working = bdf.copy()
+                    working[runs_col] = pd.to_numeric(working[runs_col], errors='coerce').fillna(0).astype(int)
+                    working['out_flag_tmp'] = pd.to_numeric(working.get('out', 0), errors='coerce').fillna(0).astype(int)
+                    working['dismissal_clean_tmp'] = working.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+            
+                    # wicket detection (bowler-credit)
+                    WICKET_TYPES = ['bowled','caught','hit wicket','stumped','leg before wicket','lbw']
+                    def is_bowler_wicket_local(out_flag_val, dismissal_text):
+                        try:
+                            if int(out_flag_val) != 1:
+                                return False
+                        except:
+                            if not out_flag_val:
+                                return False
+                        if not dismissal_text or str(dismissal_text).strip() == '':
+                            return False
+                        dd = str(dismissal_text).lower()
+                        for token in WICKET_TYPES:
+                            if token in dd:
+                                return True
+                        return False
+            
+                    working['is_wkt_tmp'] = working.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp',0), r.get('dismissal_clean_tmp','')) else 0, axis=1)
+            
+                    # ensure top7_flag exists (best-effort fallback)
+                    if 'top7_flag' not in working.columns:
+                        # try p_bat numeric
+                        if 'p_bat' in working.columns and pd.api.types.is_numeric_dtype(working['p_bat']):
+                            working['top7_flag'] = (pd.to_numeric(working['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
+                        else:
+                            # derive by first appearance per innings (best-effort)
+                            order_col = 'ball_id' if 'ball_id' in working.columns else ('ball' if 'ball' in working.columns else None)
+                            if order_col is None:
+                                working = working.reset_index().rename(columns={'index':'_ord_idx'})
+                                order_col = '_ord_idx'
+                            if all(c in working.columns for c in ['p_match','inns','bat']):
+                                tmp = working.dropna(subset=['bat','p_match','inns']).copy()
+                                first_app = tmp.groupby(['p_match','inns','bat'], as_index=False)[order_col].min().rename(columns={order_col:'first_ball'})
+                                recs = []
+                                for (m,inn), grp in first_app.groupby(['p_match','inns']):
+                                    top7_names = grp.sort_values('first_ball').head(7)['bat'].tolist()
+                                    for b in top7_names:
+                                        recs.append((m, inn, b))
+                                if recs:
+                                    top7_df = pd.DataFrame(recs, columns=['p_match','inns','bat'])
+                                    top7_df['top7_flag'] = 1
+                                    working = working.merge(top7_df, how='left', on=['p_match','inns','bat'])
+                                    working['top7_flag'] = working['top7_flag'].fillna(0).astype(int)
+                                else:
+                                    working['top7_flag'] = 0
+                            else:
+                                working['top7_flag'] = 0
+            
+                    # restrict to deliveries that have a length
+                    if 'length' not in working.columns:
+                        st.error("Column 'length' missing in data.")
+                    else:
+                        # primary top7 frame
+                        top7 = working[working.get('top7_flag',0) == 1].copy()
+                        # fallback if empty
+                        if top7.empty and 'p_bat' in working.columns:
+                            top7 = working[pd.to_numeric(working['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
+                        if top7.empty:
+                            # final fallback: derive top7 by first appearance (already attempted above) -> if still empty, abort RAA/DAA calc
+                            st.info("Top-7 data not found or empty; cannot compute RAA/DAA vs length.")
+                            top7_available = False
+                        else:
+                            top7_available = True
+            
+                        # compute per-(match,inns,batter,length) aggregates for top7
+                        if top7_available:
+                            gb_keys = ['p_match','inns','bat','length'] if all(c in top7.columns for c in ['p_match','inns']) else ['p_match','bat','length']
+                            per_mb = (top7.groupby(gb_keys, as_index=False)
+                                      .agg(runs=(runs_col,'sum'),
+                                           balls=(runs_col,'count'),
+                                           dismissals=('is_wkt_tmp','sum')))
+                            per_mb['SR'] = per_mb.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
+                            per_mb['BPD'] = per_mb.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
+            
+                            # per-batter means so each batter contributes equally
+                            per_batter_group = per_mb.groupby(['bat','length'], as_index=False).agg(mean_SR=('SR','mean'), mean_BPD=('BPD','mean'))
+            
+                            # average across batters for each length
+                            avg_by_length = per_batter_group.groupby('length').agg(avg_SR_top7=('mean_SR','mean'), avg_BPD_top7=('mean_BPD','mean')).reset_index()
+                        else:
+                            avg_by_length = pd.DataFrame(columns=['length','avg_SR_top7','avg_BPD_top7'])
+            
+                        # selected batter deliveries (use entire set of his deliveries to compute SR/BPD per length)
+                        sel = working[working['bat'] == player_selected].copy()
+                        if sel.empty:
+                            st.info("Selected batter has no deliveries in bdf.")
+                        else:
+                            sel['length'] = sel['length'].astype(str).fillna('unknown')
+                            sel_grp = sel.groupby('length').agg(runs=(runs_col,'sum'), balls=(runs_col,'count'), dismissals=('is_wkt_tmp','sum')).reset_index()
+                            sel_grp['SR'] = sel_grp.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
+                            sel_grp['BPD'] = sel_grp.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
+            
+                            # merge with averages
+                            merged = pd.merge(sel_grp, avg_by_length, how='left', on='length')
+            
+                            # compute RAA and DAA
+                            merged['RAA'] = merged.apply(lambda r: (r['SR'] - r['avg_SR_top7']) if (pd.notna(r['SR']) and pd.notna(r['avg_SR_top7'])) else np.nan, axis=1)
+                            merged['DAA'] = merged.apply(lambda r: (r['BPD'] - r['avg_BPD_top7']) if (pd.notna(r['BPD']) and pd.notna(r['avg_BPD_top7'])) else np.nan, axis=1)
+            
+                            # desired length order
+                            lengths_order = ['SHORT','SHORT_OF_A_GOOD_LENGTH','GOOD_LENGTH','FULL','YORKER','FULL_TOSS']
+                            # prepare final plot DF with all lengths present
+                            plot_df = pd.DataFrame({'length': lengths_order})
+                            merged['length'] = merged['length'].astype(str)
+                            plot_df = plot_df.merge(merged[['length','RAA','DAA','SR','BPD','runs','balls']], how='left', on='length')
+            
+                            # text columns for display: '-' when NaN
+                            plot_df['RAA_text'] = plot_df['RAA'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else '-')
+                            plot_df['DAA_text'] = plot_df['DAA'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else '-')
+            
+                            # convert for plotting (use NaN for missing so bar won't show)
+                            plot_df['RAA_plot'] = plot_df['RAA']
+                            plot_df['DAA_plot'] = plot_df['DAA']
+            
+                            # two columns and plot
+                            c1, c2 = st.columns(2, gap="large")
+                            with c1:
+                                st.markdown("### 🔁 RAA vs Length (SR above/below top-7 average)")
+                                if plot_df['RAA_plot'].dropna().empty:
+                                    st.info("No data to plot RAA vs length for this batter.")
+                                else:
+                                    fig_r = px.bar(
+                                        plot_df,
+                                        x='RAA_plot',
+                                        y='length',
+                                        orientation='h',
+                                        text='RAA_text',
+                                        labels={'RAA_plot':'RAA (SR points)','length':'Length'},
+                                        height=420,
+                                        color='RAA_plot',
+                                        color_continuous_scale=['#fff0e6','#ffd6cc']  # light/pastel skin-pink
+                                    )
+                                    fig_r.update_traces(textposition='inside')
+                                    fig_r.update_layout(margin=dict(l=140, r=40, t=30, b=30), coloraxis_showscale=False)
+                                    st.plotly_chart(fig_r, use_container_width=True)
+            
+                            with c2:
+                                st.markdown("### ⚖️ DAA vs Length (Balls-per-dismissal above/below top-7 avg)")
+                                if plot_df['DAA_plot'].dropna().empty:
+                                    st.info("No data to plot DAA vs length for this batter.")
+                                else:
+                                    fig_d = px.bar(
+                                        plot_df,
+                                        x='DAA_plot',
+                                        y='length',
+                                        orientation='h',
+                                        text='DAA_text',
+                                        labels={'DAA_plot':'DAA (BPD points)','length':'Length'},
+                                        height=420,
+                                        color='DAA_plot',
+                                        color_continuous_scale=['#eff8ff','#cfe9ff']  # light/pastel blue
+                                    )
+                                    fig_d.update_traces(textposition='inside')
+                                    fig_d.update_layout(margin=dict(l=140, r=40, t=30, b=30), coloraxis_showscale=False)
+                                    st.plotly_chart(fig_d, use_container_width=True)
         else:
             st.info("No bowl_style column found; skipping bowl_style table.")
         # -------------------- RAA & DAA vs LENGTH (two side-by-side bars) --------------------
-        import plotly.express as px
-        
-        # defensive checks
-        if 'bdf' not in globals():
-            st.error("Global `bdf` not found. This snippet requires your ball-by-ball DataFrame in variable `bdf`.")
-        else:
-            runs_col = 'batruns'
-            if runs_col not in bdf.columns:
-                st.error(f"Runs column '{runs_col}' not found in bdf.")
-            else:
-                # ensure minimal preprocessing
-                working = bdf.copy()
-                working[runs_col] = pd.to_numeric(working[runs_col], errors='coerce').fillna(0).astype(int)
-                working['out_flag_tmp'] = pd.to_numeric(working.get('out', 0), errors='coerce').fillna(0).astype(int)
-                working['dismissal_clean_tmp'] = working.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
-        
-                # wicket detection (bowler-credit)
-                WICKET_TYPES = ['bowled','caught','hit wicket','stumped','leg before wicket','lbw']
-                def is_bowler_wicket_local(out_flag_val, dismissal_text):
-                    try:
-                        if int(out_flag_val) != 1:
-                            return False
-                    except:
-                        if not out_flag_val:
-                            return False
-                    if not dismissal_text or str(dismissal_text).strip() == '':
-                        return False
-                    dd = str(dismissal_text).lower()
-                    for token in WICKET_TYPES:
-                        if token in dd:
-                            return True
-                    return False
-        
-                working['is_wkt_tmp'] = working.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp',0), r.get('dismissal_clean_tmp','')) else 0, axis=1)
-        
-                # ensure top7_flag exists (best-effort fallback)
-                if 'top7_flag' not in working.columns:
-                    # try p_bat numeric
-                    if 'p_bat' in working.columns and pd.api.types.is_numeric_dtype(working['p_bat']):
-                        working['top7_flag'] = (pd.to_numeric(working['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
-                    else:
-                        # derive by first appearance per innings (best-effort)
-                        order_col = 'ball_id' if 'ball_id' in working.columns else ('ball' if 'ball' in working.columns else None)
-                        if order_col is None:
-                            working = working.reset_index().rename(columns={'index':'_ord_idx'})
-                            order_col = '_ord_idx'
-                        if all(c in working.columns for c in ['p_match','inns','bat']):
-                            tmp = working.dropna(subset=['bat','p_match','inns']).copy()
-                            first_app = tmp.groupby(['p_match','inns','bat'], as_index=False)[order_col].min().rename(columns={order_col:'first_ball'})
-                            recs = []
-                            for (m,inn), grp in first_app.groupby(['p_match','inns']):
-                                top7_names = grp.sort_values('first_ball').head(7)['bat'].tolist()
-                                for b in top7_names:
-                                    recs.append((m, inn, b))
-                            if recs:
-                                top7_df = pd.DataFrame(recs, columns=['p_match','inns','bat'])
-                                top7_df['top7_flag'] = 1
-                                working = working.merge(top7_df, how='left', on=['p_match','inns','bat'])
-                                working['top7_flag'] = working['top7_flag'].fillna(0).astype(int)
-                            else:
-                                working['top7_flag'] = 0
-                        else:
-                            working['top7_flag'] = 0
-        
-                # restrict to deliveries that have a length
-                if 'length' not in working.columns:
-                    st.error("Column 'length' missing in data.")
-                else:
-                    # primary top7 frame
-                    top7 = working[working.get('top7_flag',0) == 1].copy()
-                    # fallback if empty
-                    if top7.empty and 'p_bat' in working.columns:
-                        top7 = working[pd.to_numeric(working['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
-                    if top7.empty:
-                        # final fallback: derive top7 by first appearance (already attempted above) -> if still empty, abort RAA/DAA calc
-                        st.info("Top-7 data not found or empty; cannot compute RAA/DAA vs length.")
-                        top7_available = False
-                    else:
-                        top7_available = True
-        
-                    # compute per-(match,inns,batter,length) aggregates for top7
-                    if top7_available:
-                        gb_keys = ['p_match','inns','bat','length'] if all(c in top7.columns for c in ['p_match','inns']) else ['p_match','bat','length']
-                        per_mb = (top7.groupby(gb_keys, as_index=False)
-                                  .agg(runs=(runs_col,'sum'),
-                                       balls=(runs_col,'count'),
-                                       dismissals=('is_wkt_tmp','sum')))
-                        per_mb['SR'] = per_mb.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
-                        per_mb['BPD'] = per_mb.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
-        
-                        # per-batter means so each batter contributes equally
-                        per_batter_group = per_mb.groupby(['bat','length'], as_index=False).agg(mean_SR=('SR','mean'), mean_BPD=('BPD','mean'))
-        
-                        # average across batters for each length
-                        avg_by_length = per_batter_group.groupby('length').agg(avg_SR_top7=('mean_SR','mean'), avg_BPD_top7=('mean_BPD','mean')).reset_index()
-                    else:
-                        avg_by_length = pd.DataFrame(columns=['length','avg_SR_top7','avg_BPD_top7'])
-        
-                    # selected batter deliveries (use entire set of his deliveries to compute SR/BPD per length)
-                    sel = working[working['bat'] == player_selected].copy()
-                    if sel.empty:
-                        st.info("Selected batter has no deliveries in bdf.")
-                    else:
-                        sel['length'] = sel['length'].astype(str).fillna('unknown')
-                        sel_grp = sel.groupby('length').agg(runs=(runs_col,'sum'), balls=(runs_col,'count'), dismissals=('is_wkt_tmp','sum')).reset_index()
-                        sel_grp['SR'] = sel_grp.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
-                        sel_grp['BPD'] = sel_grp.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
-        
-                        # merge with averages
-                        merged = pd.merge(sel_grp, avg_by_length, how='left', on='length')
-        
-                        # compute RAA and DAA
-                        merged['RAA'] = merged.apply(lambda r: (r['SR'] - r['avg_SR_top7']) if (pd.notna(r['SR']) and pd.notna(r['avg_SR_top7'])) else np.nan, axis=1)
-                        merged['DAA'] = merged.apply(lambda r: (r['BPD'] - r['avg_BPD_top7']) if (pd.notna(r['BPD']) and pd.notna(r['avg_BPD_top7'])) else np.nan, axis=1)
-        
-                        # desired length order
-                        lengths_order = ['SHORT','SHORT_OF_A_GOOD_LENGTH','GOOD_LENGTH','FULL','YORKER','FULL_TOSS']
-                        # prepare final plot DF with all lengths present
-                        plot_df = pd.DataFrame({'length': lengths_order})
-                        merged['length'] = merged['length'].astype(str)
-                        plot_df = plot_df.merge(merged[['length','RAA','DAA','SR','BPD','runs','balls']], how='left', on='length')
-        
-                        # text columns for display: '-' when NaN
-                        plot_df['RAA_text'] = plot_df['RAA'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else '-')
-                        plot_df['DAA_text'] = plot_df['DAA'].apply(lambda x: f"{x:.2f}" if pd.notna(x) else '-')
-        
-                        # convert for plotting (use NaN for missing so bar won't show)
-                        plot_df['RAA_plot'] = plot_df['RAA']
-                        plot_df['DAA_plot'] = plot_df['DAA']
-        
-                        # two columns and plot
-                        c1, c2 = st.columns(2, gap="large")
-                        with c1:
-                            st.markdown("### 🔁 RAA vs Length (SR above/below top-7 average)")
-                            if plot_df['RAA_plot'].dropna().empty:
-                                st.info("No data to plot RAA vs length for this batter.")
-                            else:
-                                fig_r = px.bar(
-                                    plot_df,
-                                    x='RAA_plot',
-                                    y='length',
-                                    orientation='h',
-                                    text='RAA_text',
-                                    labels={'RAA_plot':'RAA (SR points)','length':'Length'},
-                                    height=420,
-                                    color='RAA_plot',
-                                    color_continuous_scale=['#fff0e6','#ffd6cc']  # light/pastel skin-pink
-                                )
-                                fig_r.update_traces(textposition='inside')
-                                fig_r.update_layout(margin=dict(l=140, r=40, t=30, b=30), coloraxis_showscale=False)
-                                st.plotly_chart(fig_r, use_container_width=True)
-        
-                        with c2:
-                            st.markdown("### ⚖️ DAA vs Length (Balls-per-dismissal above/below top-7 avg)")
-                            if plot_df['DAA_plot'].dropna().empty:
-                                st.info("No data to plot DAA vs length for this batter.")
-                            else:
-                                fig_d = px.bar(
-                                    plot_df,
-                                    x='DAA_plot',
-                                    y='length',
-                                    orientation='h',
-                                    text='DAA_text',
-                                    labels={'DAA_plot':'DAA (BPD points)','length':'Length'},
-                                    height=420,
-                                    color='DAA_plot',
-                                    color_continuous_scale=['#eff8ff','#cfe9ff']  # light/pastel blue
-                                )
-                                fig_d.update_traces(textposition='inside')
-                                fig_d.update_layout(margin=dict(l=140, r=40, t=30, b=30), coloraxis_showscale=False)
-                                st.plotly_chart(fig_d, use_container_width=True)
         
         # -------------------- end RAA/DAA vs length --------------------
 
