@@ -3161,57 +3161,50 @@ elif sidebar_option == "Strength vs Weakness":
 # ---------------------- Enhanced Batting Tables with RAA & DAA ----------------------
     # ---------- Enhanced batting tables: add RAA & DAA (paste in place of your original block) ----------
 # ---------------------- Batting block (replacement) ----------------------
+# ---------------------- Batting block (robust RAA/DAA) ----------------------
     if role == "Batting":
         st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Batting — {player_selected}</div>", unsafe_allow_html=True)
     
-        # Ensure bdf exists
+        # require bdf in globals
         if 'bdf' not in globals():
-            st.error("`bdf` (ball-by-ball DataFrame) not found in globals. Put your dataframe into variable `bdf`.")
+            st.error("`bdf` (ball-by-ball DataFrame) not found. Put your dataframe in variable `bdf`.")
             st.stop()
     
-        # player frame (pf) from bdf using canonical batter column name
+        # build player frame pf using canonical batter column (COL_BAT expected to be 'bat')
         pf = bdf[bdf.get(COL_BAT, 'bat') == player_selected].copy()
         if pf.empty:
             st.info("No ball-by-ball rows for the selected batter.")
             st.stop()
     
-        # detect runs column (prefer 'batruns')
-        preferred_runs = 'batruns'
-        alt_runs = safe_get_col(bdf, ['batruns', 'batsman_runs', 'score', 'runs'])
-        runs_col = preferred_runs if preferred_runs in bdf.columns else (alt_runs if alt_runs else None)
+        # run column detection (prefer 'batruns') - use safe_get_col if available
+        preferred = 'batruns'
+        alt = safe_get_col(bdf, ['batruns', 'batsman_runs', 'score', 'runs'])
+        runs_col = preferred if preferred in bdf.columns else (alt if alt else None)
         if runs_col is None:
             st.error("No runs column found (expected 'batruns' or 'batsman_runs' or 'score' or 'runs').")
             st.stop()
     
-        # coerce runs to int in both frames
+        # coerce runs col
         bdf[runs_col] = pd.to_numeric(bdf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
         pf[runs_col] = pd.to_numeric(pf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
     
-        # compute LHB flag for mirroring
+        # detect left hand for mirroring
         is_lhb = False
         if 'bat_hand' in pf.columns:
             nonull = pf['bat_hand'].dropna().astype(str)
             if not nonull.empty and nonull.iloc[0].strip().upper().startswith('L'):
                 is_lhb = True
     
-        # -------------------------
-        # base compute_batting_metrics (uses runs_col)
-        # -------------------------
+        # basic batting metrics function (uses runs_col)
         def compute_batting_metrics(gdf, run_col=runs_col):
             runs = int(gdf[run_col].sum()) if run_col in gdf.columns else 0
             balls = int(gdf.shape[0])
             fours = int((gdf[run_col] == 4).sum()) if run_col in gdf.columns else 0
             sixes = int((gdf[run_col] == 6).sum()) if run_col in gdf.columns else 0
             sr = (runs / balls * 100.0) if balls > 0 else np.nan
-            return {
-                'Runs': runs,
-                'Balls': balls,
-                '4s': fours,
-                '6s': sixes,
-                'SR': np.round(sr, 2) if not np.isnan(sr) else '-'
-            }
+            return {'Runs': runs, 'Balls': balls, '4s': fours, '6s': sixes, 'SR': np.round(sr, 2) if not np.isnan(sr) else '-'}
     
-        # --- build bowling-kind summary for this batter ---
+        # ------------------ bowling type summary for this batter ------------------
         if COL_BOWL_KIND in pf.columns:
             pf[COL_BOWL_KIND] = pf[COL_BOWL_KIND].astype(str).str.lower().fillna('unknown')
             kinds = sorted(pf[COL_BOWL_KIND].dropna().unique().tolist())
@@ -3231,7 +3224,7 @@ elif sidebar_option == "Strength vs Weakness":
             rows.append(m)
         bk_df = pd.DataFrame(rows).set_index('bowl_kind')
     
-        # --- build bowling-style summary for this batter ---
+        # ------------------ bowling style summary for this batter -----------------
         if COL_BOWL_STYLE in pf.columns:
             styles = sorted([s for s in pf[COL_BOWL_STYLE].dropna().unique() if str(s).strip() != ''])
             bs_rows = []
@@ -3247,15 +3240,13 @@ elif sidebar_option == "Strength vs Weakness":
         else:
             bs_df = None
     
-        # -------------------- prepare top7_flag in bdf (if not present) --------------------
-        # top7 = top 7 batters of the innings (bat column used)
+        # ------------------ ensure top7_flag exists (attempt to create if absent) ------------------
         if 'top7_flag' not in bdf.columns:
             bdf = bdf.copy()
-            # prefer numeric p_bat
             if 'p_bat' in bdf.columns and pd.api.types.is_numeric_dtype(bdf['p_bat']):
                 bdf['top7_flag'] = (pd.to_numeric(bdf['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
             else:
-                # derive by first appearance per (p_match, inns) using 'bat'
+                # derive by first appearance (best effort)
                 order_col = 'ball_id' if 'ball_id' in bdf.columns else ('ball' if 'ball' in bdf.columns else None)
                 if order_col is None:
                     bdf = bdf.reset_index().rename(columns={'index': '_order_idx'})
@@ -3276,24 +3267,24 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         bdf['top7_flag'] = 0
                 else:
-                    # cannot compute reliably
                     bdf['top7_flag'] = 0
             bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
     
-        # -------------------- RAA / DAA computation (top7-aware) --------------------
+        # ------------------ compute RAA / DAA (robustly) ------------------
         def compute_RAA_DAA_for_group_column(group_col):
             """
-            group_col: string column name in bdf (e.g., COL_BOWL_KIND or COL_BOWL_STYLE)
-            returns mapping group_value_lower -> dict(selected_SR, selected_BPD, avg_SR_top7, avg_BPD_top7, RAA, DAA)
+            Return mapping: lowercase_group_val -> {
+               selected_SR, selected_BPD, avg_SR_top7, avg_BPD_top7, RAA, DAA
+            }
+            Averages computed over top-7 batters per innings (each batter contributes equally).
             """
             out = {}
             if group_col not in bdf.columns:
                 return out
     
             working = bdf.copy()
-            # normalize group col
+            # normalize
             working[group_col] = working[group_col].astype(str).str.lower().fillna('unknown')
-            # ensure runs and wicket flags
             working[runs_col] = pd.to_numeric(working.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
             working['out_flag_tmp'] = pd.to_numeric(working.get('out', 0), errors='coerce').fillna(0).astype(int)
             working['dismissal_clean_tmp'] = working.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
@@ -3317,12 +3308,34 @@ elif sidebar_option == "Strength vs Weakness":
     
             working['is_wkt_tmp'] = working.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, axis=1)
     
-            # restrict to top7 rows
+            # primary approach: use rows with top7_flag == 1
             top7 = working[working.get('top7_flag', 0) == 1].copy()
+    
+            # fallback: if top7 is empty, try numeric p_bat <=7
             if top7.empty:
+                if 'p_bat' in working.columns and pd.api.types.is_numeric_dtype(working['p_bat']):
+                    top7 = working[pd.to_numeric(working['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
+    
+            # fallback 2: if still empty, derive by first appearance per innings
+            if top7.empty:
+                if all(c in working.columns for c in ['p_match', 'inns', COL_BAT]):
+                    tmp = working.dropna(subset=[COL_BAT, 'p_match', 'inns']).copy()
+                    order_col = 'ball_id' if 'ball_id' in tmp.columns else ('ball' if 'ball' in tmp.columns else tmp.columns[0])
+                    first_app = tmp.groupby(['p_match', 'inns', COL_BAT], as_index=False)[order_col].min().rename(columns={order_col: 'first_ball'})
+                    recs = []
+                    for (m, inn), grp in first_app.groupby(['p_match', 'inns']):
+                        top7_names = grp.sort_values('first_ball').head(7)[COL_BAT].tolist()
+                        for b in top7_names:
+                            recs.append((m, inn, b))
+                    if recs:
+                        top7_df = pd.DataFrame(recs, columns=['p_match', 'inns', COL_BAT])
+                        top7_df['top7_flag'] = 1
+                        top7 = working.merge(top7_df, how='inner', on=['p_match', 'inns', COL_BAT])
+            if top7.empty:
+                # cannot compute top7-based averages
                 return out
     
-            # compute per-(match,inns,batter,group) aggregates for top7 rows
+            # compute per-(match,inns,batter,group) aggregates for top7
             gb_keys = ['p_match', 'inns', COL_BAT, group_col] if all(c in top7.columns for c in ['p_match', 'inns']) else ['p_match', COL_BAT, group_col]
             per_mb = (top7.groupby(gb_keys, as_index=False)
                       .agg(runs=(runs_col, 'sum'),
@@ -3331,13 +3344,13 @@ elif sidebar_option == "Strength vs Weakness":
             per_mb['SR'] = per_mb.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
             per_mb['BPD'] = per_mb.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
     
-            # average per batter across matches first so each batter contributes equally
+            # per-batter means (so each batter contributes equally)
             per_batter_group = per_mb.groupby([COL_BAT, group_col], as_index=False).agg(mean_SR=('SR', 'mean'), mean_BPD=('BPD', 'mean'))
     
-            # now average across batters for each group value
+            # average across batters for each group value
             avg_by_group = per_batter_group.groupby(group_col).agg(avg_SR_top7=('mean_SR', 'mean'), avg_BPD_top7=('mean_BPD', 'mean')).reset_index()
     
-            # selected batter stats (use pf — all deliveries by selected batter)
+            # selected batter metrics from pf (use all deliveries)
             sel = pf.copy()
             sel[group_col] = sel.get(group_col, "").astype(str).str.lower().fillna('unknown')
             sel[runs_col] = pd.to_numeric(sel.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
@@ -3349,8 +3362,8 @@ elif sidebar_option == "Strength vs Weakness":
             sel_grp['SR'] = sel_grp.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
             sel_grp['BPD'] = sel_grp.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
     
-            # merge and compute RAA/DAA
             merged = pd.merge(sel_grp, avg_by_group, how='left', on=group_col)
+    
             for _, row in merged.iterrows():
                 g = row[group_col]
                 sel_sr = row['SR']
@@ -3379,7 +3392,7 @@ elif sidebar_option == "Strength vs Weakness":
             return out
     
         # -------------------- attach RAA/DAA to bk_df and bs_df --------------------
-        def _fmt(x): 
+        def _fmt(x):
             return f"{x:.2f}" if (not pd.isna(x)) else '-'
     
         # attach to bk_df
@@ -3402,7 +3415,7 @@ elif sidebar_option == "Strength vs Weakness":
         st.markdown("<div style='font-weight:700; font-size:15px;'>📊 Performance by bowling type (with RAA / DAA)</div>", unsafe_allow_html=True)
         st.dataframe(bk_df, use_container_width=True)
     
-        # attach to bs_df (bowling styles)
+        # attach to bs_df
         if bs_df is not None:
             if COL_BOWL_STYLE in bdf.columns:
                 bs_raadaa = compute_RAA_DAA_for_group_column(COL_BOWL_STYLE)
@@ -3423,6 +3436,8 @@ elif sidebar_option == "Strength vs Weakness":
             st.dataframe(bs_df, use_container_width=True)
         else:
             st.info("No bowl_style column found; skipping bowl_style table.")
+# ---------------------- end batting block ----------------------
+
     # ---------------------- end replacement ----------------------
 
 
