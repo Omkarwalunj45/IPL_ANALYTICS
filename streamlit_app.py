@@ -3429,7 +3429,12 @@ elif sidebar_option == "Strength vs Weakness":
 
         # ---------------------------------------------------------------------------------
 
-    
+        st.write("runs_col:", runs_col)
+        st.write("sample top7 flags:", bdf[['p_match','inns','bat','top7_flag']].drop_duplicates().head(20))
+        st.write("bk_df index keys:", list(bk_df.index))
+        if 'bdf' in globals():
+            st.write("bdf has cols:", bdf.columns.tolist())
+
         # --- Wagon wheels: Pace (left) & Spin (right) ---
         st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'>🎥 Wagon wheels — Pace (left) & Spin (right)</div>", unsafe_allow_html=True)
         if COL_BOWL_KIND in pf.columns:
