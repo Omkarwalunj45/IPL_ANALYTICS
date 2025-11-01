@@ -1155,168 +1155,111 @@ if sidebar_option == "Player Profile":
                     val = player_stats[col].values[0] if len(player_stats[col].values) > 0 else None
             found_top_cols[label] = val
     
-        # ------------------- Compute overall RAA & DAA for this batter (career-level) -------------------
-        # RAA = player's SR (career, using batruns) - avg SR of top-7 batters per-innings (averaged across batters)
-        # DAA = player's BallsPerDismissal (career) - avg BPD of top-7 batters per-innings
-        def detect_runs_col_for_bdf(df):
-            for c in ['batruns', 'batsman_runs', 'score', 'runs']:
-                if c in df.columns:
-                    return c
-            return None
+        # ---------- Compute career RAA & DAA in-situ (use career & top-7 batters) ----------
+        # Requirements: bdf must exist and contain at least 'bat' and 'batruns' (or fallback runs), 'out' (or out flag), and match/inns identifiers.
+        career_RAA = None
+        career_DAA = None
+        RAA_disp = '-'
+        DAA_disp = '-'
+        if 'bdf' not in globals():
+            st.warning("`bdf` not available in this session; RAA/DAA cannot be computed.")
+        else:
+            df_all = bdf.copy()
     
-        # default values if cannot compute
-        RAA_val_display = '-'
-        DAA_val_display = '-'
-    
-        # attempt to compute using bdf if available
-        if 'bdf' in globals() and isinstance(bdf, pd.DataFrame) and not bdf.empty:
-            bdf_local = bdf.copy()
-            # detect batter column in bdf
-            batter_col_bdf = 'bat' if 'bat' in bdf_local.columns else ('batsman' if 'batsman' in bdf_local.columns else None)
-            # detect runs col
-            runs_col = detect_runs_col_for_bdf(bdf_local)
-    
-            if batter_col_bdf is None or runs_col is None:
-                # can't compute
-                pass
+            # detect runs column (prefer batruns)
+            runs_col = 'batruns' if 'batruns' in df_all.columns else safe_get_col(df_all, ['batsman_runs', 'score', 'runs'])
+            if runs_col is None:
+                st.warning("No runs column ('batruns' or equivalent) found in bdf; cannot compute RAA/DAA.")
             else:
-                # normalize required cols
-                bdf_local[runs_col] = pd.to_numeric(bdf_local.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
-                bdf_local['out_flag_tmp'] = pd.to_numeric(bdf_local.get('out', 0), errors='coerce').fillna(0).astype(int)
-                bdf_local['dismissal_clean_tmp'] = bdf_local.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+                # ensure numeric
+                df_all[runs_col] = pd.to_numeric(df_all.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
     
-                # bowler-credit wicket detection tokens
-                WICKET_TYPES = ['bowled','caught','hit wicket','stumped','leg before wicket','lbw']
-                def _is_bowler_wkt(o, d):
-                    try:
-                        if int(o) != 1:
-                            return False
-                    except:
-                        if not o:
-                            return False
-                    if not d or str(d).strip() == '':
-                        return False
-                    dd = str(d).lower()
-                    for t in WICKET_TYPES:
-                        if t in dd:
-                            return True
-                    return False
+                # out flag (use 'out' if present; else try 'p_out' or is_wicket)
+                out_col = 'out' if 'out' in df_all.columns else ( 'p_out' if 'p_out' in df_all.columns else None )
+                if out_col is None:
+                    df_all['_out_flag'] = 0
+                else:
+                    df_all['_out_flag'] = pd.to_numeric(df_all.get(out_col, 0), errors='coerce').fillna(0).astype(int)
     
-                bdf_local['is_wkt_tmp'] = bdf_local.apply(lambda r: 1 if _is_bowler_wkt(r.get('out_flag_tmp',0), r.get('dismissal_clean_tmp','')) else 0, axis=1)
-    
-                # ensure top7_flag exists (attempt best-effort)
-                if 'top7_flag' not in bdf_local.columns:
-                    # prefer numeric p_bat if available
-                    if 'p_bat' in bdf_local.columns and pd.api.types.is_numeric_dtype(bdf_local['p_bat']):
-                        bdf_local['top7_flag'] = (pd.to_numeric(bdf_local['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
+                # Build top-7 per innings (use p_bat numeric if available else derive by first appearance)
+                if 'top7_flag' not in df_all.columns:
+                    # try p_bat numeric
+                    if 'p_bat' in df_all.columns and pd.api.types.is_numeric_dtype(df_all['p_bat']):
+                        df_all['top7_flag'] = (pd.to_numeric(df_all['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
                     else:
-                        # derive by first appearance per innings
-                        order_col = 'ball_id' if 'ball_id' in bdf_local.columns else ('ball' if 'ball' in bdf_local.columns else None)
+                        # derive by first appearance per (p_match, inns) best-effort
+                        order_col = 'ball_id' if 'ball_id' in df_all.columns else ('ball' if 'ball' in df_all.columns else None)
                         if order_col is None:
-                            bdf_local = bdf_local.reset_index().rename(columns={'index':'_ord_idx'})
-                            order_col = '_ord_idx'
-                        if all(c in bdf_local.columns for c in ['p_match','inns', batter_col_bdf]):
-                            tmp = bdf_local.dropna(subset=[batter_col_bdf, 'p_match', 'inns']).copy()
-                            first_app = tmp.groupby(['p_match','inns', batter_col_bdf], as_index=False)[order_col].min().rename(columns={order_col:'first_ball'})
+                            df_all = df_all.reset_index().rename(columns={'index':'_order_idx'})
+                            order_col = '_order_idx'
+                        if all(c in df_all.columns for c in ['p_match','inns','bat']):
+                            tmp = df_all.dropna(subset=['bat','p_match','inns']).copy()
+                            first_app = tmp.groupby(['p_match','inns','bat'], as_index=False)[order_col].min().rename(columns={order_col:'first_ball'})
                             top7_records = []
                             for (m, inn), grp in first_app.groupby(['p_match','inns']):
-                                top7 = grp.sort_values('first_ball').head(7)[batter_col_bdf].tolist()
+                                top7 = grp.sort_values('first_ball').head(7)['bat'].tolist()
                                 for b in top7:
                                     top7_records.append((m, inn, b))
                             if top7_records:
-                                top7_df = pd.DataFrame(top7_records, columns=['p_match','inns',batter_col_bdf])
+                                top7_df = pd.DataFrame(top7_records, columns=['p_match','inns','bat'])
                                 top7_df['top7_flag'] = 1
-                                bdf_local = bdf_local.merge(top7_df, how='left', on=['p_match','inns',batter_col_bdf])
-                                bdf_local['top7_flag'] = bdf_local['top7_flag'].fillna(0).astype(int)
+                                df_all = df_all.merge(top7_df, how='left', on=['p_match','inns','bat'])
+                                df_all['top7_flag'] = df_all['top7_flag'].fillna(0).astype(int)
                             else:
-                                bdf_local['top7_flag'] = 0
+                                df_all['top7_flag'] = 0
                         else:
-                            bdf_local['top7_flag'] = 0
-                    bdf_local['top7_flag'] = bdf_local['top7_flag'].fillna(0).astype(int)
+                            df_all['top7_flag'] = 0
     
-                # build top7 frame
-                top7 = bdf_local[bdf_local.get('top7_flag',0) == 1].copy()
-                # fallback: try numeric p_bat if top7 empty
-                if top7.empty and 'p_bat' in bdf_local.columns:
-                    top7 = bdf_local[pd.to_numeric(bdf_local['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
+                # Now compute per-batter career stats BUT for top7 only: group per (bat) across all top7 rows
+                top7_rows = df_all[df_all.get('top7_flag',0) == 1].copy()
+                if top7_rows.shape[0] == 0:
+                    st.warning("No top-7 rows found in bdf; cannot compute average SR / BPD across top7.")
+                else:
+                    # per batter aggregates in top7 rows (career aggregated)
+                    per_batter = (top7_rows.groupby('bat', as_index=False)
+                                  .agg(runs=(runs_col,'sum'),
+                                       balls=(runs_col,'count'),
+                                       dismissals=('_out_flag','sum')))
+                    # compute SR and BPD per batter (career using only top7 appearances)
+                    per_batter['SR'] = per_batter.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
+                    per_batter['BPD'] = per_batter.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
     
-                # final fallback: derive by first appearance if still empty
-                if top7.empty and all(c in bdf_local.columns for c in ['p_match','inns', batter_col_bdf]):
-                    tmp = bdf_local.dropna(subset=[batter_col_bdf, 'p_match', 'inns']).copy()
-                    order_col = 'ball_id' if 'ball_id' in tmp.columns else ('ball' if 'ball' in tmp.columns else tmp.columns[0])
-                    first_app = tmp.groupby(['p_match','inns', batter_col_bdf], as_index=False)[order_col].min().rename(columns={order_col:'first_ball'})
-                    recs = []
-                    for (m, inn), grp in first_app.groupby(['p_match','inns']):
-                        top7_names = grp.sort_values('first_ball').head(7)[batter_col_bdf].tolist()
-                        for b in top7_names:
-                            recs.append((m, inn, b))
-                    if recs:
-                        top7_df = pd.DataFrame(recs, columns=['p_match','inns',batter_col_bdf])
-                        top7_df['top7_flag'] = 1
-                        top7 = bdf_local.merge(top7_df, how='inner', on=['p_match','inns',batter_col_bdf])
+                    # compute averages across batters (ignore NaNs)
+                    avg_SR_top7 = per_batter['SR'].dropna().mean() if not per_batter['SR'].dropna().empty else np.nan
+                    avg_BPD_top7 = per_batter['BPD'].dropna().mean() if not per_batter['BPD'].dropna().empty else np.nan
     
-                if not top7.empty:
-                    # compute per-(match,inns,batter) aggregates across top7 rows
-                    gb_keys = ['p_match','inns', batter_col_bdf] if all(c in top7.columns for c in ['p_match','inns']) else [batter_col_bdf]
-                    per_mb = (top7.groupby(gb_keys, as_index=False)
-                              .agg(runs=(runs_col,'sum'),
-                                   balls=(runs_col,'count'),
-                                   dismissals=('is_wkt_tmp','sum')))
-                    per_mb['SR'] = per_mb.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
-                    per_mb['BPD'] = per_mb.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
-    
-                    # per-batter mean SR/BPD across their appearances (so each batter counts equally)
-                    per_batter = per_mb.groupby(batter_col_bdf, as_index=False).agg(mean_SR=('SR','mean'), mean_BPD=('BPD','mean'))
-    
-                    # compute averages across batters (top7)
-                    avg_SR_top7_overall = per_batter['mean_SR'].mean() if not per_batter['mean_SR'].dropna().empty else np.nan
-                    avg_BPD_top7_overall = per_batter['mean_BPD'].mean() if not per_batter['mean_BPD'].dropna().empty else np.nan
-    
-                    # compute selected batter career SR and BPD from bdf_local (use all deliveries)
-                    sel_batter_mask = (bdf_local[batter_col_bdf].astype(str) == str(player_name))
-                    sel_rows = bdf_local[sel_batter_mask].copy()
-                    if not sel_rows.empty:
+                    # selected batter career metrics (use full career rows for the player)
+                    sel_rows = df_all[df_all['bat'] == player_name].copy()
+                    if sel_rows.shape[0] == 0:
+                        st.warning(f"No ball rows for player {player_name} in bdf.")
+                    else:
                         sel_runs = int(sel_rows[runs_col].sum())
                         sel_balls = int(sel_rows.shape[0])
-                        sel_wkts = int(sel_rows['is_wkt_tmp'].sum()) if 'is_wkt_tmp' in sel_rows.columns else 0
+                        sel_dismissals = int(sel_rows['_out_flag'].sum())
                         sel_SR = (sel_runs / sel_balls * 100.0) if sel_balls > 0 else np.nan
-                        sel_BPD = (sel_balls / sel_wkts) if sel_wkts > 0 else np.nan
+                        sel_BPD = (sel_balls / sel_dismissals) if sel_dismissals > 0 else np.nan
     
                         # compute RAA and DAA
-                        try:
-                            RAA_val = sel_SR - avg_SR_top7_overall if (not pd.isna(sel_SR) and not pd.isna(avg_SR_top7_overall)) else np.nan
-                        except:
-                            RAA_val = np.nan
-                        try:
-                            DAA_val = sel_BPD - avg_BPD_top7_overall if (not pd.isna(sel_BPD) and not pd.isna(avg_BPD_top7_overall)) else np.nan
-                        except:
-                            DAA_val = np.nan
+                        career_RAA = (sel_SR - avg_SR_top7) if (not np.isnan(sel_SR) and not np.isnan(avg_SR_top7)) else np.nan
+                        career_DAA = (sel_BPD - avg_BPD_top7) if (not np.isnan(sel_BPD) and not np.isnan(avg_BPD_top7)) else np.nan
     
-                        RAA_val_display = f"{RAA_val:.2f}" if (not pd.isna(RAA_val)) else '-'
-                        DAA_val_display = f"{DAA_val:.2f}" if (not pd.isna(DAA_val)) else '-'
-                    else:
-                        # no ball rows for this batter in bdf_local
-                        RAA_val_display = '-'
-                        DAA_val_display = '-'
-                else:
-                    # top7 empty -> cannot compute
-                    RAA_val_display = '-'
-                    DAA_val_display = '-'
-        else:
-            # no bdf -> cannot compute
-            RAA_val_display = '-'
-            DAA_val_display = '-'
+                        # format for display
+                        def fmt2(x):
+                            return f"{x:.2f}" if (not pd.isna(x)) else '-'
+                        RAA_disp = fmt2(career_RAA)
+                        DAA_disp = fmt2(career_DAA)
     
-        # insert RAA & DAA into top metric mapping for display
-        found_top_cols["RAA (SR pts)"] = RAA_val_display
-        found_top_cols["DAA (BPD pts)"] = DAA_val_display
+        # Add RAA/DAA into the top metrics list for display
+        # Only include if computed (else will show '-')
+        found_top_cols['RAA (career vs top7)'] = RAA_disp
+        found_top_cols['DAA (career vs top7)'] = DAA_disp
     
         # Display top metrics as columns (show only those that exist)
         visible_metrics = [(k, v) for k, v in found_top_cols.items() if v is not None and (not (isinstance(v, float) and np.isnan(v)))]
         if visible_metrics:
             cols = st.columns(len(visible_metrics))
             for (label, val), col in zip(visible_metrics, cols):
-                # format numbers nicely
+                # val might be a numeric or string formatted already
                 if isinstance(val, (int, np.integer)):
                     disp = f"{int(val)}"
                 elif isinstance(val, (float, np.floating)) and not np.isnan(val):
