@@ -1106,13 +1106,14 @@ if sidebar_option == "Player Profile":
         st.header("Career Statistics")
         option = st.selectbox("Select Career Stat Type", ("Batting", "Bowling"))
     
+    # ---------- Career Batting ----------
     if option == "Batting":
         player_stats = as_dataframe(idf[idf['batsman'] == player_name])
         if player_stats is None or player_stats.empty:
             st.warning(f"No data available for {player_name}.")
             st.stop()
     
-        # cleanup & formatting
+        # cleanup
         player_stats = player_stats.drop(columns=['final_year'], errors='ignore')
         player_stats.columns = [str(col).upper().replace('_', ' ') for col in player_stats.columns]
         player_stats = round_up_floats(player_stats)
@@ -1122,28 +1123,25 @@ if sidebar_option == "Player Profile":
             if c in player_stats.columns:
                 player_stats[c] = pd.to_numeric(player_stats[c], errors='coerce').fillna(0).astype(int)
     
-        # Header / metric cards (no emojis)
         st.markdown("### Batting Statistics")
     
-        # helper to find column by candidates
+        # helper to find column
         def find_col(df, candidates):
             for cand in candidates:
                 if cand in df.columns:
                     return cand
             return None
     
-        # preferred top metrics (ordered)
         top_metric_mapping = {
-            "Runs": ["RUNS", "RUNS "],
+            "Runs": ["RUNS"],
             "Innings": ["INNINGS", "MATCHES"],
             "Average": ["AVG", "AVERAGE"],
             "Strike Rate": ["SR", "STRIKE RATE"],
             "Highest Score": ["HIGHEST SCORE", "HS"],
-            "50s": ["FIFTIES", "50S", "FIFTY"],
+            "50s": ["FIFTIES", "50S"],
             "100s": ["HUNDREDS", "100S"],
         }
     
-        # collect values for display
         found_top_cols = {}
         for label, candidates in top_metric_mapping.items():
             col = find_col(player_stats, candidates)
@@ -1155,111 +1153,69 @@ if sidebar_option == "Player Profile":
                     val = player_stats[col].values[0] if len(player_stats[col].values) > 0 else None
             found_top_cols[label] = val
     
-        # ---------- Compute career RAA & DAA in-situ (use career & top-7 batters) ----------
-        # Requirements: bdf must exist and contain at least 'bat' and 'batruns' (or fallback runs), 'out' (or out flag), and match/inns identifiers.
-        career_RAA = None
-        career_DAA = None
-        RAA_disp = '-'
-        DAA_disp = '-'
+        # ========== RAA / DAA computation ==========
         if 'bdf' not in globals():
-            st.warning("`bdf` not available in this session; RAA/DAA cannot be computed.")
+            st.warning("Global dataframe `bdf` not found; skipping RAA/DAA.")
+            avg_RAA = avg_DAA = np.nan
         else:
-            df_all = bdf.copy()
-    
-            # detect runs column (prefer batruns)
-            runs_col = 'batruns' if 'batruns' in df_all.columns else safe_get_col(df_all, ['batsman_runs', 'score', 'runs'])
-            if runs_col is None:
-                st.warning("No runs column ('batruns' or equivalent) found in bdf; cannot compute RAA/DAA.")
+            bdf = bdf.copy()
+            batter_col = 'bat' if 'bat' in bdf.columns else ('batsman' if 'batsman' in bdf.columns else None)
+            if batter_col is None:
+                st.warning("No batter column found in bdf.")
+                avg_RAA = avg_DAA = np.nan
             else:
-                # ensure numeric
-                df_all[runs_col] = pd.to_numeric(df_all.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
-    
-                # out flag (use 'out' if present; else try 'p_out' or is_wicket)
-                out_col = 'out' if 'out' in df_all.columns else ( 'p_out' if 'p_out' in df_all.columns else None )
-                if out_col is None:
-                    df_all['_out_flag'] = 0
+                # mark top7 batters per innings
+                if 'p_bat' in bdf.columns:
+                    bdf['top7_flag'] = (pd.to_numeric(bdf['p_bat'], errors='coerce').fillna(99) <= 7).astype(int)
                 else:
-                    df_all['_out_flag'] = pd.to_numeric(df_all.get(out_col, 0), errors='coerce').fillna(0).astype(int)
+                    # derive via first appearance
+                    bdf['_order'] = bdf.groupby(['p_match','inns']).cumcount()
+                    first_app = bdf.groupby(['p_match','inns',batter_col], as_index=False)['_order'].min()
+                    top7 = first_app.groupby(['p_match','inns']).apply(lambda x: x.nsmallest(7, '_order')).reset_index(drop=True)
+                    top7['top7_flag'] = 1
+                    bdf = bdf.merge(top7[['p_match','inns',batter_col,'top7_flag']], how='left', on=['p_match','inns',batter_col])
+                    bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
     
-                # Build top-7 per innings (use p_bat numeric if available else derive by first appearance)
-                if 'top7_flag' not in df_all.columns:
-                    # try p_bat numeric
-                    if 'p_bat' in df_all.columns and pd.api.types.is_numeric_dtype(df_all['p_bat']):
-                        df_all['top7_flag'] = (pd.to_numeric(df_all['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
-                    else:
-                        # derive by first appearance per (p_match, inns) best-effort
-                        order_col = 'ball_id' if 'ball_id' in df_all.columns else ('ball' if 'ball' in df_all.columns else None)
-                        if order_col is None:
-                            df_all = df_all.reset_index().rename(columns={'index':'_order_idx'})
-                            order_col = '_order_idx'
-                        if all(c in df_all.columns for c in ['p_match','inns','bat']):
-                            tmp = df_all.dropna(subset=['bat','p_match','inns']).copy()
-                            first_app = tmp.groupby(['p_match','inns','bat'], as_index=False)[order_col].min().rename(columns={order_col:'first_ball'})
-                            top7_records = []
-                            for (m, inn), grp in first_app.groupby(['p_match','inns']):
-                                top7 = grp.sort_values('first_ball').head(7)['bat'].tolist()
-                                for b in top7:
-                                    top7_records.append((m, inn, b))
-                            if top7_records:
-                                top7_df = pd.DataFrame(top7_records, columns=['p_match','inns','bat'])
-                                top7_df['top7_flag'] = 1
-                                df_all = df_all.merge(top7_df, how='left', on=['p_match','inns','bat'])
-                                df_all['top7_flag'] = df_all['top7_flag'].fillna(0).astype(int)
-                            else:
-                                df_all['top7_flag'] = 0
-                        else:
-                            df_all['top7_flag'] = 0
-    
-                # Now compute per-batter career stats BUT for top7 only: group per (bat) across all top7 rows
-                top7_rows = df_all[df_all.get('top7_flag',0) == 1].copy()
-                if top7_rows.shape[0] == 0:
-                    st.warning("No top-7 rows found in bdf; cannot compute average SR / BPD across top7.")
+                # compute for each top7 batter
+                top7 = bdf[bdf['top7_flag'] == 1]
+                if top7.empty:
+                    st.warning("No top-7 rows found in bdf; cannot compute average RAA/DAA.")
+                    avg_RAA = avg_DAA = np.nan
                 else:
-                    # per batter aggregates in top7 rows (career aggregated)
-                    per_batter = (top7_rows.groupby('bat', as_index=False)
-                                  .agg(runs=(runs_col,'sum'),
-                                       balls=(runs_col,'count'),
-                                       dismissals=('_out_flag','sum')))
-                    # compute SR and BPD per batter (career using only top7 appearances)
-                    per_batter['SR'] = per_batter.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
-                    per_batter['BPD'] = per_batter.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
+                    # SR and Balls per dismissal (BPD)
+                    sr_all = (
+                        top7.groupby(batter_col)
+                        .agg(runs=('batruns','sum'), balls=('ball','count'),
+                             dismissals=('is_wicket','sum'))
+                        .reset_index()
+                    )
+                    sr_all['SR'] = sr_all['runs'] / sr_all['balls'] * 100
+                    sr_all['BPD'] = sr_all.apply(
+                        lambda x: x['balls']/x['dismissals'] if x['dismissals']>0 else np.nan, axis=1
+                    )
     
-                    # compute averages across batters (ignore NaNs)
-                    avg_SR_top7 = per_batter['SR'].dropna().mean() if not per_batter['SR'].dropna().empty else np.nan
-                    avg_BPD_top7 = per_batter['BPD'].dropna().mean() if not per_batter['BPD'].dropna().empty else np.nan
+                    # compute averages (excluding player)
+                    player_data = sr_all[sr_all[batter_col] == player_name]
+                    rest = sr_all[sr_all[batter_col] != player_name]
+                    avg_SR_others = rest['SR'].mean() if not rest.empty else np.nan
+                    avg_BPD_others = rest['BPD'].mean() if not rest.empty else np.nan
     
-                    # selected batter career metrics (use full career rows for the player)
-                    sel_rows = df_all[df_all['bat'] == player_name].copy()
-                    if sel_rows.shape[0] == 0:
-                        st.warning(f"No ball rows for player {player_name} in bdf.")
+                    if not player_data.empty:
+                        player_SR = player_data['SR'].values[0]
+                        player_BPD = player_data['BPD'].values[0]
+                        avg_RAA = round(player_SR - avg_SR_others, 2) if not np.isnan(avg_SR_others) else np.nan
+                        avg_DAA = round(player_BPD - avg_BPD_others, 2) if not np.isnan(avg_BPD_others) else np.nan
                     else:
-                        sel_runs = int(sel_rows[runs_col].sum())
-                        sel_balls = int(sel_rows.shape[0])
-                        sel_dismissals = int(sel_rows['_out_flag'].sum())
-                        sel_SR = (sel_runs / sel_balls * 100.0) if sel_balls > 0 else np.nan
-                        sel_BPD = (sel_balls / sel_dismissals) if sel_dismissals > 0 else np.nan
+                        avg_RAA = avg_DAA = np.nan
     
-                        # compute RAA and DAA
-                        career_RAA = (sel_SR - avg_SR_top7) if (not np.isnan(sel_SR) and not np.isnan(avg_SR_top7)) else np.nan
-                        career_DAA = (sel_BPD - avg_BPD_top7) if (not np.isnan(sel_BPD) and not np.isnan(avg_BPD_top7)) else np.nan
+        found_top_cols["RAA"] = avg_RAA
+        found_top_cols["DAA"] = avg_DAA
     
-                        # format for display
-                        def fmt2(x):
-                            return f"{x:.2f}" if (not pd.isna(x)) else '-'
-                        RAA_disp = fmt2(career_RAA)
-                        DAA_disp = fmt2(career_DAA)
-    
-        # Add RAA/DAA into the top metrics list for display
-        # Only include if computed (else will show '-')
-        found_top_cols['RAA (career vs top7)'] = RAA_disp
-        found_top_cols['DAA (career vs top7)'] = DAA_disp
-    
-        # Display top metrics as columns (show only those that exist)
-        visible_metrics = [(k, v) for k, v in found_top_cols.items() if v is not None and (not (isinstance(v, float) and np.isnan(v)))]
+        # display metrics
+        visible_metrics = [(k, v) for k, v in found_top_cols.items() if v is not None and not (isinstance(v, float) and np.isnan(v))]
         if visible_metrics:
             cols = st.columns(len(visible_metrics))
             for (label, val), col in zip(visible_metrics, cols):
-                # val might be a numeric or string formatted already
                 if isinstance(val, (int, np.integer)):
                     disp = f"{int(val)}"
                 elif isinstance(val, (float, np.floating)) and not np.isnan(val):
