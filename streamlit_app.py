@@ -1086,7 +1086,7 @@ if sidebar_option == "Player Profile":
 
     idf = as_dataframe(idf)
     df  = as_dataframe(df)
-
+    bdf=df
     if 'batsman' not in idf.columns:
         if 'bat' in idf.columns:
             idf = idf.rename(columns={'bat': 'batsman'})
