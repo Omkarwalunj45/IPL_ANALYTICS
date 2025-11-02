@@ -2622,9 +2622,9 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             import numpy as np
             
             # Defensive checks
-            if 'pf' not in globals():
-                st.error("Player frame `pf` not found. Filter your DataFrame for the selected batsman into `pf` first.")
-                st.stop()
+            # if 'pf' not in globals():
+            #     st.error("Player frame `pf` not found. Filter your DataFrame for the selected batsman into `pf` first.")
+            #     st.stop()
             
             # Ensure required columns exist
             if 'batruns' not in pf.columns:
