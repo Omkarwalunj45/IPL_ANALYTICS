@@ -2714,7 +2714,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 col1, col2 = st.columns(2)
             
                 with col1:
-                    st.markdown("### 🔥 Most Productive Shots (share of runs — using `batruns`)")
+                    st.markdown("###  Most Productive Shots ")
                     if productive_shot_df.empty:
                         st.info("No shot data to plot.")
                     else:
@@ -2749,7 +2749,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 # Plotting: right = Control % by shot (if available)
                 # -------------------------
                 with col2:
-                    st.markdown("### 🎯 Control Percentage by Shot")
+                    st.markdown("###  Control Percentage by Shot")
                     if control_df is None:
                         st.info("No `control` column available for this batter; skipping Control % chart.")
                     else:
@@ -2983,7 +2983,7 @@ elif sidebar_option == "Strength vs Weakness":
         st.stop()
     
     # ---------- UI header and player selection ----------
-    st.title("📺 Strength & Weakness — Broadcast View")
+    # st.title("Strength & Weakness — Broadcast View")
     
     role = st.selectbox("Select Role", ["Batting", "Bowling"], index=0)
     
@@ -3220,7 +3220,7 @@ elif sidebar_option == "Strength vs Weakness":
 # ---------------------- Batting block (replacement) ----------------------
 # ---------------------- Batting block (robust RAA/DAA) ----------------------
     if role == "Batting":
-        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Batting — {player_selected}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Batting — {player_selected}</div>", unsafe_allow_html=True)
     
         # require bdf in globals
         if 'bdf' not in globals():
@@ -3469,7 +3469,7 @@ elif sidebar_option == "Strength vs Weakness":
                 bk_df['RAA'] = '-'
                 bk_df['DAA'] = '-'
     
-        st.markdown("<div style='font-weight:700; font-size:15px;'>📊 Performance by bowling type (with RAA / DAA)</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by bowling type </div>", unsafe_allow_html=True)
         st.dataframe(bk_df, use_container_width=True)
     
         # attach to bs_df
@@ -3489,7 +3489,7 @@ elif sidebar_option == "Strength vs Weakness":
                 bs_df['RAA'] = '-'
                 bs_df['DAA'] = '-'
     
-            st.markdown("<div style='font-weight:700; font-size:15px;'>📌 Performance by bowling style (with RAA / DAA)</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by bowling style </div>", unsafe_allow_html=True)
             st.dataframe(bs_df, use_container_width=True)
 
 
@@ -3623,7 +3623,7 @@ elif sidebar_option == "Strength vs Weakness":
                         # display side-by-side
                         c1, c2 = st.columns(2, gap="large")
                         with c1:
-                            st.markdown("### 🔁 RAA vs Length (SR above/below top-7 average)")
+                            st.markdown("### Runs Above Average vs Length")
                             if plot_df['RAA_plot'].dropna().empty:
                                 st.info("No RAA data available for this batter by length.")
                             else:
@@ -3644,7 +3644,7 @@ elif sidebar_option == "Strength vs Weakness":
                                 st.plotly_chart(fig_r, use_container_width=True)
             
                         with c2:
-                            st.markdown("### ⚖️ DAA vs Length (BPD above/below top-7 avg)")
+                            st.markdown("### Dismissals Above Average vs Length ")
                             if plot_df['DAA_plot'].dropna().empty:
                                 st.info("No DAA data available for this batter by length.")
                             else:
@@ -3679,7 +3679,7 @@ elif sidebar_option == "Strength vs Weakness":
 
 
         # --- Wagon wheels: Pace (left) & Spin (right) ---
-        st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'>🎥 Wagon wheels — Pace (left) & Spin (right)</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'> Wagon wheels — Pace & Spin</div>", unsafe_allow_html=True)
         if COL_BOWL_KIND in pf.columns:
             pf_pace = pf[pf[COL_BOWL_KIND].str.contains('pace', na=False)].copy()
             pf_spin = pf[pf[COL_BOWL_KIND].str.contains('spin', na=False)].copy()
@@ -3689,11 +3689,11 @@ elif sidebar_option == "Strength vs Weakness":
     
         c1, c2 = st.columns([1,1], gap="large")
         with c1:
-            st.markdown(f"<div style='font-size:14px; font-weight:800;'>▶️ {player_selected} — vs Pace (Wagon)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:14px; font-weight:800;'> {player_selected} — vs Pace (Wagon)</div>", unsafe_allow_html=True)
             fig_p = draw_wagon(pf_pace, f"{player_selected} — vs Pace", is_lhb)
             display_figure_fixed_height_html(fig_p, height_px=HEIGHT_WAGON_PX, margin_px=0)
         with c2:
-            st.markdown(f"<div style='font-size:14px; font-weight:800;'>▶️ {player_selected} — vs Spin (Wagon)</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size:14px; font-weight:800;'> {player_selected} — vs Spin (Wagon)</div>", unsafe_allow_html=True)
             fig_s = draw_wagon(pf_spin, f"{player_selected} — vs Spin", is_lhb)
             display_figure_fixed_height_html(fig_s, height_px=HEIGHT_WAGON_PX, margin_px=0)
     
@@ -3701,7 +3701,7 @@ elif sidebar_option == "Strength vs Weakness":
         # Pitchmaps — Boundaries, Dismissals, and Dot Balls (Pace vs Spin)
         # use improved readable annotation style (same as bowling)
         # -------------------------------------------------------------------------
-        st.markdown("<div style='font-size:16px; font-weight:800; margin-top:6px;'>📍 Pitchmaps — Boundaries, Dismissals & Dot %</div>", unsafe_allow_html=True)
+        st.markdown("<div style='font-size:16px; font-weight:800; margin-top:6px;'> Pitchmaps — Boundaries, Dismissals & Dot %</div>", unsafe_allow_html=True)
     
         # small consistent LINE/LENGTH maps used across app
         LINE_MAP = {
@@ -3840,33 +3840,33 @@ elif sidebar_option == "Strength vs Weakness":
         # display Boundaries row
         c1, c2 = st.columns([1,1], gap="large")
         with c1:
-            st.markdown(f"<div style='font-weight:800;'>🏁 Boundaries — Pace</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-weight:800;'> Boundaries — Pace</div>", unsafe_allow_html=True)
             fig_b1 = plot_grid_with_readable_labels(grid_pace_bound, f"{player_selected} — Boundaries vs Pace", cmap='Oranges', mirror=is_lhb, fmt='int', vmax=vmax_bound)
             display_figure_fixed_height_html(fig_b1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c2:
-            st.markdown(f"<div style='font-weight:800;'>🏁 Boundaries — Spin</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-weight:800;'> Boundaries — Spin</div>", unsafe_allow_html=True)
             fig_b2 = plot_grid_with_readable_labels(grid_spin_bound, f"{player_selected} — Boundaries vs Spin", cmap='Oranges', mirror=is_lhb, fmt='int', vmax=vmax_bound)
             display_figure_fixed_height_html(fig_b2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
         # display Dismissals row
         c3, c4 = st.columns([1,1], gap="large")
         with c3:
-            st.markdown(f"<div style='font-weight:800;'>💥 Dismissals — Pace</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-weight:800;'> Dismissals — Pace</div>", unsafe_allow_html=True)
             fig_w1 = plot_grid_with_readable_labels(grid_pace_wkt, f"{player_selected} — Dismissals vs Pace", cmap='Reds', mirror=is_lhb, fmt='int', vmax=vmax_wkt)
             display_figure_fixed_height_html(fig_w1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c4:
-            st.markdown(f"<div style='font-weight:800;'>💥 Dismissals — Spin</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-weight:800;'> Dismissals — Spin</div>", unsafe_allow_html=True)
             fig_w2 = plot_grid_with_readable_labels(grid_spin_wkt, f"{player_selected} — Dismissals vs Spin", cmap='Reds', mirror=is_lhb, fmt='int', vmax=vmax_wkt)
             display_figure_fixed_height_html(fig_w2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
         # display Dot Balls row (as counts)
         c5, c6 = st.columns([1,1], gap="large")
         with c5:
-            st.markdown(f"<div style='font-weight:800;'>⚫ Dot Balls (count) — Pace</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-weight:800;'> Dot Balls — Pace</div>", unsafe_allow_html=True)
             fig_d1 = plot_grid_with_readable_labels(grid_pace_dot, f"{player_selected} — Dot Balls vs Pace", cmap='Blues', mirror=is_lhb, fmt='int', vmax=vmax_dot)
             display_figure_fixed_height_html(fig_d1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c6:
-            st.markdown(f"<div style='font-weight:800;'>⚫ Dot Balls (count) — Spin</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-weight:800;'> Dot Balls — Spin</div>", unsafe_allow_html=True)
             fig_d2 = plot_grid_with_readable_labels(grid_spin_dot, f"{player_selected} — Dot Balls vs Spin", cmap='Blues', mirror=is_lhb, fmt='int', vmax=vmax_dot)
             display_figure_fixed_height_html(fig_d2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
     
@@ -3969,7 +3969,7 @@ elif sidebar_option == "Strength vs Weakness":
             col1, col2 = st.columns(2)
         
             with col1:
-                st.markdown("### 🔥 Most Productive Shots (share of runs — using `batruns`)")
+                st.markdown("### Most Productive Shots")
                 if productive_shot_df.empty:
                     st.info("No shot data to plot.")
                 else:
@@ -4004,7 +4004,7 @@ elif sidebar_option == "Strength vs Weakness":
             # Plotting: right = Control % by shot (if available)
             # -------------------------
             with col2:
-                st.markdown("### 🎯 Control Percentage by Shot")
+                st.markdown("### Control Percentage by Shot")
                 if control_df is None:
                     st.info("No `control` column available for this batter; skipping Control % chart.")
                 else:
@@ -4028,7 +4028,7 @@ elif sidebar_option == "Strength vs Weakness":
                     st.plotly_chart(fig2, use_container_width=True)
         
             # ---------- Underlying numbers (rounded) ----------
-            st.markdown("#### Underlying numbers (rounded)")
+            st.markdown("#### Underlying numbers")
             prod_show = productive_shot_df[['shot', 'runs_by_shot', 'balls', 'SR', 'dismissals', 'BallsPerDismissal', '% of Runs']].copy()
             prod_show = prod_show.rename(columns={
                 'shot': 'Shot',
@@ -4265,21 +4265,21 @@ elif sidebar_option == "Strength vs Weakness":
         # Display maps
         c1, c2 = st.columns([1,1], gap="large")
         with c1:
-            st.markdown("<div style='font-weight:800;'>🎯 Strike Rate (%) — Pace</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800;'>Strike Rate — Pace</div>", unsafe_allow_html=True)
             fig_sr_pace = plot_grid_light(sr_pace, counts_pace, f"{player_selected} — SR% vs Pace", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
             display_figure_fixed_height_html(fig_sr_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c2:
-            st.markdown("<div style='font-weight:800;'>🎯 Strike Rate (%) — Spin</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800;'>Strike Rate — Spin</div>", unsafe_allow_html=True)
             fig_sr_spin = plot_grid_light(sr_spin, counts_spin, f"{player_selected} — SR% vs Spin", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
             display_figure_fixed_height_html(fig_sr_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         
         c3, c4 = st.columns([1,1], gap="large")
         with c3:
-            st.markdown("<div style='font-weight:800;'>🎯 Control % — Pace</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800;'> Control % — Pace</div>", unsafe_allow_html=True)
             fig_ctrl_pace = plot_grid_light(ctrl_pace, total_pace, f"{player_selected} — Control% vs Pace", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
             display_figure_fixed_height_html(fig_ctrl_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         with c4:
-            st.markdown("<div style='font-weight:800;'>🎯 Control % — Spin</div>", unsafe_allow_html=True)
+            st.markdown("<div style='font-weight:800;'> Control % — Spin</div>", unsafe_allow_html=True)
             fig_ctrl_spin = plot_grid_light(ctrl_spin, total_spin, f"{player_selected} — Control% vs Spin", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
             display_figure_fixed_height_html(fig_ctrl_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
         # ---------------- end light-colour pitchmaps ----------------
@@ -4301,7 +4301,7 @@ elif sidebar_option == "Strength vs Weakness":
     
     else:
         # ---------- Bowling view (rearranged) ----------
-        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'>🎯 Bowling — {player_selected}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Bowling — {player_selected}</div>", unsafe_allow_html=True)
         bf = bdf[bdf[COL_BOWL] == player_selected].copy()
         if bf.empty:
             st.info("No bowling rows for this bowler.")
