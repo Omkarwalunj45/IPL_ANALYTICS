@@ -4506,6 +4506,13 @@ else:
     bicr_24['BICR percentile']=bicr_24['icr_percentile_final']
     icr_23['ICR percentile']=icr_23['icr_percentile_final']
     bicr_23['BICR percentile']=bicr_23['icr_percentile_final']
+    icr_25=icr_25[['batter', 'Team', 'Role','matches','ICR percentile']]
+    bicr_25=bicr_25[['Bowler', 'Team', 'Role','Matches','BICR percentile']]
+    icr_23=icr_23[['player', 'team_bat', 'comp_group','n1','ICR percentile']]
+    icr_24=icr_24[['player', 'team_bat', 'comp_group','n1','ICR percentile']]
+    bicr_23=bicr_23[['player', 'team_bowl', 'comp_group','n1','BICR percentile']]
+    bicr_24=bicr_24[['player', 'team_bowl', 'comp_group','n1','BICR percentile']]
+    
     
     # -------------------- Integrated Contextual Ratings (sidebar) --------------------
     st.markdown("##  Integrated Contextual Ratings")
