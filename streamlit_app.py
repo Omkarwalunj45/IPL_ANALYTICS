@@ -75,7 +75,7 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
     plt.close(fig)
 
 
-st.set_page_config(page_title='IPL Performance Analysis Portal', layout='wide')
+st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
 st.title('IPL Performance Analysis Portal')
 @st.cache_data
 def load_data():
