@@ -4508,7 +4508,7 @@ else:
     bicr_23['BICR percentile']=bicr_23['icr_percentile_final']
     
     # -------------------- Integrated Contextual Ratings (sidebar) --------------------
-    st.markdown("## 🔗 Integrated Contextual Ratings")
+    st.markdown("##  Integrated Contextual Ratings")
     # Year selection (handle probable typo '203' as 2023)
     year_choice = st.selectbox("Select year", options=["2023", "2024", "2025"], index=2)
     # normalize if user picks '203'
