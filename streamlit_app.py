@@ -1153,63 +1153,63 @@ if sidebar_option == "Player Profile":
                     val = player_stats[col].values[0] if len(player_stats[col].values) > 0 else None
             found_top_cols[label] = val
     
-        # ========== RAA / DAA computation ==========
-        if 'bdf' not in globals():
-            st.warning("Global dataframe `bdf` not found; skipping RAA/DAA.")
-            avg_RAA = avg_DAA = np.nan
-        else:
-            bdf = bdf.copy()
-            batter_col = 'bat' if 'bat' in bdf.columns else ('batsman' if 'batsman' in bdf.columns else None)
-            if batter_col is None:
-                st.warning("No batter column found in bdf.")
-                avg_RAA = avg_DAA = np.nan
-            else:
-                # mark top7 batters per innings
-                if 'p_bat' in bdf.columns:
-                    bdf['top7_flag'] = (pd.to_numeric(bdf['p_bat'], errors='coerce').fillna(99) <= 7).astype(int)
-                else:
-                    # derive via first appearance
-                    bdf['_order'] = bdf.groupby(['p_match','inns']).cumcount()
-                    first_app = bdf.groupby(['p_match','inns',batter_col], as_index=False)['_order'].min()
-                    top7 = first_app.groupby(['p_match','inns']).apply(lambda x: x.nsmallest(7, '_order')).reset_index(drop=True)
-                    top7['top7_flag'] = 1
-                    bdf = bdf.merge(top7[['p_match','inns',batter_col,'top7_flag']], how='left', on=['p_match','inns',batter_col])
-                    bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
+        # # ========== RAA / DAA computation ==========
+        # if 'bdf' not in globals():
+        #     st.warning("Global dataframe `bdf` not found; skipping RAA/DAA.")
+        #     avg_RAA = avg_DAA = np.nan
+        # else:
+        #     bdf = bdf.copy()
+        #     batter_col = 'bat' if 'bat' in bdf.columns else ('batsman' if 'batsman' in bdf.columns else None)
+        #     if batter_col is None:
+        #         st.warning("No batter column found in bdf.")
+        #         avg_RAA = avg_DAA = np.nan
+        #     else:
+        #         # mark top7 batters per innings
+        #         if 'p_bat' in bdf.columns:
+        #             bdf['top7_flag'] = (pd.to_numeric(bdf['p_bat'], errors='coerce').fillna(99) <= 7).astype(int)
+        #         else:
+        #             # derive via first appearance
+        #             bdf['_order'] = bdf.groupby(['p_match','inns']).cumcount()
+        #             first_app = bdf.groupby(['p_match','inns',batter_col], as_index=False)['_order'].min()
+        #             top7 = first_app.groupby(['p_match','inns']).apply(lambda x: x.nsmallest(7, '_order')).reset_index(drop=True)
+        #             top7['top7_flag'] = 1
+        #             bdf = bdf.merge(top7[['p_match','inns',batter_col,'top7_flag']], how='left', on=['p_match','inns',batter_col])
+        #             bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
     
-                # compute for each top7 batter
-                top7 = bdf[bdf['top7_flag'] == 1]
-                if top7.empty:
-                    st.warning("No top-7 rows found in bdf; cannot compute average RAA/DAA.")
-                    avg_RAA = avg_DAA = np.nan
-                else:
-                    # SR and Balls per dismissal (BPD)
-                    sr_all = (
-                        top7.groupby(batter_col)
-                        .agg(runs=('batruns','sum'), balls=('ball','count'),
-                             dismissals=('is_wicket','sum'))
-                        .reset_index()
-                    )
-                    sr_all['SR'] = sr_all['runs'] / sr_all['balls'] * 100
-                    sr_all['BPD'] = sr_all.apply(
-                        lambda x: x['balls']/x['dismissals'] if x['dismissals']>0 else np.nan, axis=1
-                    )
+        #         # compute for each top7 batter
+        #         top7 = bdf[bdf['top7_flag'] == 1]
+        #         if top7.empty:
+        #             st.warning("No top-7 rows found in bdf; cannot compute average RAA/DAA.")
+        #             avg_RAA = avg_DAA = np.nan
+        #         else:
+        #             # SR and Balls per dismissal (BPD)
+        #             sr_all = (
+        #                 top7.groupby(batter_col)
+        #                 .agg(runs=('batruns','sum'), balls=('ball','count'),
+        #                      dismissals=('is_wicket','sum'))
+        #                 .reset_index()
+        #             )
+        #             sr_all['SR'] = sr_all['runs'] / sr_all['balls'] * 100
+        #             sr_all['BPD'] = sr_all.apply(
+        #                 lambda x: x['balls']/x['dismissals'] if x['dismissals']>0 else np.nan, axis=1
+        #             )
     
-                    # compute averages (excluding player)
-                    player_data = sr_all[sr_all[batter_col] == player_name]
-                    rest = sr_all[sr_all[batter_col] != player_name]
-                    avg_SR_others = rest['SR'].mean() if not rest.empty else np.nan
-                    avg_BPD_others = rest['BPD'].mean() if not rest.empty else np.nan
+        #             # compute averages (excluding player)
+        #             player_data = sr_all[sr_all[batter_col] == player_name]
+        #             rest = sr_all[sr_all[batter_col] != player_name]
+        #             avg_SR_others = rest['SR'].mean() if not rest.empty else np.nan
+        #             avg_BPD_others = rest['BPD'].mean() if not rest.empty else np.nan
     
-                    if not player_data.empty:
-                        player_SR = player_data['SR'].values[0]
-                        player_BPD = player_data['BPD'].values[0]
-                        avg_RAA = round(player_SR - avg_SR_others, 2) if not np.isnan(avg_SR_others) else np.nan
-                        avg_DAA = round(player_BPD - avg_BPD_others, 2) if not np.isnan(avg_BPD_others) else np.nan
-                    else:
-                        avg_RAA = avg_DAA = np.nan
+        #             if not player_data.empty:
+        #                 player_SR = player_data['SR'].values[0]
+        #                 player_BPD = player_data['BPD'].values[0]
+        #                 avg_RAA = round(player_SR - avg_SR_others, 2) if not np.isnan(avg_SR_others) else np.nan
+        #                 avg_DAA = round(player_BPD - avg_BPD_others, 2) if not np.isnan(avg_BPD_others) else np.nan
+        #             else:
+        #                 avg_RAA = avg_DAA = np.nan
     
-        found_top_cols["RAA"] = avg_RAA
-        found_top_cols["DAA"] = avg_DAA
+        # found_top_cols["RAA"] = avg_RAA
+        # found_top_cols["DAA"] = avg_DAA
     
         # display metrics
         visible_metrics = [(k, v) for k, v in found_top_cols.items() if v is not None and not (isinstance(v, float) and np.isnan(v))]
