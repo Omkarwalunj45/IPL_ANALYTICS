@@ -2900,8 +2900,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     plt.tight_layout(pad=3.0)
                     st.pyplot(fig2)
 
-            else:
-                st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+            # else:
+            #     st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
 
             # Adapted shot-productivity + control charts for your dataset (uses `bdf`)
             # ---------- Shot productivity + SR + Dismissals + BallsPerDismissal (for selected batter only) ----------
