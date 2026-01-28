@@ -2854,53 +2854,19 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     side_label = "LHB" if batting_style_display and str(batting_style_display).strip().upper().startswith('L') else "RHB"
                     print(f"\n{batsman_selected}'s Wagon Chart ({side_label})")
 
+                batting_style_display = None
+                if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
+                    batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
+                side_label = "LHB" if batting_style_display and str(batting_style_display).strip().upper().startswith('L') else "RHB"
+                st.markdown(f"<div style='text-align:center; margin-top:6px;'><strong>{batsman_selected}'s Wagon Chart ({side_label})</strong></div>", unsafe_allow_html=True)
 
-                    
-                # import base64
-                # from io import BytesIO
-                # from PIL import Image
-                
-                # # Pixel height for pitchmaps (change this value to whatever visible height you want)
-                # HEIGHT_PITCHMAP_PX = 1600
+                # show table below wheel
+                # st.dataframe(ww_display.style.set_table_styles([
+                #     {"selector":"thead th", "props":[("background-color","#e6f2ff"),("font-weight","600")]},
+                # ]), use_container_width=True)
 
-                # Assuming dot_grid and run_grid are 5x5 numpy arrays already defined
-                
-                st.markdown("### Pitchmaps")
-                c1, c2 = st.columns([1, 1])
-                
-                with c1:
-                    st.markdown("**Dot Balls**")
-                    fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
-                    im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
-                    ax1.set_xticks(range(5))
-                    ax1.set_yticks(range(5))
-                    ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-                                        rotation=45, ha='right')
-                    ax1.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
-                    for i in range(5):
-                        for j in range(5):
-                            ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-                    fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-                    plt.tight_layout(pad=3.0)
-                    st.pyplot(fig1)
-                
-                with c2:
-                    st.markdown("**Scoring Balls**")
-                    fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
-                    im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
-                    ax2.set_xticks(range(5))
-                    ax2.set_yticks(range(5))
-                    ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-                                        rotation=45, ha='right')
-                    ax2.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
-                    for i in range(5):
-                        for j in range(5):
-                            ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-                    fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-                    plt.tight_layout(pad=3.0)
-                    st.pyplot(fig2)
-
-                        # Pitchmaps below Wagon: two heatmaps (dots vs scoring) - increased height
+            # -------------------------
+            # Pitchmaps below Wagon: two heatmaps (dots vs scoring) - increased height
             # -------------------------
             run_grid = np.zeros((5,5), dtype=float)
             dot_grid = np.zeros((5,5), dtype=int)
@@ -2963,6 +2929,116 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 
             else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+
+
+                    
+            #     # import base64
+            #     # from io import BytesIO
+            #     # from PIL import Image
+                
+            #     # # Pixel height for pitchmaps (change this value to whatever visible height you want)
+            #     # HEIGHT_PITCHMAP_PX = 1600
+
+            #     # Assuming dot_grid and run_grid are 5x5 numpy arrays already defined
+                
+            #     st.markdown("### Pitchmaps")
+            #     c1, c2 = st.columns([1, 1])
+                
+            #     with c1:
+            #         st.markdown("**Dot Balls**")
+            #         fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
+            #         im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
+            #         ax1.set_xticks(range(5))
+            #         ax1.set_yticks(range(5))
+            #         ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
+            #                             rotation=45, ha='right')
+            #         ax1.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
+            #         for i in range(5):
+            #             for j in range(5):
+            #                 ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
+            #         fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+            #         plt.tight_layout(pad=3.0)
+            #         st.pyplot(fig1)
+                
+            #     with c2:
+            #         st.markdown("**Scoring Balls**")
+            #         fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
+            #         im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
+            #         ax2.set_xticks(range(5))
+            #         ax2.set_yticks(range(5))
+            #         ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
+            #                             rotation=45, ha='right')
+            #         ax2.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
+            #         for i in range(5):
+            #             for j in range(5):
+            #                 ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
+            #         fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+            #         plt.tight_layout(pad=3.0)
+            #         st.pyplot(fig2)
+
+            #             # Pitchmaps below Wagon: two heatmaps (dots vs scoring) - increased height
+            # # -------------------------
+            # run_grid = np.zeros((5,5), dtype=float)
+            # dot_grid = np.zeros((5,5), dtype=int)
+
+            # if line_col in final_df.columns and length_col in final_df.columns:
+            #     plot_df = final_df[[line_col,length_col,run_col]].copy().dropna(subset=[line_col,length_col])
+            #     for _, r in plot_df.iterrows():
+            #         li = line_map.get(r[line_col], None)
+            #         le = length_map.get(r[length_col], None)
+            #         if li is None or le is None:
+            #             continue
+            #         runs_here = int(r[run_col])
+            #         run_grid[le, li] += runs_here
+            #         if runs_here == 0:
+            #             dot_grid[le, li] += 1
+
+            #     # import base64
+            #     # from io import BytesIO
+            #     # from PIL import Image
+
+            #     # # Pixel height for pitchmaps (change this value to whatever visible height you want)
+            #     # HEIGHT_PITCHMAP_PX = 1600
+
+            #     # Assuming dot_grid and run_grid are 5x5 numpy arrays already defined
+
+            #     st.markdown("### Pitchmaps")
+            #     c1, c2 = st.columns([1, 1])
+
+            #     with c1:
+            #         st.markdown("**Dot Balls**")
+            #         fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
+            #         im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
+            #         ax1.set_xticks(range(5))
+            #         ax1.set_yticks(range(5))
+            #         ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
+            #                             rotation=45, ha='right')
+            #         ax1.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
+            #         for i in range(5):
+            #             for j in range(5):
+            #                 ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
+            #         fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+            #         plt.tight_layout(pad=3.0)
+            #         st.pyplot(fig1)
+
+            #     with c2:
+            #         st.markdown("**Scoring Balls**")
+            #         fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
+            #         im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
+            #         ax2.set_xticks(range(5))
+            #         ax2.set_yticks(range(5))
+            #         ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
+            #                             rotation=45, ha='right')
+            #         ax2.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
+            #         for i in range(5):
+            #             for j in range(5):
+            #                 ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
+            #         fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+            #         plt.tight_layout(pad=3.0)
+            #         st.pyplot(fig2)
+
+            # else:
+            #     st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
     
             # else:
             #     st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
