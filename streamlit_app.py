@@ -2403,14 +2403,14 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # Wagon Wheel (8 sectors) - clock-accurate sector centers + proper mirroring for LHB
             # -------------------------
             sector_names = {
-                1: "Third Man",
-                2: "Point",
-                3: "Covers",
-                4: "Mid Off",
-                5: "Mid On",
-                6: "Mid Wicket",
-                7: "Square Leg",
-                8: "Fine Leg"
+                1: "Fine Leg",
+                2: "Square Leg",
+                3: "Mid Wicket",
+                4: "Mid On",
+                5: "Mid Off",
+                6: "Covers",
+                7: "Point",
+                8: "Third Man"
             }
     
             # Base angles for RHB per your clock instruction: Third Man centered at 11:15 (112.5°)
