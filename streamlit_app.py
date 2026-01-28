@@ -2416,14 +2416,14 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # Base angles for RHB per your clock instruction: Third Man centered at 11:15 (112.5°)
             # and then each sector moves 45° toward the left (counter-clockwise)
             base_angles = {
-                1: 112.5,  # Third Man
-                2: 157.5,  # Point
-                3: 202.5,  # Covers
-                4: 247.5,  # Mid Off
-                5: 292.5,  # Mid On
-                6: 337.5,  # Mid Wicket
-                7: 22.5,   # Square Leg
-                8: 67.5    # Fine Leg
+                8: 112.5,  # Third Man
+                7: 157.5,  # Point
+                6: 202.5,  # Covers
+                5: 247.5,  # Mid Off
+                4: 292.5,  # Mid On
+                3: 337.5,  # Mid Wicket
+                2: 22.5,   # Square Leg
+                1: 67.5    # Fine Leg
             }
     
             def get_sector_angle_requested(zone, batting_style):
