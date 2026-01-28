@@ -2556,14 +2556,24 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             #     st.markdown(f"<div style='text-align:center; margin-top:6px;'><strong>{batsman_selected}'s Wagon Chart ({side_label})</strong></div>", unsafe_allow_html=True)
 
             # Full wagon-wheel / sector-summary code (self-contained)
+
+            # --- wagon wheel with correct LHB mirroring and sector name reversal ---
             import math
             import numpy as np
             import pandas as pd
             import matplotlib.pyplot as plt
             from matplotlib.patches import Circle, Rectangle
-            from typing import Tuple, Dict
             
-            # ---- Configuration: sector names for RHB (1..8) ----
+            # If using Streamlit front-end (your original code used st.*), import it.
+            # If not running inside Streamlit this import will still work if streamlit is installed.
+            try:
+                import streamlit as st
+            except Exception:
+                st = None
+            
+            # -------------------------
+            # Sector names for RHB and LHB (reversed)
+            # -------------------------
             SECTOR_NAMES_RHB = {
                 1: "Fine Leg",
                 2: "Square Leg",
@@ -2575,217 +2585,275 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 8: "Third Man"
             }
             
-            # Base angle centers (degrees) for RHB mapping (user clock instruction)
-            # These are **center angles** for zones 1..8 (RHB)
-            BASE_ANGLES_DEG = {
-                1: 67.5,   # Fine Leg
-                2: 22.5,   # Square Leg
-                3: 337.5,  # Mid Wicket
-                4: 292.5,  # Mid On
-                5: 247.5,  # Mid Off
-                6: 202.5,  # Covers
-                7: 157.5,  # Point
-                8: 112.5   # Third Man
+            SECTOR_NAMES_LHB = {
+                1: "Third Man",
+                2: "Point",
+                3: "Covers",
+                4: "Mid Off",
+                5: "Mid On",
+                6: "Mid Wicket",
+                7: "Square Leg",
+                8: "Fine Leg"
             }
             
+            # Base angles for RHB per your clock instruction (zone centers in degrees)
+            BASE_ANGLES = {
+                8: 112.5,  # Third Man
+                7: 157.5,  # Point
+                6: 202.5,  # Covers
+                5: 247.5,  # Mid Off
+                4: 292.5,  # Mid On
+                3: 337.5,  # Mid Wicket
+                2: 22.5,   # Square Leg
+                1: 67.5    # Fine Leg
+            }
             
-            def get_sector_angle_requested(zone: int, batting_style: str) -> float:
+            def get_sector_angle_requested(zone, batting_style):
                 """
-                Return the sector center angle (radians) for given zone (1..8).
-                If batter is LHB, reflect across vertical axis: angle -> (180 - angle) % 360
+                Return sector center in radians.
+                For left-handers mirror across vertical axis: angle -> (180 - angle) % 360
                 """
-                deg = float(BASE_ANGLES_DEG.get(int(zone), 0.0))
+                angle = float(BASE_ANGLES.get(int(zone), 0.0))
                 if isinstance(batting_style, str) and batting_style.strip().upper().startswith('L'):
-                    deg = (180.0 - deg) % 360.0
-                return math.radians(deg)
+                    angle = (180.0 - angle) % 360.0
+                return math.radians(angle)
             
             
-            def _make_sector_name_map_for_hand(is_rhb: bool) -> Dict[int, str]:
+            def draw_cricket_field_with_run_totals_requested(final_df_local,
+                                                            batsman_name,
+                                                            wagon_zone_col='wagonZone',
+                                                            run_col='score',
+                                                            bat_hand_col='bat_hand',
+                                                            figsize=(10,10)):
                 """
-                If RHB: return SECTOR_NAMES_RHB unchanged.
-                If LHB: return reversed name mapping so sector i -> name of (9-i)
-                This means the textual labels match the mirrored visual.
-                """
-                if is_rhb:
-                    return SECTOR_NAMES_RHB.copy()
-                else:
-                    # mirror names: zone -> name of (9 - zone)
-                    return {i: SECTOR_NAMES_RHB[9 - i] for i in range(1, 9)}
-            
-            
-            def create_wagon_wheel_figure(
-                df: pd.DataFrame,
-                batsman_name: str,
-                wagon_zone_col: str = "wagonZone",
-                run_col: str = "score",
-                bat_hand_col: str = "bat_hand",
-                figsize: Tuple[int, int] = (8, 8)
-            ) -> Tuple[plt.Figure, pd.DataFrame]:
-                """
-                Create a wagon-wheel style figure and return (fig, sector_summary_df)
-                - df: deliveries dataframe (must contain wagon_zone_col and run_col)
-                - batsman_name: exact name as present in df (filtering applied)
-                - wagon_zone_col: column holding integer zone 1..8
-                - run_col: column with runs on that ball
-                - bat_hand_col: column with 'RHB'/'LHB' values (optional)
+                Draw wagon wheel / scoring zones for a batsman.
+                - final_df_local : full dataframe (deliveries)
+                - batsman_name : string (used only for title)
+                - wagon_zone_col : column containing zone indices 1..8
+                - run_col : column containing runs scored off the ball
+                - bat_hand_col : column containing 'RHB'/'LHB' if available
+                Returns matplotlib Figure.
                 """
             
-                # select deliveries for batsman
-                sub = df.copy()
-                # if batter column exists, filter to batsman_name (try common columns)
-                batter_col = None
-                for c in ['batter', 'striker', 'bat']:
-                    if c in sub.columns:
-                        batter_col = c
-                        break
-                if batter_col is not None:
-                    sub = sub[sub[batter_col].astype(str).str.lower() == batsman_name.lower()].copy()
-            
-                # get batting handedness: prefer first non-null entry in bat_hand_col if present
-                batting_style_val = None
-                if bat_hand_col in sub.columns and not sub[bat_hand_col].dropna().empty:
-                    batting_style_val = str(sub[bat_hand_col].dropna().iloc[0])
-                # fallback: user can pass None and we assume RHB
-                if batting_style_val is None:
-                    batting_style_val = "RHB"
-            
-                is_rhb = not str(batting_style_val).strip().upper().startswith('L')
-            
-                # prepare integer wagon_zone column
-                if wagon_zone_col in sub.columns:
-                    sub['wagon_zone_int'] = pd.to_numeric(sub[wagon_zone_col], errors='coerce').astype('Int64')
-                else:
-                    sub['wagon_zone_int'] = pd.Series(dtype='Int64')
-            
-                # runs, fours, sixes, balls per sector
-                runs_by_zone = sub.groupby('wagon_zone_int')[run_col].sum().to_dict()
-                # count fours and sixes by checking the run column equals 4 or 6
-                fours_by_zone = sub.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s == 4).sum())).to_dict()
-                sixes_by_zone = sub.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s == 6).sum())).to_dict()
-                balls_by_zone = sub.groupby('wagon_zone_int')[run_col].size().to_dict()
-            
-                # ensure all sectors 1..8 exist in summary
-                summary_rows = []
-                total_runs = 0
-                for z in range(1, 9):
-                    r = int(runs_by_zone.get(z, 0))
-                    total_runs += r
-                # build display DataFrame
-                for z in range(1, 9):
-                    r = int(runs_by_zone.get(z, 0))
-                    b = int(balls_by_zone.get(z, 0))
-                    f = int(fours_by_zone.get(z, 0))
-                    s6 = int(sixes_by_zone.get(z, 0))
-                    summary_rows.append({'sector': z, 'runs': r, 'balls': b, '4s': f, '6s': s6})
-                summary_df = pd.DataFrame(summary_rows)
-                if total_runs > 0:
-                    summary_df['pct_runs'] = summary_df['runs'] / total_runs * 100.0
-                else:
-                    summary_df['pct_runs'] = 0.0
-            
-                # for display, format percentage
-                display_df = summary_df.copy()
-                display_df['Pct of Runs'] = display_df['pct_runs'].apply(lambda x: f"{x:.2f}%")
-                display_df = display_df[['sector', 'runs', 'Pct of Runs', '4s', '6s', 'balls']].rename(columns={'sector': 'Sector', 'runs': 'Runs', '4s': '4s', '6s': '6s', 'balls': 'Balls'})
-            
-                # sector names mapping depending on hand
-                sector_name_map = _make_sector_name_map_for_hand(is_rhb)
-            
-                # ---------- Drawing ---------- #
                 fig, ax = plt.subplots(figsize=figsize)
                 ax.set_aspect('equal')
                 ax.axis('off')
             
-                # base circles (ground and inner)
-                outer_r = 1.0
-                inner_r = 0.45
-                ax.add_patch(Circle((0, 0), outer_r, facecolor='#2e7d32', edgecolor='black', linewidth=2, zorder=0))
-                ax.add_patch(Circle((0, 0), inner_r, facecolor='#cfe8b0', edgecolor='white', linewidth=1.0, zorder=3))
+                # Field base
+                ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1, zorder=0))
+                ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3, zorder=1))
+                ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a', zorder=2))
+                ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1, zorder=3))
             
-                # pitch rectangle (simple)
-                pitch_width = 0.06
-                pitch_height = 0.18
-                ax.add_patch(Rectangle((-pitch_width/2, -pitch_height/2), pitch_width, pitch_height, facecolor='#d2b48c', edgecolor='#8b5a2b', zorder=8))
+                # pitch rectangle approx
+                pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
+                ax.add_patch(pitch_rect)
             
-                # For each sector place labels at its center angle (mirrored for LHB by get_sector_angle_requested)
-                # Use radius ~0.62 and sector-name radius ~0.88
-                label_r = 0.62
-                name_r = 0.88
+                # radial sector lines (8)
+                angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                for angle in angles:
+                    x = math.cos(angle)
+                    y = math.sin(angle)
+                    ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1, zorder=4)
             
+                # prepare data
+                tmp = final_df_local.copy()
+            
+                if wagon_zone_col in tmp.columns:
+                    tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
+                else:
+                    tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
+            
+                # Determine batting hand (prefer first non-null in this player's rows, else fallback)
+                batting_style_val = None
+                if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
+                    batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
+                # If still None, try check final_df_local top-level (might be global)
+                if batting_style_val is None and bat_hand_col in final_df_local.columns and not final_df_local[bat_hand_col].dropna().empty:
+                    batting_style_val = final_df_local[bat_hand_col].dropna().iloc[0]
+            
+                # Choose sector name mapping based on hand
+                if isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L'):
+                    sector_names = SECTOR_NAMES_LHB
+                    side_label = "LHB"
+                else:
+                    sector_names = SECTOR_NAMES_RHB
+                    side_label = "RHB"
+            
+                # Aggregate runs, fours, sixes by zone (no remapping of zone numbers; we mirror geometry & names)
+                runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
+                # Count fours and sixes by raw run_col values
+                fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
+                sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
+                balls_by_zone = tmp.groupby('wagon_zone_int')[run_col].size().to_dict()
+            
+                total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
+            
+                # Title
+                title_text = f"{batsman_name}'s Scoring Zones"
+                plt_title_color = 'white'
+                fig.suptitle(title_text, fontsize=14, fontweight='bold', color=plt_title_color, y=0.95)
+            
+                # Place % runs and runs in each sector using sector centers
                 for zone in range(1, 9):
-                    angle_mid = get_sector_angle_requested(zone, batting_style_val)  # radians
-                    x = label_r * math.cos(angle_mid)
-                    y = label_r * math.sin(angle_mid)
+                    angle_mid = get_sector_angle_requested(zone, batting_style_val)
+                    x = 0.60 * math.cos(angle_mid)
+                    y = 0.60 * math.sin(angle_mid)
             
                     runs = int(runs_by_zone.get(zone, 0))
-                    pct = (runs / total_runs * 100.0) if total_runs > 0 else 0.0
+                    pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
                     pct_str = f"{pct:.2f}%"
-                    ax.text(x, y + 0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=14, zorder=10)
-                    ax.text(x, y - 0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10, zorder=10)
             
-                    # fours/sixes
+                    # main labels
+                    ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=16, zorder=10)
+                    ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10, zorder=10)
+            
+                    # fours & sixes below
                     fours = int(fours_by_zone.get(zone, 0))
                     sixes = int(sixes_by_zone.get(zone, 0))
-                    ax.text(x, y - 0.12, f"4s: {fours}    6s: {sixes}", ha='center', va='center', color='white', fontsize=9, zorder=10)
+                    ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9, zorder=10)
             
-                    # sector name slightly further out
-                    sx = name_r * math.cos(angle_mid)
-                    sy = name_r * math.sin(angle_mid)
-                    name = sector_name_map.get(zone, f"Sector {zone}")
-                    ax.text(sx, sy, name, ha='center', va='center', color='white', fontsize=9, zorder=9)
+                    # sector name slightly farther out
+                    sx = 0.80 * math.cos(angle_mid)
+                    sy = 0.80 * math.sin(angle_mid)
+                    ax.text(sx, sy, sector_names.get(zone, f"Sector {zone}"), ha='center', va='center', color='white', fontsize=8, zorder=9)
             
-                # draw sector boundary lines: use mid-angles +/- 22.5 deg
-                half_width_rad = math.radians(22.5)
-                for zone in range(1, 9):
-                    center = get_sector_angle_requested(zone, batting_style_val)
-                    a1 = center - half_width_rad
-                    a2 = center + half_width_rad
-                    x1, y1 = math.cos(a1), math.sin(a1)
-                    x2, y2 = math.cos(a2), math.sin(a2)
-                    # draw radial boundary lines from inner_r to outer_r
-                    ax.plot([inner_r * math.cos(a1), outer_r * math.cos(a1)], [inner_r * math.sin(a1), outer_r * math.sin(a1)], color='white', linewidth=0.8, alpha=0.6, zorder=2)
-                    # optional arc (thin) near outer edge for visual separation
-                    arc_pts_x = np.linspace(a1, a2, 8)
-                    arc_x = 0.98 * np.cos(arc_pts_x)
-                    arc_y = 0.98 * np.sin(arc_pts_x)
-                    ax.plot(arc_x, arc_y, color='white', linewidth=0.7, alpha=0.6, zorder=2)
+                ax.set_xlim(-1.2, 1.2)
+                ax.set_ylim(-1.2, 1.2)
+                plt.tight_layout(pad=0)
             
-                # Title and footer label (hand)
-                hand_label = "RHB" if is_rhb else "LHB"
-                ax.set_title(f"{batsman_name} — Wagon Chart ({hand_label})", fontsize=16, fontweight='bold', color='white', pad=14)
-                ax.set_xlim(-1.25, 1.25)
-                ax.set_ylim(-1.25, 1.25)
-                plt.tight_layout()
-                return fig, display_df
-            
-            
-            # ---------------- Example usage ----------------
-            if __name__ == "__main__":
-                # Example: build a small dummy dataframe to test plotting
-                import random
-                random.seed(0)
-                # create fake deliveries for a player with random zones and runs
-                n = 200
-                data = {
-                    'batter': ['N de Klerk'] * n,
-                    'wagonZone': [random.randint(1, 8) for _ in range(n)],
-                    'score': [random.choice([0, 1, 2, 3, 4, 6]) for _ in range(n)],
-                    'bat_hand': ['RHB'] * n
+                return fig, {
+                    'side_label': side_label,
+                    'runs_by_zone': runs_by_zone,
+                    'fours_by_zone': fours_by_zone,
+                    'sixes_by_zone': sixes_by_zone,
+                    'balls_by_zone': balls_by_zone,
+                    'total_runs': total_runs_in_wagon
                 }
-                df_test = pd.DataFrame(data)
             
-                # choose batsman and call function
-                batsman_selected = "N de Klerk"
-                fig, sector_table = create_wagon_wheel_figure(df_test, batsman_selected,
-                                                              wagon_zone_col='wagonZone',
-                                                              run_col='score',
-                                                              bat_hand_col='bat_hand',
-                                                              figsize=(8, 8))
-                # show figure
-                plt.show(fig)
             
-                # print sector table
-                print(sector_table.to_string(index=False))
+            # -------------------------
+            # run the wagon wheel drawing if column exists (main integration block)
+            # -------------------------
+            # expected outer-scope variables used in your app:
+            # final_df, wagon_zone_col, run_col, bat_hand_col, batsman_selected
+            #
+            # If you're running this block stand-alone, set them here for a quick test:
+            # Example test (uncomment to use):
+            # import random
+            # random.seed(1)
+            # final_df = pd.DataFrame({
+            #     'batter': ['Player X']*200,
+            #     'wagonZone': [random.randint(1,8) for _ in range(200)],
+            #     'score': [random.choice([0,0,1,1,2,4,6]) for _ in range(200)],
+            #     'bat_hand': ['RHB']*200
+            # })
+            # batsman_selected = 'Player X'
+            # wagon_zone_col = 'wagonZone'
+            # run_col = 'score'
+            # bat_hand_col = 'bat_hand'
+            
+            # Ensure variables exist (this will raise if you don't set them in your environment)
+            try:
+                _ = final_df
+                _ = batsman_selected
+                _ = wagon_zone_col
+                _ = run_col
+                _ = bat_hand_col
+            except NameError:
+                raise RuntimeError("You must set final_df, batsman_selected, wagon_zone_col, run_col and bat_hand_col in your environment before running this block.")
+            
+            if wagon_zone_col not in final_df.columns:
+                # If in Streamlit show an info. Otherwise print.
+                if st:
+                    st.info(f"{wagon_zone_col} column not available for wagon wheel.")
+                else:
+                    print(f"{wagon_zone_col} column not available for wagon wheel.")
+            else:
+                ww_df = final_df.copy()
+                ww_df['wagon_zone_int'] = pd.to_numeric(ww_df[wagon_zone_col], errors='coerce').astype('Int64')
+            
+                # aggregated table similar to your earlier code
+                grouped = ww_df.groupby('wagon_zone_int').agg(
+                    runs = (run_col, 'sum'),
+                    balls = (run_col, 'size'),
+                    fours = (run_col, lambda s: int((s==4).sum())),
+                    sixes = (run_col, lambda s: int((s==6).sum()))
+                ).reset_index().rename(columns={'wagon_zone_int':'sector'})
+            
+                all_sectors = pd.DataFrame({"sector": list(range(1,9))})
+                grouped = all_sectors.merge(grouped, on='sector', how='left').fillna(0)
+                grouped[['runs','balls','fours','sixes']] = grouped[['runs','balls','fours','sixes']].astype(int)
+                total_runs = grouped['runs'].sum()
+                grouped['pct_runs'] = grouped['runs'].apply(lambda x: round((x / total_runs * 100) if total_runs>0 else 0.0, 2))
+            
+                ww_display = grouped.copy()
+                # Sector names for table — use RHB mapping (this is tabular; visual will show LHB mirrored)
+                ww_display['Sector Name'] = ww_display['sector'].map({
+                    1: "Fine Leg",
+                    2: "Square Leg",
+                    3: "Mid Wicket",
+                    4: "Mid On",
+                    5: "Mid Off",
+                    6: "Covers",
+                    7: "Point",
+                    8: "Third Man"
+                })
+                ww_display = ww_display[['sector','Sector Name','runs','pct_runs','fours','sixes','balls']].rename(columns={
+                    'sector':'Sector','runs':'Runs','pct_runs':'Pct of Runs','fours':'4s','sixes':'6s','balls':'Balls'
+                })
+                ww_display['Pct of Runs'] = ww_display['Pct of Runs'].apply(lambda x: f"{x:.2f}%")
+            
+                # draw figure using the requested mapping and styles
+                fig, metadata = draw_cricket_field_with_run_totals_requested(final_df, batsman_selected,
+                                                                            wagon_zone_col=wagon_zone_col,
+                                                                            run_col=run_col,
+                                                                            bat_hand_col=bat_hand_col)
+            
+                # try safe_st_pyplot if available (your original code used it). Fallback to st.pyplot or plt.show
+                try:
+                    # safe_st_pyplot may be defined in your app runtime; attempt to call it if present
+                    safe_st_pyplot  # check existence
+                except NameError:
+                    safe_st_pyplot = None
+            
+                plotted = False
+                if safe_st_pyplot:
+                    try:
+                        safe_st_pyplot(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                        plotted = True
+                    except Exception:
+                        plotted = False
+            
+                if not plotted and st:
+                    try:
+                        st.pyplot(fig)
+                        plotted = True
+                    except Exception:
+                        plotted = False
+            
+                if not plotted:
+                    # notebook fallback
+                    plt.show()
+            
+                # Show table in Streamlit nicely if available, else print
+                if st:
+                    st.dataframe(ww_display)
+                    # beneath wagon chart, show which hand
+                    batting_style_display = None
+                    if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
+                        batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
+                    side_label = "LHB" if batting_style_display and str(batting_style_display).strip().upper().startswith('L') else "RHB"
+                    st.markdown(f"<div style='text-align:center; margin-top:6px;'><strong>{batsman_selected}'s Wagon Chart ({side_label})</strong></div>", unsafe_allow_html=True)
+                else:
+                    # Print summary table to console
+                    print(ww_display.to_string(index=False))
+                    batting_style_display = None
+                    if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
+                        batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
+                    side_label = "LHB" if batting_style_display and str(batting_style_display).strip().upper().startswith('L') else "RHB"
+                    print(f"\n{batsman_selected}'s Wagon Chart ({side_label})")
+
 
                     
                 # import base64
