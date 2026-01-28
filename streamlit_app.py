@@ -2526,8 +2526,18 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 grouped['pct_runs'] = grouped['runs'].apply(lambda x: round((x / total_runs * 100) if total_runs>0 else 0.0,2))
     
                 ww_display = grouped.copy()
+                # ww_display['Sector Name'] = ww_display['sector'].map({
+                #     1:"Third Man",2:"Point",3:"Covers",4:"Mid Off",5:"Mid On",6:"Mid Wicket",7:"Square Leg",8:"Fine Leg"
+                # })
                 ww_display['Sector Name'] = ww_display['sector'].map({
-                    1:"Third Man",2:"Point",3:"Covers",4:"Mid Off",5:"Mid On",6:"Mid Wicket",7:"Square Leg",8:"Fine Leg"
+                    1: "Fine Leg",
+                    2: "Square Leg",
+                    3: "Mid Wicket",
+                    4: "Mid On",
+                    5: "Mid Off",
+                    6: "Covers",
+                    7: "Point",
+                    8: "Third Man"
                 })
                 ww_display = ww_display[['sector','Sector Name','runs','pct_runs','fours','sixes','balls']].rename(columns={
                     'sector':'Sector','runs':'Runs','pct_runs':'Pct of Runs','fours':'4s','sixes':'6s','balls':'Balls'
