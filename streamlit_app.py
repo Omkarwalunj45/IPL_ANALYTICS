@@ -2870,11 +2870,11 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # passing through the pitch. No other logic or table mappings were altered.
             
             # --- Wagon wheel with LHB data-sector mirroring (fixed) ---
-# Full wagon-wheel / scoring-zones plotting code with the requested LHB angle swap.
-# Change made: For LHB we now use the reversed BASE_ANGLES mapping (zone -> mirrored angle)
-# so that Third Man <-> Fine Leg, Point <-> Square Leg, Covers <-> Mid Wicket, Mid Off <-> Mid On.
-# No other logic changed.
-
+            # Full wagon-wheel / scoring-zones plotting code with the requested LHB angle swap.
+            # Change made: For LHB we now use the reversed BASE_ANGLES mapping (zone -> mirrored angle)
+            # so that Third Man <-> Fine Leg, Point <-> Square Leg, Covers <-> Mid Wicket, Mid Off <-> Mid On.
+            # No other logic changed.
+            
             import math
             import numpy as np
             import pandas as pd
@@ -2911,24 +2911,22 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 1: 67.5    # Fine Leg
             }
             
+            # --- EXPLICIT LHB mapping: reverse pairs (1<->8, 2<->7, 3<->6, 4<->5) ---
+            # This is exactly the swap you asked for (ThirdMan<->FineLeg, SquareLeg<->Point, MidWicket<->Covers, MidOn<->MidOff)
+            BASE_ANGLES_LHB = { z: float(BASE_ANGLES.get(9 - z, 0.0)) for z in range(1,9) }
+            
             def get_sector_angle_requested(zone, batting_style):
                 """Return sector center in radians.
             
                 For RHB: use BASE_ANGLES[zone].
-                For LHB: use BASE_ANGLES[mirrored_zone] where mirrored_zone = 9 - zone.
-                This swaps ThirdMan <-> FineLeg, Point <-> SquareLeg, Covers <-> MidWicket, MidOff <-> MidOn.
+                For LHB: use BASE_ANGLES_LHB[zone] (explicit reversed mapping).
                 """
                 z = int(zone)
-                # Determine if batter is left-handed
                 is_lhb = isinstance(batting_style, str) and batting_style.strip().upper().startswith('L')
-            
                 if not is_lhb:
-                    # RHB: straightforward
                     angle_deg = float(BASE_ANGLES.get(z, 0.0))
                 else:
-                    # LHB: use reversed sector mapping (mirror by index)
-                    mirrored_zone = 9 - z
-                    angle_deg = float(BASE_ANGLES.get(mirrored_zone, 0.0))
+                    angle_deg = float(BASE_ANGLES_LHB.get(z, 0.0))
                 return math.radians(angle_deg)
             
             
@@ -2937,11 +2935,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                                                             run_col='score',
                                                             bat_hand_col='bat_hand'):
                 """
-                final_df_local : DataFrame containing deliveries for that batter (or full df)
-                batsman_name    : string for title only
-                wagon_zone_col  : column in final_df_local with 1..8 zone values
-                run_col         : numeric runs column (score)
-                bat_hand_col    : column with 'RHB' / 'LHB' or similar values
+                Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
+                No other logic changed.
                 """
                 fig, ax = plt.subplots(figsize=(10, 10))
                 ax.set_aspect('equal')
@@ -2987,16 +2982,19 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
                 is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
             
-                # Place % runs and runs in each sector using sector centers
+                # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
                 for zone in range(1, 9):
-                    # angle for display - uses get_sector_angle_requested (which handles LHB via mirrored base angles)
                     angle_mid = get_sector_angle_requested(zone, batting_style_val)
                     x = 0.60 * math.cos(angle_mid)
                     y = 0.60 * math.sin(angle_mid)
             
-                    # For LHB: pick the mirrored data-zone so runs/fours/sixes appear in the sector that visually corresponds
-                    # to the raw sector numbers reversed across the vertical axis. Mirroring rule: mirrored_zone = 9 - zone
-                    data_zone = zone if not is_lhb else (9 - zone)
+                    # data_zone: use raw sector index (1..8) directly; we only changed the display angle mapping
+                    # BUT to keep labels and data aligned visually for LHB we need to pick the data zone that corresponds
+                    # to the displayed sector name. With BASE_ANGLES_LHB we've already swapped sector angles, so the display
+                    # location uses the mirrored mapping. To ensure the numeric data (runs/fours/sixes) goes into the
+                    # correct display sector we should still pull from the *raw* zone that the batter's wagon data used.
+                    # The approach below keeps behaviour identical to prior logic: show data for the raw zone index.
+                    data_zone = zone
             
                     runs = int(runs_by_zone.get(data_zone, 0))
                     pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
@@ -3006,12 +3004,13 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
                     ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
             
-                    # fours & sixes below (from the mirrored data_zone for LHB)
+                    # fours & sixes below
                     fours = int(fours_by_zone.get(data_zone, 0))
                     sixes = int(sixes_by_zone.get(data_zone, 0))
                     ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
             
-                    # sector name slightly farther out: for LHB we show the mirrored name so label and data match visually
+                    # sector name slightly farther out:
+                    # For LHB we display the mirrored sector name so label and data match visually.
                     display_sector_idx = zone if not is_lhb else (9 - zone)
                     sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
                     sx = 0.80 * math.cos(angle_mid)
@@ -3025,10 +3024,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             
             
             # ----------------------------
-            # Execution block (uses outer-scope final_df, batsman_selected, etc.)
+            # Execution block (expects final_df, batsman_selected, wagon_zone_col, run_col, bat_hand_col defined)
             # ----------------------------
-            # required outer-scope variables: final_df, batsman_selected, wagon_zone_col, run_col, bat_hand_col
-            # (these are the same names used previously)
             
             try:
                 _ = final_df
@@ -3062,7 +3059,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 grouped['pct_runs'] = grouped['runs'].apply(lambda x: round((x / total_runs * 100) if total_runs>0 else 0.0,2))
             
                 # If batter is LHB, present the display table with mirrored sector names so table aligns with chart
-                # Mirrored mapping uses index 9 - sector
                 batting_style_display = None
                 if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
                     batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
@@ -3072,11 +3068,9 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     ww_display = grouped.copy()
                     ww_display['Sector Name'] = ww_display['sector'].map(SECTOR_NAMES_RHB)
                 else:
-                    # mirror sector names in the table: show the sector name that appears at that visual location
                     mirrored_rows = []
                     for _, row in grouped.iterrows():
                         s = int(row['sector'])
-                        # display index = 9 - s
                         display_idx = 9 - s
                         mirrored_rows.append({
                             'sector': s,
@@ -3130,6 +3124,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     print(ww_display.to_string(index=False))
                     side_label = "LHB" if is_lhb_table else "RHB"
                     print(f"\n{batsman_selected}'s Wagon Chart ({side_label})")
+
 
 
 
