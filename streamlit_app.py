@@ -3674,7 +3674,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                             # ✅ LIGHT CELL BORDERS
                             ax.set_xticks(np.arange(-0.5, 5, 1), minor=True)
                             ax.set_yticks(np.arange(-0.5, 5, 1), minor=True)
-                            ax.grid(which='minor', color='white', linewidth=0.6, alpha=0.6)
+                            ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.6)
                             ax.tick_params(which='minor', bottom=False, left=False)
     
                             wkt_grid = disp[k.replace('perc', 'wkt').replace('dot', 'wkt').replace('run', 'wkt')]
