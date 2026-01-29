@@ -2870,6 +2870,11 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # passing through the pitch. No other logic or table mappings were altered.
             
             # --- Wagon wheel with LHB data-sector mirroring (fixed) ---
+# Full wagon-wheel / scoring-zones plotting code with the requested LHB angle swap.
+# Change made: For LHB we now use the reversed BASE_ANGLES mapping (zone -> mirrored angle)
+# so that Third Man <-> Fine Leg, Point <-> Square Leg, Covers <-> Mid Wicket, Mid Off <-> Mid On.
+# No other logic changed.
+
             import math
             import numpy as np
             import pandas as pd
@@ -2882,18 +2887,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             except Exception:
                 st = None
             
-            # Base angles for RHB per your clock instruction
-            BASE_ANGLES = {
-                8: 112.5,  # Third Man
-                7: 157.5,  # Point
-                6: 202.5,  # Covers
-                5: 247.5,  # Mid Off
-                4: 292.5,  # Mid On
-                3: 337.5,  # Mid Wicket
-                2: 22.5,   # Square Leg
-                1: 67.5    # Fine Leg
-            }
-            
+            # --- Sector name mapping (RHB canonical) ---
             SECTOR_NAMES_RHB = {
                 1: "Fine Leg",
                 2: "Square Leg",
@@ -2905,21 +2899,50 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 8: "Third Man"
             }
             
+            # --- BASE_ANGLES for the canonical RHB layout (degrees) ---
+            BASE_ANGLES = {
+                8: 112.5,  # Third Man
+                7: 157.5,  # Point
+                6: 202.5,  # Covers
+                5: 247.5,  # Mid Off
+                4: 292.5,  # Mid On
+                3: 337.5,  # Mid Wicket
+                2: 22.5,   # Square Leg
+                1: 67.5    # Fine Leg
+            }
+            
             def get_sector_angle_requested(zone, batting_style):
                 """Return sector center in radians.
             
-                For left-handers mirror across vertical axis by reflecting angle:
-                    angle -> (180 - angle) % 360
+                For RHB: use BASE_ANGLES[zone].
+                For LHB: use BASE_ANGLES[mirrored_zone] where mirrored_zone = 9 - zone.
+                This swaps ThirdMan <-> FineLeg, Point <-> SquareLeg, Covers <-> MidWicket, MidOff <-> MidOn.
                 """
-                angle = float(BASE_ANGLES.get(int(zone), 0.0))
-                if isinstance(batting_style, str) and batting_style.strip().upper().startswith('L'):
-                    angle = (180.0 - angle) % 360.0
-                return math.radians(angle)
+                z = int(zone)
+                # Determine if batter is left-handed
+                is_lhb = isinstance(batting_style, str) and batting_style.strip().upper().startswith('L')
+            
+                if not is_lhb:
+                    # RHB: straightforward
+                    angle_deg = float(BASE_ANGLES.get(z, 0.0))
+                else:
+                    # LHB: use reversed sector mapping (mirror by index)
+                    mirrored_zone = 9 - z
+                    angle_deg = float(BASE_ANGLES.get(mirrored_zone, 0.0))
+                return math.radians(angle_deg)
+            
             
             def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
                                                             wagon_zone_col='wagonZone',
                                                             run_col='score',
                                                             bat_hand_col='bat_hand'):
+                """
+                final_df_local : DataFrame containing deliveries for that batter (or full df)
+                batsman_name    : string for title only
+                wagon_zone_col  : column in final_df_local with 1..8 zone values
+                run_col         : numeric runs column (score)
+                bat_hand_col    : column with 'RHB' / 'LHB' or similar values
+                """
                 fig, ax = plt.subplots(figsize=(10, 10))
                 ax.set_aspect('equal')
                 ax.axis('off')
@@ -2966,7 +2989,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             
                 # Place % runs and runs in each sector using sector centers
                 for zone in range(1, 9):
-                    # angle for display: we still use the mirrored angle for LHB so the visual sector is correct
+                    # angle for display - uses get_sector_angle_requested (which handles LHB via mirrored base angles)
                     angle_mid = get_sector_angle_requested(zone, batting_style_val)
                     x = 0.60 * math.cos(angle_mid)
                     y = 0.60 * math.sin(angle_mid)
@@ -2998,15 +3021,15 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 ax.set_xlim(-1.2, 1.2)
                 ax.set_ylim(-1.2, 1.2)
                 plt.tight_layout(pad=0)
-                # if is_lhb:
-                #     ax.invert_xaxis()      
                 return fig
             
-            # run the wagon wheel drawing if column exists
-            # required outer-scope variables: final_df, batsman_selected, wagon_zone_col, run_col, bat_hand_col
-            # (these are the same names you used previously)
             
-            # quick check that required names are defined; helpful error if run standalone
+            # ----------------------------
+            # Execution block (uses outer-scope final_df, batsman_selected, etc.)
+            # ----------------------------
+            # required outer-scope variables: final_df, batsman_selected, wagon_zone_col, run_col, bat_hand_col
+            # (these are the same names used previously)
+            
             try:
                 _ = final_df
                 _ = batsman_selected
@@ -3107,6 +3130,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     print(ww_display.to_string(index=False))
                     side_label = "LHB" if is_lhb_table else "RHB"
                     print(f"\n{batsman_selected}'s Wagon Chart ({side_label})")
+
 
 
 
