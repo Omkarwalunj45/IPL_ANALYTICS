@@ -3020,6 +3020,9 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 ax.set_xlim(-1.2, 1.2)
                 ax.set_ylim(-1.2, 1.2)
                 plt.tight_layout(pad=0)
+                if is_lhb:
+                    ax.invert_xaxis()
+
                 return fig
             
             
