@@ -2869,34 +2869,20 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # if batter is LHB, the plotted wagon-wheel is mirrored about the vertical axis
             # passing through the pitch. No other logic or table mappings were altered.
             
+            # --- Wagon wheel with LHB data-sector mirroring (fixed) ---
             import math
             import numpy as np
             import pandas as pd
             import matplotlib.pyplot as plt
             from matplotlib.patches import Circle, Rectangle
             
-            # Optional Streamlit support if running inside your app
+            # Optional Streamlit support
             try:
                 import streamlit as st
             except Exception:
                 st = None
             
-            # -------------------------
-            # Wagon Wheel (8 sectors) - clock-accurate sector centers + proper mirroring for LHB
-            # -------------------------
-            # sector_names = {
-            #     1: "Fine Leg",
-            #     2: "Square Leg",
-            #     3: "Mid Wicket",
-            #     4: "Mid On",
-            #     5: "Mid Off",
-            #     6: "Covers",
-            #     7: "Point",
-            #     8: "Third Man"
-            # }
-            
-            # Base angles for RHB per your clock instruction: Third Man centered at 11:15 (112.5°)
-            # and then each sector moves 45° toward the left (counter-clockwise)
+            # Base angles for RHB per your clock instruction
             BASE_ANGLES = {
                 8: 112.5,  # Third Man
                 7: 157.5,  # Point
@@ -2908,11 +2894,21 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 1: 67.5    # Fine Leg
             }
             
+            SECTOR_NAMES_RHB = {
+                1: "Fine Leg",
+                2: "Square Leg",
+                3: "Mid Wicket",
+                4: "Mid On",
+                5: "Mid Off",
+                6: "Covers",
+                7: "Point",
+                8: "Third Man"
+            }
+            
             def get_sector_angle_requested(zone, batting_style):
                 """Return sector center in radians.
             
-                IMPORTANT: For left-handers we mirror the chart across the vertical axis.
-                This is done by reflecting the angle across the vertical axis:
+                For left-handers mirror across vertical axis by reflecting angle:
                     angle -> (180 - angle) % 360
                 """
                 angle = float(BASE_ANGLES.get(int(zone), 0.0))
@@ -2952,6 +2948,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 else:
                     tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
             
+                # raw aggregates keyed by the raw sector id (1..8)
                 runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
                 fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
                 sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
@@ -2961,15 +2958,24 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 title_text = f"{batsman_name}'s Scoring Zones"
                 plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
             
+                # Determine batter handedness (first non-null sample in the filtered rows)
+                batting_style_val = None
+                if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
+                    batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
+                is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+            
                 # Place % runs and runs in each sector using sector centers
                 for zone in range(1, 9):
-                    batting_style_val = None
-                    if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
-                        batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
+                    # angle for display: we still use the mirrored angle for LHB so the visual sector is correct
                     angle_mid = get_sector_angle_requested(zone, batting_style_val)
                     x = 0.60 * math.cos(angle_mid)
                     y = 0.60 * math.sin(angle_mid)
-                    runs = int(runs_by_zone.get(zone, 0))
+            
+                    # For LHB: pick the mirrored data-zone so runs/fours/sixes appear in the sector that visually corresponds
+                    # to the raw sector numbers reversed across the vertical axis. Mirroring rule: mirrored_zone = 9 - zone
+                    data_zone = zone if not is_lhb else (9 - zone)
+            
+                    runs = int(runs_by_zone.get(data_zone, 0))
                     pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
                     pct_str = f"{pct:.2f}%"
             
@@ -2977,26 +2983,17 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
                     ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
             
-                    # fours & sixes below
-                    fours = int(fours_by_zone.get(zone, 0))
-                    sixes = int(sixes_by_zone.get(zone, 0))
+                    # fours & sixes below (from the mirrored data_zone for LHB)
+                    fours = int(fours_by_zone.get(data_zone, 0))
+                    sixes = int(sixes_by_zone.get(data_zone, 0))
                     ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
             
-                    # sector name slightly farther out
+                    # sector name slightly farther out: for LHB we show the mirrored name so label and data match visually
+                    display_sector_idx = zone if not is_lhb else (9 - zone)
+                    sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
                     sx = 0.80 * math.cos(angle_mid)
                     sy = 0.80 * math.sin(angle_mid)
-                    # keep using the original sector naming mapping (this is the only non-geometric change left unchanged)
-                    sector_names = {
-                        1: "Fine Leg",
-                        2: "Square Leg",
-                        3: "Mid Wicket",
-                        4: "Mid On",
-                        5: "Mid Off",
-                        6: "Covers",
-                        7: "Point",
-                        8: "Third Man"
-                    }
-                    ax.text(sx, sy, sector_names.get(zone, f"Sector {zone}"), ha='center', va='center', color='white', fontsize=8)
+                    ax.text(sx, sy, sector_name_to_show, ha='center', va='center', color='white', fontsize=8)
             
                 ax.set_xlim(-1.2, 1.2)
                 ax.set_ylim(-1.2, 1.2)
@@ -3004,23 +3001,10 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 return fig
             
             # run the wagon wheel drawing if column exists
-            # expected outer-scope variables: final_df, batsman_selected, wagon_zone_col, run_col, bat_hand_col
-            # If you're testing standalone, uncomment the quick test block below.
+            # required outer-scope variables: final_df, batsman_selected, wagon_zone_col, run_col, bat_hand_col
+            # (these are the same names you used previously)
             
-            # Example quick test (uncomment to use):
-            # import random
-            # random.seed(1)
-            # final_df = pd.DataFrame({
-            #     'batter': ['Player X']*200,
-            #     'wagonZone': [random.randint(1,8) for _ in range(200)],
-            #     'score': [random.choice([0,0,1,1,2,4,6]) for _ in range(200)],
-            #     'bat_hand': ['LHB']*200
-            # })
-            # batsman_selected = 'Player X'
-            # wagon_zone_col = 'wagonZone'
-            # run_col = 'score'
-            # bat_hand_col = 'bat_hand'
-            
+            # quick check that required names are defined; helpful error if run standalone
             try:
                 _ = final_df
                 _ = batsman_selected
@@ -3038,29 +3022,48 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             else:
                 ww_df = final_df.copy()
                 ww_df['wagon_zone_int'] = pd.to_numeric(ww_df[wagon_zone_col], errors='coerce').astype('Int64')
+            
                 grouped = ww_df.groupby('wagon_zone_int').agg(
                     runs = (run_col, 'sum'),
                     balls = (run_col, 'size'),
                     fours = (run_col, lambda s: int((s==4).sum())),
                     sixes = (run_col, lambda s: int((s==6).sum()))
                 ).reset_index().rename(columns={'wagon_zone_int':'sector'})
+            
                 all_sectors = pd.DataFrame({"sector": list(range(1,9))})
                 grouped = all_sectors.merge(grouped, on='sector', how='left').fillna(0)
                 grouped[['runs','balls','fours','sixes']] = grouped[['runs','balls','fours','sixes']].astype(int)
                 total_runs = grouped['runs'].sum()
                 grouped['pct_runs'] = grouped['runs'].apply(lambda x: round((x / total_runs * 100) if total_runs>0 else 0.0,2))
             
-                ww_display = grouped.copy()
-                ww_display['Sector Name'] = ww_display['sector'].map({
-                    1: "Fine Leg",
-                    2: "Square Leg",
-                    3: "Mid Wicket",
-                    4: "Mid On",
-                    5: "Mid Off",
-                    6: "Covers",
-                    7: "Point",
-                    8: "Third Man"
-                })
+                # If batter is LHB, present the display table with mirrored sector names so table aligns with chart
+                # Mirrored mapping uses index 9 - sector
+                batting_style_display = None
+                if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
+                    batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
+                is_lhb_table = isinstance(batting_style_display, str) and batting_style_display.strip().upper().startswith('L')
+            
+                if not is_lhb_table:
+                    ww_display = grouped.copy()
+                    ww_display['Sector Name'] = ww_display['sector'].map(SECTOR_NAMES_RHB)
+                else:
+                    # mirror sector names in the table: show the sector name that appears at that visual location
+                    mirrored_rows = []
+                    for _, row in grouped.iterrows():
+                        s = int(row['sector'])
+                        # display index = 9 - s
+                        display_idx = 9 - s
+                        mirrored_rows.append({
+                            'sector': s,
+                            'Sector Name': SECTOR_NAMES_RHB.get(display_idx, f"Sector {display_idx}"),
+                            'runs': int(row['runs']),
+                            'pct_runs': round(row['pct_runs'],2),
+                            'fours': int(row['fours']),
+                            'sixes': int(row['sixes']),
+                            'balls': int(row['balls'])
+                        })
+                    ww_display = pd.DataFrame(mirrored_rows)
+            
                 ww_display = ww_display[['sector','Sector Name','runs','pct_runs','fours','sixes','balls']].rename(columns={
                     'sector':'Sector','runs':'Runs','pct_runs':'Pct of Runs','fours':'4s','sixes':'6s','balls':'Balls'
                 })
@@ -3072,7 +3075,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 # attempt safe plotting in Streamlit if available; fallbacks included
                 plotted = False
                 try:
-                    safe_st_pyplot  # if this exists in your environment, use it
+                    safe_st_pyplot  # if you have a utility named this in your app
                 except NameError:
                     safe_st_pyplot = None
             
@@ -3093,20 +3096,16 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 if not plotted:
                     plt.show()
             
+                # show table
                 if st:
                     st.dataframe(ww_display)
-                    batting_style_display = None
-                    if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
-                        batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
-                    side_label = "LHB" if batting_style_display and str(batting_style_display).strip().upper().startswith('L') else "RHB"
+                    side_label = "LHB" if is_lhb_table else "RHB"
                     st.markdown(f"<div style='text-align:center; margin-top:6px;'><strong>{batsman_selected}'s Wagon Chart ({side_label})</strong></div>", unsafe_allow_html=True)
                 else:
                     print(ww_display.to_string(index=False))
-                    batting_style_display = None
-                    if bat_hand_col in final_df.columns and not final_df[bat_hand_col].dropna().empty:
-                        batting_style_display = final_df[bat_hand_col].dropna().iloc[0]
-                    side_label = "LHB" if batting_style_display and str(batting_style_display).strip().upper().startswith('L') else "RHB"
+                    side_label = "LHB" if is_lhb_table else "RHB"
                     print(f"\n{batsman_selected}'s Wagon Chart ({side_label})")
+
 
 
             # -------------------------
