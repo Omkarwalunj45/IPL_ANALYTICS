@@ -3573,22 +3573,18 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # -------------------------
             # Pitchmaps: one 3x2 figure (Percent of balls, Dots, Runs) vs LHB / RHB
             # -------------------------
-            # Validate mapping variables exist: line_map, length_map, and column names
             required_cols = [line_col, length_col]
             missing = [c for c in required_cols if c not in filtered_df.columns]
             if missing:
                 st.info(f"Pitchmap requires columns {missing} in dataset; skipping pitchmaps.")
             else:
-                # Check line_map / length_map existence
                 if 'line_map' not in globals() or 'length_map' not in globals():
-                    st.error("line_map and length_map mappings must be defined in the app (map textual 'line'/'length' -> 0..4 indices). Skipping pitchmaps.")
+                    st.error("line_map and length_map mappings must be defined in the app.")
                 else:
-                    # Work only with legal deliveries
                     df_legal = filtered_df[filtered_df['legal_ball'] == 1].copy()
                     if df_legal.empty:
                         st.info("No legal deliveries for this bowler in this match to plot pitchmaps.")
                     else:
-                        # Determine bat-hand column name
                         try:
                             bh_col = bat_hand_col
                         except NameError:
@@ -3599,20 +3595,12 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                         else:
                             df_legal[bh_col] = df_legal[bh_col].astype(str).str.strip()
     
-                        # Helper to build grids
                         def build_grids(df_sub):
-                            """
-                            returns:
-                              count_grid (5x5), dot_grid (5x5), runs_grid (5x5), wkt_grid (5x5)
-                            indexing: [length_idx, line_idx] where length_idx 0..4 (short->yorker),
-                                      line_idx 0..4 (wide out off -> wide down leg)
-                            """
                             count_grid = np.zeros((5, 5), dtype=int)
                             dot_grid = np.zeros((5, 5), dtype=int)
                             runs_grid = np.zeros((5, 5), dtype=float)
                             wkt_grid = np.zeros((5, 5), dtype=int)
     
-                            # pick run column preference
                             if 'batruns' in df_sub.columns:
                                 rv_col = 'batruns'
                             elif 'score' in df_sub.columns:
@@ -3627,172 +3615,351 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                                 li = line_map.get(rr[line_col], None)
                                 le = length_map.get(rr[length_col], None)
                                 if li is None or le is None:
-                                    # skip if mapping missing
                                     continue
-                                # increment counts
+    
                                 count_grid[le, li] += 1
-    
-                                rv = 0.0
-                                if rv_col:
-                                    try:
-                                        rv = float(rr.get(rv_col, 0) or 0)
-                                    except:
-                                        rv = 0.0
+                                rv = float(rr.get(rv_col, 0) or 0) if rv_col else 0
                                 runs_grid[le, li] += rv
-    
                                 if rv == 0:
                                     dot_grid[le, li] += 1
-    
-                                if dismissal_col:
-                                    d = rr.get(dismissal_col, '')
-                                    if isinstance(d, str) and d.strip().lower() in wicket_set:
-                                        wkt_grid[le, li] += 1
+                                if dismissal_col and str(rr.get(dismissal_col, '')).lower() in wicket_set:
+                                    wkt_grid[le, li] += 1
     
                             return count_grid, dot_grid, runs_grid, wkt_grid
     
-                        # split by batter hand
-                        df_lhb = df_legal[df_legal[bh_col].fillna('').astype(str).str.upper().str.startswith('L')].copy()
-                        df_rhb = df_legal[df_legal[bh_col].fillna('').astype(str).str.upper().str.startswith('R')].copy()
+                        df_lhb = df_legal[df_legal[bh_col].str.upper().str.startswith('L')]
+                        df_rhb = df_legal[df_legal[bh_col].str.upper().str.startswith('R')]
     
                         count_l, dot_l, runs_l, wkt_l = build_grids(df_lhb)
                         count_r, dot_r, runs_r, wkt_r = build_grids(df_rhb)
     
-                        total_l = int(count_l.sum())
-                        total_r = int(count_r.sum())
+                        perc_l = (count_l / count_l.sum() * 100) if count_l.sum() else np.zeros_like(count_l)
+                        perc_r = (count_r / count_r.sum() * 100) if count_r.sum() else np.zeros_like(count_r)
     
-                        # compute percent arrays safely (avoid div by zero)
-                        perc_l = (count_l.astype(float) / total_l * 100.0) if total_l > 0 else np.zeros_like(count_l, dtype=float)
-                        perc_r = (count_r.astype(float) / total_r * 100.0) if total_r > 0 else np.zeros_like(count_r, dtype=float)
+                        disp = {
+                            'perc_l': np.fliplr(perc_l),
+                            'dot_l': np.fliplr(dot_l),
+                            'run_l': np.fliplr(runs_l),
+                            'wkt_l': np.fliplr(wkt_l),
+                            'perc_r': perc_r,
+                            'dot_r': dot_r,
+                            'run_r': runs_r,
+                            'wkt_r': wkt_r
+                        }
     
-                        # For LHB: display mirrored horizontally so off/leg swap visually
-                        disp_count_l = np.fliplr(count_l)
-                        disp_dot_l = np.fliplr(dot_l)
-                        disp_runs_l = np.fliplr(runs_l)
-                        disp_wkt_l = np.fliplr(wkt_l)
-                        disp_perc_l = np.fliplr(perc_l)
-    
-                        disp_count_r = count_r.copy()
-                        disp_dot_r = dot_r.copy()
-                        disp_runs_r = runs_r.copy()
-                        disp_wkt_r = wkt_r.copy()
-                        disp_perc_r = perc_r.copy()
-    
-                        # xticklabels mapping: left->right for RHB. For LHB we'll reverse labels to match flipped arrays
                         xticks_r = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                         xticks_l = xticks_r[::-1]
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker']
     
-                        # One 3x2 figure
                         fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                        plt.suptitle(f"{bowler_selected} — Pitchmaps vs LHB / RHB (legal deliveries only)", fontsize=16, weight='bold')
+                        plt.suptitle(f"{bowler_selected} — Pitchmaps vs LHB / RHB", fontsize=16, weight='bold')
     
-                        # Row 1: percent of balls (color only; no numbers)
-                        ax = axes[0, 0]
-                        vmax_pct = max(float(np.nanmax(disp_perc_l)), float(np.nanmax(disp_perc_r)), 1e-6)
-                        im = ax.imshow(disp_perc_l, origin='lower', cmap='Blues', vmin=0, vmax=vmax_pct)
-                        ax.set_title("Percent of balls vs LHB", fontsize=12)
-                        ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                        ax.set_xticklabels(xticks_l, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
-                        # Only annotate wickets (N W) if >0
-                        for i in range(5):
-                            for j in range(5):
-                                wval = int(disp_wkt_l[i, j])
-                                if wval > 0:
-                                    ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                            bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                        cbar.set_label('% of balls', fontsize=10)
+                        plot_defs = [
+                            ('perc_l', '% of balls vs LHB', 'Blues', xticks_l),
+                            ('perc_r', '% of balls vs RHB', 'Blues', xticks_r),
+                            ('dot_l', 'Dot balls vs LHB', 'Blues', xticks_l),
+                            ('dot_r', 'Dot balls vs RHB', 'Blues', xticks_r),
+                            ('run_l', 'Runs conceded vs LHB', 'Reds', xticks_l),
+                            ('run_r', 'Runs conceded vs RHB', 'Reds', xticks_r),
+                        ]
     
-                        ax = axes[0, 1]
-                        im = ax.imshow(disp_perc_r, origin='lower', cmap='Blues', vmin=0, vmax=vmax_pct)
-                        ax.set_title("Percent of balls vs RHB", fontsize=12)
-                        ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                        ax.set_xticklabels(xticks_r, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
-                        for i in range(5):
-                            for j in range(5):
-                                wval = int(disp_wkt_r[i, j])
-                                if wval > 0:
-                                    ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                            bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                        cbar.set_label('% of balls', fontsize=10)
+                        for ax, (k, title, cmap, xt) in zip(axes.flat, plot_defs):
+                            im = ax.imshow(disp[k], origin='lower', cmap=cmap)
+                            ax.set_title(title)
+                            ax.set_xticks(range(5))
+                            ax.set_yticks(range(5))
+                            ax.set_xticklabels(xt, rotation=45, ha='right')
+                            ax.set_yticklabels(yticklabels)
     
-                        # Row 2: dot balls (color only; no numbers)
-                        ax = axes[1, 0]
-                        vmax_dot = max(float(np.nanmax(disp_dot_l)), float(np.nanmax(disp_dot_r)), 1e-6)
-                        im = ax.imshow(disp_dot_l, origin='lower', cmap='Blues', vmin=0, vmax=vmax_dot)
-                        ax.set_title("Dot balls vs LHB (count)", fontsize=12)
-                        ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                        ax.set_xticklabels(xticks_l, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
-                        for i in range(5):
-                            for j in range(5):
-                                wval = int(disp_wkt_l[i, j])
-                                if wval > 0:
-                                    ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                            bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                        cbar.set_label('Dot count', fontsize=10)
+                            # ✅ LIGHT CELL BORDERS
+                            ax.set_xticks(np.arange(-0.5, 5, 1), minor=True)
+                            ax.set_yticks(np.arange(-0.5, 5, 1), minor=True)
+                            ax.grid(which='minor', color='white', linewidth=0.6, alpha=0.6)
+                            ax.tick_params(which='minor', bottom=False, left=False)
     
-                        ax = axes[1, 1]
-                        im = ax.imshow(disp_dot_r, origin='lower', cmap='Blues', vmin=0, vmax=vmax_dot)
-                        ax.set_title("Dot balls vs RHB (count)", fontsize=12)
-                        ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                        ax.set_xticklabels(xticks_r, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
-                        for i in range(5):
-                            for j in range(5):
-                                wval = int(disp_wkt_r[i, j])
-                                if wval > 0:
-                                    ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                            bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                        cbar.set_label('Dot count', fontsize=10)
+                            wkt_grid = disp[k.replace('perc', 'wkt').replace('dot', 'wkt').replace('run', 'wkt')]
+                            for i in range(5):
+                                for j in range(5):
+                                    if wkt_grid[i, j] > 0:
+                                        ax.text(j, i, f"{wkt_grid[i, j]} W",
+                                                ha='center', va='center',
+                                                fontsize=14, weight='bold',
+                                                color='gold',
+                                                bbox=dict(facecolor='black', alpha=0.6,
+                                                          boxstyle='round,pad=0.2'))
     
-                        # Row 3: runs conceded (color only; no numbers)
-                        ax = axes[2, 0]
-                        vmax_runs = max(float(np.nanmax(disp_runs_l)), float(np.nanmax(disp_runs_r)), 1e-6)
-                        im = ax.imshow(disp_runs_l, origin='lower', cmap='Reds', vmin=0, vmax=vmax_runs)
-                        ax.set_title("Runs conceded vs LHB (sum)", fontsize=12)
-                        ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                        ax.set_xticklabels(xticks_l, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
-                        for i in range(5):
-                            for j in range(5):
-                                wval = int(disp_wkt_l[i, j])
-                                if wval > 0:
-                                    ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                            bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                        cbar.set_label('Runs (sum)', fontsize=10)
-    
-                        ax = axes[2, 1]
-                        im = ax.imshow(disp_runs_r, origin='lower', cmap='Reds', vmin=0, vmax=vmax_runs)
-                        ax.set_title("Runs conceded vs RHB (sum)", fontsize=12)
-                        ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                        ax.set_xticklabels(xticks_r, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
-                        for i in range(5):
-                            for j in range(5):
-                                wval = int(disp_wkt_r[i, j])
-                                if wval > 0:
-                                    ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                            bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                        cbar.set_label('Runs (sum)', fontsize=10)
+                            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
     
                         plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+                        st.pyplot(fig, clear_figure=True)
+                        plt.close(fig)
+
+    # elif option == "Bowler Analysis":
+    #     # -------------------------
+    #     # Bowler selection & base metrics (unchanged)
+    #     # -------------------------
+    #     bowler_choices = sorted([x for x in temp_df[bowler_col].dropna().unique() if str(x).strip() not in ("","0")])
+    #     if not bowler_choices:
+    #         st.info("No bowlers found in this match.")
+    #     else:
+    #         bowler_selected = st.selectbox("Select Bowler", options=bowler_choices, index=0)
+    #         filtered_df = temp_df[temp_df[bowler_col] == bowler_selected].copy()
     
-                        # Display once (Streamlit preferred)
-                        try:
-                            st.pyplot(fig, clear_figure=True)
-                        except Exception:
-                            # fallback to matplotlib display
-                            plt.show()
-                        finally:
-                            plt.close(fig)
+    #         # Legal balls definition: both wide & noball == 0
+    #         filtered_df['noball'] = pd.to_numeric(filtered_df.get('noball', 0), errors='coerce').fillna(0).astype(int)
+    #         filtered_df['wide'] = pd.to_numeric(filtered_df.get('wide', 0), errors='coerce').fillna(0).astype(int)
+    #         filtered_df['legal_ball'] = ((filtered_df['noball'] == 0) & (filtered_df['wide'] == 0)).astype(int)
+    
+    #         # runs conceded should be sum of score/batruns when byes & legbyes ==0
+    #         if 'score' in filtered_df.columns:
+    #             cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
+    #             runs_given = int(filtered_df.loc[cond, 'score'].sum() if 'score' in filtered_df.columns else 0)
+    #         elif 'batruns' in filtered_df.columns:
+    #             cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
+    #             runs_given = int(filtered_df.loc[cond, 'batruns'].sum())
+    #         else:
+    #             runs_given = int(filtered_df.get('bowlruns', filtered_df.get('total_runs', 0)).sum())
+    
+    #         balls_bowled = int(filtered_df['legal_ball'].sum())
+    #         wickets = int(filtered_df['is_wkt'].sum()) if 'is_wkt' in filtered_df.columns else 0
+    #         econ = (runs_given * 6.0 / balls_bowled) if balls_bowled > 0 else float('nan')
+    #         avg = (runs_given / wickets) if wickets > 0 else float('nan')
+    #         sr = (balls_bowled / wickets) if wickets > 0 else float('nan')
+    
+    #         st.markdown(f"### Bowling Analysis for {bowler_selected}")
+    #         col1, col2 = st.columns(2)
+    #         with col1:
+    #             st.write(f"Runs conceded: {runs_given}")
+    #             st.write(f"Balls: {balls_bowled}")
+    #             st.write(f"Wickets: {wickets}")
+    #         with col2:
+    #             st.write(f"Econ: {econ:.2f}" if not np.isnan(econ) else "Econ: -")
+    #             st.write(f"Avg: {avg:.2f}" if not np.isnan(avg) else "Avg: -")
+    #             st.write(f"SR: {sr:.2f}" if not np.isnan(sr) else "SR: -")
+    
+    #         # -------------------------
+    #         # Pitchmaps: one 3x2 figure (Percent of balls, Dots, Runs) vs LHB / RHB
+    #         # -------------------------
+    #         # Validate mapping variables exist: line_map, length_map, and column names
+    #         required_cols = [line_col, length_col]
+    #         missing = [c for c in required_cols if c not in filtered_df.columns]
+    #         if missing:
+    #             st.info(f"Pitchmap requires columns {missing} in dataset; skipping pitchmaps.")
+    #         else:
+    #             # Check line_map / length_map existence
+    #             if 'line_map' not in globals() or 'length_map' not in globals():
+    #                 st.error("line_map and length_map mappings must be defined in the app (map textual 'line'/'length' -> 0..4 indices). Skipping pitchmaps.")
+    #             else:
+    #                 # Work only with legal deliveries
+    #                 df_legal = filtered_df[filtered_df['legal_ball'] == 1].copy()
+    #                 if df_legal.empty:
+    #                     st.info("No legal deliveries for this bowler in this match to plot pitchmaps.")
+    #                 else:
+    #                     # Determine bat-hand column name
+    #                     try:
+    #                         bh_col = bat_hand_col
+    #                     except NameError:
+    #                         bh_col = 'bat_hand'
+    
+    #                     if bh_col not in df_legal.columns:
+    #                         df_legal[bh_col] = ''
+    #                     else:
+    #                         df_legal[bh_col] = df_legal[bh_col].astype(str).str.strip()
+    
+    #                     # Helper to build grids
+    #                     def build_grids(df_sub):
+    #                         """
+    #                         returns:
+    #                           count_grid (5x5), dot_grid (5x5), runs_grid (5x5), wkt_grid (5x5)
+    #                         indexing: [length_idx, line_idx] where length_idx 0..4 (short->yorker),
+    #                                   line_idx 0..4 (wide out off -> wide down leg)
+    #                         """
+    #                         count_grid = np.zeros((5, 5), dtype=int)
+    #                         dot_grid = np.zeros((5, 5), dtype=int)
+    #                         runs_grid = np.zeros((5, 5), dtype=float)
+    #                         wkt_grid = np.zeros((5, 5), dtype=int)
+    
+    #                         # pick run column preference
+    #                         if 'batruns' in df_sub.columns:
+    #                             rv_col = 'batruns'
+    #                         elif 'score' in df_sub.columns:
+    #                             rv_col = 'score'
+    #                         else:
+    #                             rv_col = None
+    
+    #                         dismissal_col = 'dismissal' if 'dismissal' in df_sub.columns else None
+    #                         wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+    
+    #                         for _, rr in df_sub.iterrows():
+    #                             li = line_map.get(rr[line_col], None)
+    #                             le = length_map.get(rr[length_col], None)
+    #                             if li is None or le is None:
+    #                                 # skip if mapping missing
+    #                                 continue
+    #                             # increment counts
+    #                             count_grid[le, li] += 1
+    
+    #                             rv = 0.0
+    #                             if rv_col:
+    #                                 try:
+    #                                     rv = float(rr.get(rv_col, 0) or 0)
+    #                                 except:
+    #                                     rv = 0.0
+    #                             runs_grid[le, li] += rv
+    
+    #                             if rv == 0:
+    #                                 dot_grid[le, li] += 1
+    
+    #                             if dismissal_col:
+    #                                 d = rr.get(dismissal_col, '')
+    #                                 if isinstance(d, str) and d.strip().lower() in wicket_set:
+    #                                     wkt_grid[le, li] += 1
+    
+    #                         return count_grid, dot_grid, runs_grid, wkt_grid
+    
+    #                     # split by batter hand
+    #                     df_lhb = df_legal[df_legal[bh_col].fillna('').astype(str).str.upper().str.startswith('L')].copy()
+    #                     df_rhb = df_legal[df_legal[bh_col].fillna('').astype(str).str.upper().str.startswith('R')].copy()
+    
+    #                     count_l, dot_l, runs_l, wkt_l = build_grids(df_lhb)
+    #                     count_r, dot_r, runs_r, wkt_r = build_grids(df_rhb)
+    
+    #                     total_l = int(count_l.sum())
+    #                     total_r = int(count_r.sum())
+    
+    #                     # compute percent arrays safely (avoid div by zero)
+    #                     perc_l = (count_l.astype(float) / total_l * 100.0) if total_l > 0 else np.zeros_like(count_l, dtype=float)
+    #                     perc_r = (count_r.astype(float) / total_r * 100.0) if total_r > 0 else np.zeros_like(count_r, dtype=float)
+    
+    #                     # For LHB: display mirrored horizontally so off/leg swap visually
+    #                     disp_count_l = np.fliplr(count_l)
+    #                     disp_dot_l = np.fliplr(dot_l)
+    #                     disp_runs_l = np.fliplr(runs_l)
+    #                     disp_wkt_l = np.fliplr(wkt_l)
+    #                     disp_perc_l = np.fliplr(perc_l)
+    
+    #                     disp_count_r = count_r.copy()
+    #                     disp_dot_r = dot_r.copy()
+    #                     disp_runs_r = runs_r.copy()
+    #                     disp_wkt_r = wkt_r.copy()
+    #                     disp_perc_r = perc_r.copy()
+    
+    #                     # xticklabels mapping: left->right for RHB. For LHB we'll reverse labels to match flipped arrays
+    #                     xticks_r = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+    #                     xticks_l = xticks_r[::-1]
+    #                     yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker']
+    
+    #                     # One 3x2 figure
+    #                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+    #                     plt.suptitle(f"{bowler_selected} — Pitchmaps vs LHB / RHB (legal deliveries only)", fontsize=16, weight='bold')
+    
+    #                     # Row 1: percent of balls (color only; no numbers)
+    #                     ax = axes[0, 0]
+    #                     vmax_pct = max(float(np.nanmax(disp_perc_l)), float(np.nanmax(disp_perc_r)), 1e-6)
+    #                     im = ax.imshow(disp_perc_l, origin='lower', cmap='Blues', vmin=0, vmax=vmax_pct)
+    #                     ax.set_title("Percent of balls vs LHB", fontsize=12)
+    #                     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+    #                     ax.set_xticklabels(xticks_l, rotation=45, ha='right')
+    #                     ax.set_yticklabels(yticklabels)
+    #                     # Only annotate wickets (N W) if >0
+    #                     for i in range(5):
+    #                         for j in range(5):
+    #                             wval = int(disp_wkt_l[i, j])
+    #                             if wval > 0:
+    #                                 ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
+    #                                         bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    #                     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #                     cbar.set_label('% of balls', fontsize=10)
+    
+    #                     ax = axes[0, 1]
+    #                     im = ax.imshow(disp_perc_r, origin='lower', cmap='Blues', vmin=0, vmax=vmax_pct)
+    #                     ax.set_title("Percent of balls vs RHB", fontsize=12)
+    #                     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+    #                     ax.set_xticklabels(xticks_r, rotation=45, ha='right')
+    #                     ax.set_yticklabels(yticklabels)
+    #                     for i in range(5):
+    #                         for j in range(5):
+    #                             wval = int(disp_wkt_r[i, j])
+    #                             if wval > 0:
+    #                                 ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
+    #                                         bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    #                     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #                     cbar.set_label('% of balls', fontsize=10)
+    
+    #                     # Row 2: dot balls (color only; no numbers)
+    #                     ax = axes[1, 0]
+    #                     vmax_dot = max(float(np.nanmax(disp_dot_l)), float(np.nanmax(disp_dot_r)), 1e-6)
+    #                     im = ax.imshow(disp_dot_l, origin='lower', cmap='Blues', vmin=0, vmax=vmax_dot)
+    #                     ax.set_title("Dot balls vs LHB (count)", fontsize=12)
+    #                     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+    #                     ax.set_xticklabels(xticks_l, rotation=45, ha='right')
+    #                     ax.set_yticklabels(yticklabels)
+    #                     for i in range(5):
+    #                         for j in range(5):
+    #                             wval = int(disp_wkt_l[i, j])
+    #                             if wval > 0:
+    #                                 ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
+    #                                         bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    #                     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #                     cbar.set_label('Dot count', fontsize=10)
+    
+    #                     ax = axes[1, 1]
+    #                     im = ax.imshow(disp_dot_r, origin='lower', cmap='Blues', vmin=0, vmax=vmax_dot)
+    #                     ax.set_title("Dot balls vs RHB (count)", fontsize=12)
+    #                     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+    #                     ax.set_xticklabels(xticks_r, rotation=45, ha='right')
+    #                     ax.set_yticklabels(yticklabels)
+    #                     for i in range(5):
+    #                         for j in range(5):
+    #                             wval = int(disp_wkt_r[i, j])
+    #                             if wval > 0:
+    #                                 ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
+    #                                         bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    #                     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #                     cbar.set_label('Dot count', fontsize=10)
+    
+    #                     # Row 3: runs conceded (color only; no numbers)
+    #                     ax = axes[2, 0]
+    #                     vmax_runs = max(float(np.nanmax(disp_runs_l)), float(np.nanmax(disp_runs_r)), 1e-6)
+    #                     im = ax.imshow(disp_runs_l, origin='lower', cmap='Reds', vmin=0, vmax=vmax_runs)
+    #                     ax.set_title("Runs conceded vs LHB (sum)", fontsize=12)
+    #                     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+    #                     ax.set_xticklabels(xticks_l, rotation=45, ha='right')
+    #                     ax.set_yticklabels(yticklabels)
+    #                     for i in range(5):
+    #                         for j in range(5):
+    #                             wval = int(disp_wkt_l[i, j])
+    #                             if wval > 0:
+    #                                 ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
+    #                                         bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    #                     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #                     cbar.set_label('Runs (sum)', fontsize=10)
+    
+    #                     ax = axes[2, 1]
+    #                     im = ax.imshow(disp_runs_r, origin='lower', cmap='Reds', vmin=0, vmax=vmax_runs)
+    #                     ax.set_title("Runs conceded vs RHB (sum)", fontsize=12)
+    #                     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+    #                     ax.set_xticklabels(xticks_r, rotation=45, ha='right')
+    #                     ax.set_yticklabels(yticklabels)
+    #                     for i in range(5):
+    #                         for j in range(5):
+    #                             wval = int(disp_wkt_r[i, j])
+    #                             if wval > 0:
+    #                                 ax.text(j, i, f"{wval} W", ha='center', va='center', fontsize=14, color='gold', weight='bold',
+    #                                         bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    #                     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #                     cbar.set_label('Runs (sum)', fontsize=10)
+    
+    #                     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    
+    #                     # Display once (Streamlit preferred)
+    #                     try:
+    #                         st.pyplot(fig, clear_figure=True)
+    #                     except Exception:
+    #                         # fallback to matplotlib display
+    #                         plt.show()
+    #                     finally:
+    #                         plt.close(fig)
 
 
 
