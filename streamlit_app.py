@@ -2327,7 +2327,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
         'SHORT_OF_A_GOOD_LENGTH': 1,
         'GOOD_LENGTH': 2,
         'FULL': 3,
-        'YORKER': 4
+        'YORKER': 4,
+        'FULLTOSS': 5
     }
     
     # ---------------------------
@@ -3527,172 +3528,172 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     # ---------------------------
     # Bowler Analysis (match-level)
                 # ---------------------------
-    elif option == "Bowler Analysis":
-        # -------------------------
-        # Bowler selection & base metrics (unchanged)
-        # -------------------------
-        bowler_choices = sorted([x for x in temp_df[bowler_col].dropna().unique() if str(x).strip() not in ("","0")])
-        if not bowler_choices:
-            st.info("No bowlers found in this match.")
-        else:
-            bowler_selected = st.selectbox("Select Bowler", options=bowler_choices, index=0)
-            filtered_df = temp_df[temp_df[bowler_col] == bowler_selected].copy()
+    # elif option == "Bowler Analysis":
+    #     # -------------------------
+    #     # Bowler selection & base metrics (unchanged)
+    #     # -------------------------
+    #     bowler_choices = sorted([x for x in temp_df[bowler_col].dropna().unique() if str(x).strip() not in ("","0")])
+    #     if not bowler_choices:
+    #         st.info("No bowlers found in this match.")
+    #     else:
+    #         bowler_selected = st.selectbox("Select Bowler", options=bowler_choices, index=0)
+    #         filtered_df = temp_df[temp_df[bowler_col] == bowler_selected].copy()
     
-            # Legal balls definition: both wide & noball == 0
-            filtered_df['noball'] = pd.to_numeric(filtered_df.get('noball', 0), errors='coerce').fillna(0).astype(int)
-            filtered_df['wide'] = pd.to_numeric(filtered_df.get('wide', 0), errors='coerce').fillna(0).astype(int)
-            filtered_df['legal_ball'] = ((filtered_df['noball'] == 0) & (filtered_df['wide'] == 0)).astype(int)
+    #         # Legal balls definition: both wide & noball == 0
+    #         filtered_df['noball'] = pd.to_numeric(filtered_df.get('noball', 0), errors='coerce').fillna(0).astype(int)
+    #         filtered_df['wide'] = pd.to_numeric(filtered_df.get('wide', 0), errors='coerce').fillna(0).astype(int)
+    #         filtered_df['legal_ball'] = ((filtered_df['noball'] == 0) & (filtered_df['wide'] == 0)).astype(int)
     
-            # runs conceded should be sum of score/batruns when byes & legbyes ==0
-            if 'score' in filtered_df.columns:
-                cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
-                runs_given = int(filtered_df.loc[cond, 'score'].sum() if 'score' in filtered_df.columns else 0)
-            elif 'batruns' in filtered_df.columns:
-                cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
-                runs_given = int(filtered_df.loc[cond, 'batruns'].sum())
-            else:
-                runs_given = int(filtered_df.get('bowlruns', filtered_df.get('total_runs', 0)).sum())
+    #         # runs conceded should be sum of score/batruns when byes & legbyes ==0
+    #         if 'score' in filtered_df.columns:
+    #             cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
+    #             runs_given = int(filtered_df.loc[cond, 'score'].sum() if 'score' in filtered_df.columns else 0)
+    #         elif 'batruns' in filtered_df.columns:
+    #             cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
+    #             runs_given = int(filtered_df.loc[cond, 'batruns'].sum())
+    #         else:
+    #             runs_given = int(filtered_df.get('bowlruns', filtered_df.get('total_runs', 0)).sum())
     
-            balls_bowled = int(filtered_df['legal_ball'].sum())
-            wickets = int(filtered_df['is_wkt'].sum()) if 'is_wkt' in filtered_df.columns else 0
-            econ = (runs_given * 6.0 / balls_bowled) if balls_bowled > 0 else float('nan')
-            avg = (runs_given / wickets) if wickets > 0 else float('nan')
-            sr = (balls_bowled / wickets) if wickets > 0 else float('nan')
+    #         balls_bowled = int(filtered_df['legal_ball'].sum())
+    #         wickets = int(filtered_df['is_wkt'].sum()) if 'is_wkt' in filtered_df.columns else 0
+    #         econ = (runs_given * 6.0 / balls_bowled) if balls_bowled > 0 else float('nan')
+    #         avg = (runs_given / wickets) if wickets > 0 else float('nan')
+    #         sr = (balls_bowled / wickets) if wickets > 0 else float('nan')
     
-            st.markdown(f"### Bowling Analysis for {bowler_selected}")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"Runs conceded: {runs_given}")
-                st.write(f"Balls: {balls_bowled}")
-                st.write(f"Wickets: {wickets}")
-            with col2:
-                st.write(f"Econ: {econ:.2f}" if not np.isnan(econ) else "Econ: -")
-                st.write(f"Avg: {avg:.2f}" if not np.isnan(avg) else "Avg: -")
-                st.write(f"SR: {sr:.2f}" if not np.isnan(sr) else "SR: -")
+    #         st.markdown(f"### Bowling Analysis for {bowler_selected}")
+    #         col1, col2 = st.columns(2)
+    #         with col1:
+    #             st.write(f"Runs conceded: {runs_given}")
+    #             st.write(f"Balls: {balls_bowled}")
+    #             st.write(f"Wickets: {wickets}")
+    #         with col2:
+    #             st.write(f"Econ: {econ:.2f}" if not np.isnan(econ) else "Econ: -")
+    #             st.write(f"Avg: {avg:.2f}" if not np.isnan(avg) else "Avg: -")
+    #             st.write(f"SR: {sr:.2f}" if not np.isnan(sr) else "SR: -")
     
-            # -------------------------
-            # Pitchmaps: one 3x2 figure (Percent of balls, Dots, Runs) vs LHB / RHB
-            # -------------------------
-            required_cols = [line_col, length_col]
-            missing = [c for c in required_cols if c not in filtered_df.columns]
-            if missing:
-                st.info(f"Pitchmap requires columns {missing} in dataset; skipping pitchmaps.")
-            else:
-                if 'line_map' not in globals() or 'length_map' not in globals():
-                    st.error("line_map and length_map mappings must be defined in the app.")
-                else:
-                    df_legal = filtered_df[filtered_df['legal_ball'] == 1].copy()
-                    if df_legal.empty:
-                        st.info("No legal deliveries for this bowler in this match to plot pitchmaps.")
-                    else:
-                        try:
-                            bh_col = bat_hand_col
-                        except NameError:
-                            bh_col = 'bat_hand'
+    #         # -------------------------
+    #         # Pitchmaps: one 3x2 figure (Percent of balls, Dots, Runs) vs LHB / RHB
+    #         # -------------------------
+    #         required_cols = [line_col, length_col]
+    #         missing = [c for c in required_cols if c not in filtered_df.columns]
+    #         if missing:
+    #             st.info(f"Pitchmap requires columns {missing} in dataset; skipping pitchmaps.")
+    #         else:
+    #             if 'line_map' not in globals() or 'length_map' not in globals():
+    #                 st.error("line_map and length_map mappings must be defined in the app.")
+    #             else:
+    #                 df_legal = filtered_df[filtered_df['legal_ball'] == 1].copy()
+    #                 if df_legal.empty:
+    #                     st.info("No legal deliveries for this bowler in this match to plot pitchmaps.")
+    #                 else:
+    #                     try:
+    #                         bh_col = bat_hand_col
+    #                     except NameError:
+    #                         bh_col = 'bat_hand'
     
-                        if bh_col not in df_legal.columns:
-                            df_legal[bh_col] = ''
-                        else:
-                            df_legal[bh_col] = df_legal[bh_col].astype(str).str.strip()
+    #                     if bh_col not in df_legal.columns:
+    #                         df_legal[bh_col] = ''
+    #                     else:
+    #                         df_legal[bh_col] = df_legal[bh_col].astype(str).str.strip()
     
-                        def build_grids(df_sub):
-                            count_grid = np.zeros((5, 5), dtype=int)
-                            dot_grid = np.zeros((5, 5), dtype=int)
-                            runs_grid = np.zeros((5, 5), dtype=float)
-                            wkt_grid = np.zeros((5, 5), dtype=int)
+    #                     def build_grids(df_sub):
+    #                         count_grid = np.zeros((5, 5), dtype=int)
+    #                         dot_grid = np.zeros((5, 5), dtype=int)
+    #                         runs_grid = np.zeros((5, 5), dtype=float)
+    #                         wkt_grid = np.zeros((5, 5), dtype=int)
     
-                            if 'batruns' in df_sub.columns:
-                                rv_col = 'batruns'
-                            elif 'score' in df_sub.columns:
-                                rv_col = 'score'
-                            else:
-                                rv_col = None
+    #                         if 'batruns' in df_sub.columns:
+    #                             rv_col = 'batruns'
+    #                         elif 'score' in df_sub.columns:
+    #                             rv_col = 'score'
+    #                         else:
+    #                             rv_col = None
     
-                            dismissal_col = 'dismissal' if 'dismissal' in df_sub.columns else None
-                            wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+    #                         dismissal_col = 'dismissal' if 'dismissal' in df_sub.columns else None
+    #                         wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
     
-                            for _, rr in df_sub.iterrows():
-                                li = line_map.get(rr[line_col], None)
-                                le = length_map.get(rr[length_col], None)
-                                if li is None or le is None:
-                                    continue
+    #                         for _, rr in df_sub.iterrows():
+    #                             li = line_map.get(rr[line_col], None)
+    #                             le = length_map.get(rr[length_col], None)
+    #                             if li is None or le is None:
+    #                                 continue
     
-                                count_grid[le, li] += 1
-                                rv = float(rr.get(rv_col, 0) or 0) if rv_col else 0
-                                runs_grid[le, li] += rv
-                                if rv == 0:
-                                    dot_grid[le, li] += 1
-                                if dismissal_col and str(rr.get(dismissal_col, '')).lower() in wicket_set:
-                                    wkt_grid[le, li] += 1
+    #                             count_grid[le, li] += 1
+    #                             rv = float(rr.get(rv_col, 0) or 0) if rv_col else 0
+    #                             runs_grid[le, li] += rv
+    #                             if rv == 0:
+    #                                 dot_grid[le, li] += 1
+    #                             if dismissal_col and str(rr.get(dismissal_col, '')).lower() in wicket_set:
+    #                                 wkt_grid[le, li] += 1
     
-                            return count_grid, dot_grid, runs_grid, wkt_grid
+    #                         return count_grid, dot_grid, runs_grid, wkt_grid
     
-                        df_lhb = df_legal[df_legal[bh_col].str.upper().str.startswith('L')]
-                        df_rhb = df_legal[df_legal[bh_col].str.upper().str.startswith('R')]
+    #                     df_lhb = df_legal[df_legal[bh_col].str.upper().str.startswith('L')]
+    #                     df_rhb = df_legal[df_legal[bh_col].str.upper().str.startswith('R')]
     
-                        count_l, dot_l, runs_l, wkt_l = build_grids(df_lhb)
-                        count_r, dot_r, runs_r, wkt_r = build_grids(df_rhb)
+    #                     count_l, dot_l, runs_l, wkt_l = build_grids(df_lhb)
+    #                     count_r, dot_r, runs_r, wkt_r = build_grids(df_rhb)
     
-                        perc_l = (count_l / count_l.sum() * 100) if count_l.sum() else np.zeros_like(count_l)
-                        perc_r = (count_r / count_r.sum() * 100) if count_r.sum() else np.zeros_like(count_r)
+    #                     perc_l = (count_l / count_l.sum() * 100) if count_l.sum() else np.zeros_like(count_l)
+    #                     perc_r = (count_r / count_r.sum() * 100) if count_r.sum() else np.zeros_like(count_r)
     
-                        disp = {
-                            'perc_l': np.fliplr(perc_l),
-                            'dot_l': np.fliplr(dot_l),
-                            'run_l': np.fliplr(runs_l),
-                            'wkt_l': np.fliplr(wkt_l),
-                            'perc_r': perc_r,
-                            'dot_r': dot_r,
-                            'run_r': runs_r,
-                            'wkt_r': wkt_r
-                        }
+    #                     disp = {
+    #                         'perc_l': np.fliplr(perc_l),
+    #                         'dot_l': np.fliplr(dot_l),
+    #                         'run_l': np.fliplr(runs_l),
+    #                         'wkt_l': np.fliplr(wkt_l),
+    #                         'perc_r': perc_r,
+    #                         'dot_r': dot_r,
+    #                         'run_r': runs_r,
+    #                         'wkt_r': wkt_r
+    #                     }
     
-                        xticks_r = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-                        xticks_l = xticks_r[::-1]
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker']
+    #                     xticks_r = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+    #                     xticks_l = xticks_r[::-1]
+    #                     yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker']
     
-                        fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                        plt.suptitle(f"{bowler_selected} — Pitchmaps vs LHB / RHB", fontsize=16, weight='bold')
+    #                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+    #                     plt.suptitle(f"{bowler_selected} — Pitchmaps vs LHB / RHB", fontsize=16, weight='bold')
     
-                        plot_defs = [
-                            ('perc_l', '% of balls vs LHB', 'Blues', xticks_l),
-                            ('perc_r', '% of balls vs RHB', 'Blues', xticks_r),
-                            ('dot_l', 'Dot balls vs LHB', 'Blues', xticks_l),
-                            ('dot_r', 'Dot balls vs RHB', 'Blues', xticks_r),
-                            ('run_l', 'Runs conceded vs LHB', 'Reds', xticks_l),
-                            ('run_r', 'Runs conceded vs RHB', 'Reds', xticks_r),
-                        ]
+    #                     plot_defs = [
+    #                         ('perc_l', '% of balls vs LHB', 'Blues', xticks_l),
+    #                         ('perc_r', '% of balls vs RHB', 'Blues', xticks_r),
+    #                         ('dot_l', 'Dot balls vs LHB', 'Blues', xticks_l),
+    #                         ('dot_r', 'Dot balls vs RHB', 'Blues', xticks_r),
+    #                         ('run_l', 'Runs conceded vs LHB', 'Reds', xticks_l),
+    #                         ('run_r', 'Runs conceded vs RHB', 'Reds', xticks_r),
+    #                     ]
     
-                        for ax, (k, title, cmap, xt) in zip(axes.flat, plot_defs):
-                            im = ax.imshow(disp[k], origin='lower', cmap=cmap)
-                            ax.set_title(title)
-                            ax.set_xticks(range(5))
-                            ax.set_yticks(range(5))
-                            ax.set_xticklabels(xt, rotation=45, ha='right')
-                            ax.set_yticklabels(yticklabels)
+    #                     for ax, (k, title, cmap, xt) in zip(axes.flat, plot_defs):
+    #                         im = ax.imshow(disp[k], origin='lower', cmap=cmap)
+    #                         ax.set_title(title)
+    #                         ax.set_xticks(range(5))
+    #                         ax.set_yticks(range(5))
+    #                         ax.set_xticklabels(xt, rotation=45, ha='right')
+    #                         ax.set_yticklabels(yticklabels)
     
-                            # ✅ LIGHT CELL BORDERS
-                            ax.set_xticks(np.arange(-0.5, 5, 1), minor=True)
-                            ax.set_yticks(np.arange(-0.5, 5, 1), minor=True)
-                            ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.6)
-                            ax.tick_params(which='minor', bottom=False, left=False)
+    #                         # ✅ LIGHT CELL BORDERS
+    #                         ax.set_xticks(np.arange(-0.5, 5, 1), minor=True)
+    #                         ax.set_yticks(np.arange(-0.5, 5, 1), minor=True)
+    #                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.6)
+    #                         ax.tick_params(which='minor', bottom=False, left=False)
     
-                            wkt_grid = disp[k.replace('perc', 'wkt').replace('dot', 'wkt').replace('run', 'wkt')]
-                            for i in range(5):
-                                for j in range(5):
-                                    if wkt_grid[i, j] > 0:
-                                        ax.text(j, i, f"{wkt_grid[i, j]} W",
-                                                ha='center', va='center',
-                                                fontsize=14, weight='bold',
-                                                color='gold',
-                                                bbox=dict(facecolor='black', alpha=0.6,
-                                                          boxstyle='round,pad=0.2'))
+    #                         wkt_grid = disp[k.replace('perc', 'wkt').replace('dot', 'wkt').replace('run', 'wkt')]
+    #                         for i in range(5):
+    #                             for j in range(5):
+    #                                 if wkt_grid[i, j] > 0:
+    #                                     ax.text(j, i, f"{wkt_grid[i, j]} W",
+    #                                             ha='center', va='center',
+    #                                             fontsize=14, weight='bold',
+    #                                             color='gold',
+    #                                             bbox=dict(facecolor='black', alpha=0.6,
+    #                                                       boxstyle='round,pad=0.2'))
     
-                            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #                         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
     
-                        plt.tight_layout(rect=[0, 0.03, 1, 0.97])
-                        st.pyplot(fig, clear_figure=True)
-                        plt.close(fig)
+    #                     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    #                     st.pyplot(fig, clear_figure=True)
+    #                     plt.close(fig)
 
     # elif option == "Bowler Analysis":
     #     # -------------------------
@@ -3960,6 +3961,206 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     #                         plt.show()
     #                     finally:
     #                         plt.close(fig)
+
+    elif option == "Bowler Analysis":
+    # -------------------------
+    # Bowler selection & base metrics (unchanged)
+    # -------------------------
+        bowler_choices = sorted([x for x in temp_df[bowler_col].dropna().unique() if str(x).strip() not in ("","0")])
+        if not bowler_choices:
+            st.info("No bowlers found in this match.")
+        else:
+            bowler_selected = st.selectbox("Select Bowler", options=bowler_choices, index=0)
+            filtered_df = temp_df[temp_df[bowler_col] == bowler_selected].copy()
+        
+            # Legal balls definition: both wide & noball == 0
+            filtered_df['noball'] = pd.to_numeric(filtered_df.get('noball', 0), errors='coerce').fillna(0).astype(int)
+            filtered_df['wide'] = pd.to_numeric(filtered_df.get('wide', 0), errors='coerce').fillna(0).astype(int)
+            filtered_df['legal_ball'] = ((filtered_df['noball'] == 0) & (filtered_df['wide'] == 0)).astype(int)
+        
+            # runs conceded should be sum of score/batruns when byes & legbyes ==0
+            if 'score' in filtered_df.columns:
+                cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
+                runs_given = int(filtered_df.loc[cond, 'score'].sum() if 'score' in filtered_df.columns else 0)
+            elif 'batruns' in filtered_df.columns:
+                cond = (~filtered_df.get('byes', 0).astype(bool)) & (~filtered_df.get('legbyes', 0).astype(bool))
+                runs_given = int(filtered_df.loc[cond, 'batruns'].sum())
+            else:
+                runs_given = int(filtered_df.get('bowlruns', filtered_df.get('total_runs', 0)).sum())
+        
+            balls_bowled = int(filtered_df['legal_ball'].sum())
+            wickets = int(filtered_df['is_wkt'].sum()) if 'is_wkt' in filtered_df.columns else 0
+            econ = (runs_given * 6.0 / balls_bowled) if balls_bowled > 0 else float('nan')
+            avg = (runs_given / wickets) if wickets > 0 else float('nan')
+            sr = (balls_bowled / wickets) if wickets > 0 else float('nan')
+        
+            st.markdown(f"### Bowling Analysis for {bowler_selected}")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"Runs conceded: {runs_given}")
+                st.write(f"Balls: {balls_bowled}")
+                st.write(f"Wickets: {wickets}")
+            with col2:
+                st.write(f"Econ: {econ:.2f}" if not np.isnan(econ) else "Econ: -")
+                st.write(f"Avg: {avg:.2f}" if not np.isnan(avg) else "Avg: -")
+                st.write(f"SR: {sr:.2f}" if not np.isnan(sr) else "SR: -")
+        
+            # -------------------------
+            # Pitchmaps: one 3x2 figure (Percent of balls, Dots, Runs) vs LHB / RHB
+            # -------------------------
+            required_cols = [line_col, length_col]
+            missing = [c for c in required_cols if c not in filtered_df.columns]
+            if missing:
+                st.info(f"Pitchmap requires columns {missing} in dataset; skipping pitchmaps.")
+            else:
+                if 'line_map' not in globals() or 'length_map' not in globals():
+                    st.error("line_map and length_map mappings must be defined in the app.")
+                else:
+                    df_legal = filtered_df[filtered_df['legal_ball'] == 1].copy()
+                    if df_legal.empty:
+                        st.info("No legal deliveries for this bowler in this match to plot pitchmaps.")
+                    else:
+                        try:
+                            bh_col = bat_hand_col
+                        except NameError:
+                            bh_col = 'bat_hand'
+        
+                        if bh_col not in df_legal.columns:
+                            df_legal[bh_col] = ''
+                        else:
+                            df_legal[bh_col] = df_legal[bh_col].astype(str).str.strip()
+        
+                        def build_grids(df_sub, n_rows=6, n_cols=5):
+                            """
+                            returns:
+                              count_grid (n_rows x n_cols), dot_grid, runs_grid, wkt_grid
+                            indexing: [length_idx, line_idx] where length_idx 0..n_rows-1 (short -> full toss),
+                                      line_idx 0..n_cols-1 (wide out off -> wide down leg)
+                            """
+                            count_grid = np.zeros((n_rows, n_cols), dtype=int)
+                            dot_grid = np.zeros((n_rows, n_cols), dtype=int)
+                            runs_grid = np.zeros((n_rows, n_cols), dtype=float)
+                            wkt_grid = np.zeros((n_rows, n_cols), dtype=int)
+        
+                            if 'batruns' in df_sub.columns:
+                                rv_col = 'batruns'
+                            elif 'score' in df_sub.columns:
+                                rv_col = 'score'
+                            else:
+                                rv_col = None
+        
+                            dismissal_col = 'dismissal' if 'dismissal' in df_sub.columns else None
+                            wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+        
+                            for _, rr in df_sub.iterrows():
+                                li = line_map.get(rr[line_col], None)
+                                le = length_map.get(rr[length_col], None)
+                                if li is None or le is None:
+                                    continue
+        
+                                # ensure le is within new n_rows
+                                if le < 0 or le >= n_rows:
+                                    continue
+        
+                                count_grid[le, li] += 1
+                                rv = 0.0
+                                if rv_col:
+                                    try:
+                                        rv = float(rr.get(rv_col, 0) or 0)
+                                    except:
+                                        rv = 0.0
+                                runs_grid[le, li] += rv
+                                if rv == 0:
+                                    dot_grid[le, li] += 1
+                                if dismissal_col and str(rr.get(dismissal_col, '')).lower() in wicket_set:
+                                    wkt_grid[le, li] += 1
+        
+                            return count_grid, dot_grid, runs_grid, wkt_grid
+        
+                        # NEW: n_rows = 6 to include Full Toss ahead of Yorker
+                        N_ROWS = 6
+                        N_COLS = 5
+        
+                        df_lhb = df_legal[df_legal[bh_col].str.upper().str.startswith('L')]
+                        df_rhb = df_legal[df_legal[bh_col].str.upper().str.startswith('R')]
+        
+                        count_l, dot_l, runs_l, wkt_l = build_grids(df_lhb, n_rows=N_ROWS, n_cols=N_COLS)
+                        count_r, dot_r, runs_r, wkt_r = build_grids(df_rhb, n_rows=N_ROWS, n_cols=N_COLS)
+        
+                        perc_l = (count_l / count_l.sum() * 100) if count_l.sum() else np.zeros_like(count_l, dtype=float)
+                        perc_r = (count_r / count_r.sum() * 100) if count_r.sum() else np.zeros_like(count_r, dtype=float)
+        
+                        disp = {
+                            'perc_l': np.fliplr(perc_l),
+                            'dot_l': np.fliplr(dot_l),
+                            'run_l': np.fliplr(runs_l),
+                            'wkt_l': np.fliplr(wkt_l),
+                            'perc_r': perc_r,
+                            'dot_r': dot_r,
+                            'run_r': runs_r,
+                            'wkt_r': wkt_r
+                        }
+        
+                        xticks_r = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+                        xticks_l = xticks_r[::-1]
+                        # yticklabels bottom->top: Short -> Back of Length -> Good -> Full -> Yorker -> Full Toss (top)
+                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss']
+        
+                        fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+                        plt.suptitle(f"{bowler_selected} — Pitchmaps vs LHB / RHB", fontsize=16, weight='bold')
+        
+                        plot_defs = [
+                            ('perc_l', '% of balls vs LHB', 'Blues', xticks_l),
+                            ('perc_r', '% of balls vs RHB', 'Blues', xticks_r),
+                            ('dot_l', 'Dot balls vs LHB', 'Blues', xticks_l),
+                            ('dot_r', 'Dot balls vs RHB', 'Blues', xticks_r),
+                            ('run_l', 'Runs conceded vs LHB', 'Reds', xticks_l),
+                            ('run_r', 'Runs conceded vs RHB', 'Reds', xticks_r),
+                        ]
+        
+                        for ax, (k, title, cmap, xt) in zip(axes.flat, plot_defs):
+                            im = ax.imshow(disp[k], origin='lower', cmap=cmap)
+                            ax.set_title(title)
+                            ax.set_xticks(range(N_COLS))
+                            ax.set_yticks(range(N_ROWS))
+                            ax.set_xticklabels(xt, rotation=45, ha='right')
+                            ax.set_yticklabels(yticklabels)
+        
+                            # ✅ LIGHT CELL BORDERS (minor grid lines) with subtle color
+                            ax.set_xticks(np.arange(-0.5, N_COLS, 1), minor=True)
+                            ax.set_yticks(np.arange(-0.5, N_ROWS, 1), minor=True)
+                            # light border line: color can be changed to 'black' if desired (see earlier note)
+                            ax.grid(which='minor', color='white', linewidth=0.6, alpha=0.6)
+                            ax.tick_params(which='minor', bottom=False, left=False)
+        
+                            # Annotate wickets only (N W) if >0
+                            # map k to corresponding wkt grid key: 'wkt_l' or 'wkt_r'
+                            if k.endswith('_l'):
+                                wkt_grid = disp['wkt_l']
+                            else:
+                                wkt_grid = disp['wkt_r']
+        
+                            # loops must match N_ROWS x N_COLS
+                            for i in range(N_ROWS):
+                                for j in range(N_COLS):
+                                    if int(wkt_grid[i, j]) > 0:
+                                        ax.text(j, i, f"{int(wkt_grid[i, j])} W",
+                                                ha='center', va='center',
+                                                fontsize=14, weight='bold',
+                                                color='gold',
+                                                bbox=dict(facecolor='black', alpha=0.6,
+                                                          boxstyle='round,pad=0.2'))
+        
+                            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+        
+                        plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+                        try:
+                            st.pyplot(fig, clear_figure=True)
+                        except Exception:
+                            plt.show()
+                        finally:
+                            plt.close(fig)
+    
 
 
 
