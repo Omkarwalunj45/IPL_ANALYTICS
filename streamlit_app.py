@@ -3135,11 +3135,14 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # -------------------------
             # Pitchmaps below Wagon: two heatmaps (dots vs scoring) - increased height
             # -------------------------
+            import numpy as np
+            import matplotlib.pyplot as plt
+            
             run_grid = np.zeros((5,5), dtype=float)
             dot_grid = np.zeros((5,5), dtype=int)
-
+            
             if line_col in final_df.columns and length_col in final_df.columns:
-                plot_df = final_df[[line_col,length_col,run_col]].copy().dropna(subset=[line_col,length_col])
+                plot_df = final_df[[line_col, length_col, run_col]].copy().dropna(subset=[line_col, length_col])
                 for _, r in plot_df.iterrows():
                     li = line_map.get(r[line_col], None)
                     le = length_map.get(r[length_col], None)
@@ -3149,53 +3152,73 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     run_grid[le, li] += runs_here
                     if runs_here == 0:
                         dot_grid[le, li] += 1
-
-                # import base64
-                # from io import BytesIO
-                # from PIL import Image
-
-                # # Pixel height for pitchmaps (change this value to whatever visible height you want)
-                # HEIGHT_PITCHMAP_PX = 1600
-
-                # Assuming dot_grid and run_grid are 5x5 numpy arrays already defined
-
+            
+                # Determine batter handedness (look for bat_hand column name if available)
+                try:
+                    bat_hand_col_name = bat_hand_col  # if your app defines this variable
+                except NameError:
+                    bat_hand_col_name = 'bat_hand'   # fallback to common column name
+            
+                batting_style_val = None
+                is_lhb = False
+                if bat_hand_col_name in final_df.columns and not final_df[bat_hand_col_name].dropna().empty:
+                    batting_style_val = final_df[bat_hand_col_name].dropna().iloc[0]
+                    is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+            
+                # If LHB, mirror arrays left-right so off/leg sides swap about the vertical axis
+                if is_lhb:
+                    run_grid = np.fliplr(run_grid)
+                    dot_grid = np.fliplr(dot_grid)
+            
+                # xtick labels (line positions left->right for RHB). For LHB we want them mirrored as well,
+                # so reverse the xticklabels when is_lhb is True.
+                xticklabels = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+                if is_lhb:
+                    xticklabels = xticklabels[::-1]
+            
+                yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker']
+            
                 st.markdown("### Pitchmaps")
                 c1, c2 = st.columns([1, 1])
-
+            
                 with c1:
                     st.markdown("**Dot Balls**")
-                    fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
+                    fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
                     ax1.set_xticks(range(5))
                     ax1.set_yticks(range(5))
-                    ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-                                        rotation=45, ha='right')
-                    ax1.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
+                    ax1.set_xticklabels(xticklabels, rotation=45, ha='right')
+                    ax1.set_yticklabels(yticklabels)
                     for i in range(5):
                         for j in range(5):
-                            ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-                    fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+                            val = int(dot_grid[i, j])
+                            # If zero keep it visible as 0 (you can change formatting if needed)
+                            ax1.text(j, i, val if val != 0 else 0, ha='center', va='center', color='black', fontsize=12)
+                    cbar1 = fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
+                    cbar1.set_label('Dot count')
                     plt.tight_layout(pad=3.0)
                     st.pyplot(fig1)
-
+            
                 with c2:
                     st.markdown("**Scoring Balls**")
-                    fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
+                    fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
                     ax2.set_xticks(range(5))
                     ax2.set_yticks(range(5))
-                    ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-                                        rotation=45, ha='right')
-                    ax2.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
+                    ax2.set_xticklabels(xticklabels, rotation=45, ha='right')
+                    ax2.set_yticklabels(yticklabels)
                     for i in range(5):
                         for j in range(5):
-                            ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-                    fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+                            val = int(run_grid[i, j])
+                            ax2.text(j, i, val if val != 0 else 0, ha='center', va='center', color='black', fontsize=12)
+                    cbar2 = fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
+                    cbar2.set_label('Runs (sum)')
                     plt.tight_layout(pad=3.0)
                     st.pyplot(fig2)
-
+            
             else:
                 st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+
 
 
                     
