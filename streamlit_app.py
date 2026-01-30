@@ -5190,10 +5190,11 @@ elif sidebar_option == "Strength vs Weakness":
                 return vals
             
             bowl_kinds_present = unique_vals_union('bowl_kind') # e.g. ['pace', 'spin']
+            bowl_kinds_present = [k for k in bowl_kinds_present if 'pace' in k.lower() or 'spin' in k.lower()]
             bowl_styles_present_short = unique_vals_union('bowl_style') # short codes as in data
             
             # Build list of full style names to show (all unique full names from map, ignoring data presence)
-            full_styles_to_show = sorted(set(bowl_style_map.values()))
+            full_styles_to_show = sorted(set(bowl_styles_present_short))
             
             # UI controls
             st.markdown("## Batter — Bowler Kind / Style exploration")
@@ -5382,8 +5383,8 @@ elif sidebar_option == "Strength vs Weakness":
                     (ctrl, 'False Shot % (not in control)', 'PuBu'),
                     (runs, 'Runs (sum)', 'Reds')
                 ]
-                
-                for ax, (arr, ttl, cmap) in zip(axes.flat, plot_list):
+                                
+                for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
                     safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
                     # autoscale vmax by 95th percentile to reduce outlier effect
                     flat = safe_arr.flatten()
@@ -5394,28 +5395,28 @@ elif sidebar_option == "Strength vs Weakness":
                         vmax = float(np.nanpercentile(flat, 95))
                         if vmax <= vmin:
                             vmax = vmin + 1.0
-                    
+                
                     im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
                     ax.set_title(ttl)
                     ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
                     ax.set_xticklabels(xticks, rotation=45, ha='right')
                     ax.set_yticklabels(yticklabels)
-                    
+                
                     # black minor-grid borders for cells
                     ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
                     ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
                     ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                     ax.tick_params(which='minor', bottom=False, left=False)
-                    
-                    # annotate N W for wicket cells (e.g., '2 W')
-                    for i in range(grids['n_rows']):
-                        for j in range(grids['n_cols']):
-                            w_count = int(wkt[i, j])
-                            if w_count > 0:
-                                w_text = f"{w_count} W" if w_count > 1 else 'W'
-                                ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                        bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                    
+                
+                    if ax_idx == 0:  # Only annotate wickets in the first plot (% of balls)
+                        for i in range(grids['n_rows']):
+                            for j in range(grids['n_cols']):
+                                w_count = int(wkt[i, j])
+                                if w_count > 0:
+                                    w_text = f"{w_count} W" if w_count > 1 else 'W'
+                                    ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
+                                            bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+                
                     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
                 
                 plt.tight_layout(rect=[0, 0.03, 1, 0.97])
@@ -5479,7 +5480,7 @@ elif sidebar_option == "Strength vs Weakness":
                     st.info(f"No short codes configured for style '{chosen_style_full}'.")
                 else:
                     # filter pf/bdf by bowl_style containing any of the short_codes (case-insensitive substring)
-                    def filter_by_short_codes(df, col='bowl_style', shorts=short_codes):
+                    def filter_by_short_codes(df, col='bowl_style', shorts=[chosen_style_full]):
                         if col not in df.columns:
                             return df.iloc[0:0]
                         mask = pd.Series(False, index=df.index)
