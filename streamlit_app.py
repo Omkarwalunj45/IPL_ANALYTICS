@@ -2153,7 +2153,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                        fallback_set_max: bool = False,
                        use_container_width: bool = True):
         """Save matplotlib figure to an in-memory buffer then display via st.image.
-        Uses use_container_width param (no deprecated use_column_width).
+        Uses use_container_width param (no deprecated use_container_width).
         """
         try:
             dpi = fig.get_dpi()
