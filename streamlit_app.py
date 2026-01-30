@@ -42,7 +42,7 @@ def display_figure_fixed_height(fig, height_px=1200, bg='white'):
         img_resized = bg_img
 
     # display with explicit width (same as new_w) so Streamlit doesn't auto-scale
-    st.image(img_resized, use_column_width=False, width=new_w)
+    st.image(img_resized, use_container_width=False, width=new_w)
     plt.close(fig)
 
 def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_id=None):
