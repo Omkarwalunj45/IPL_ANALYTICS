@@ -3136,30 +3136,131 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             # -------------------------
             # Pitchmaps below Wagon: two heatmaps (dots vs scoring) - increased height
             # -------------------------
+# --- Batsman pitchmaps: Dot Balls & Runs (6 lengths including Full Toss), mirrored for LHB ---
             import numpy as np
             import matplotlib.pyplot as plt
             
-            run_grid = np.zeros((5,5), dtype=float)
-            dot_grid = np.zeros((5,5), dtype=int)
+            # safety: ensure streamlit variable 'st' may or may not exist
+            try:
+                import streamlit as st  # noqa
+            except Exception:
+                st = None
             
+            # create 6x5 grids (lengths bottom->top: Short, Back of Length, Good, Full, Yorker, Full Toss)
+            N_ROWS = 6
+            N_COLS = 5
+            dot_grid = np.zeros((N_ROWS, N_COLS), dtype=int)
+            run_grid = np.zeros((N_ROWS, N_COLS), dtype=float)
+            wkt_grid = np.zeros((N_ROWS, N_COLS), dtype=int)
+            
+            # only proceed if required columns exist
             if line_col in final_df.columns and length_col in final_df.columns:
                 plot_df = final_df[[line_col, length_col, run_col]].copy().dropna(subset=[line_col, length_col])
+            
+                # helper mapping with fallbacks (tries global maps then heuristics)
+                def get_line_index(val):
+                    if val is None:
+                        return None
+                    # try global line_map if present
+                    lm = globals().get('line_map', None)
+                    if lm is not None:
+                        try:
+                            idx = lm.get(val)
+                            if idx is not None:
+                                return int(idx)
+                        except Exception:
+                            pass
+                    s = str(val).strip().lower()
+                    # heuristics left->right for RHB:
+                    # 0: wide outside off, 1: outside off, 2: on stumps, 3: down leg, 4: wide down leg
+                    if 'wide' in s and 'outside' in s and 'off' in s:
+                        return 0
+                    if 'outside off' in s or ('outside' in s and 'off' in s):
+                        return 1
+                    if ('on' in s and ('stump' in s or 'stumps' in s)) or 'middle' in s:
+                        return 2
+                    if 'down' in s and 'leg' in s:
+                        return 3
+                    if 'wide' in s and 'leg' in s:
+                        return 4
+                    # fallback by keywords
+                    if 'off' in s:
+                        return 1
+                    if 'leg' in s:
+                        return 3
+                    return None
+            
+                def get_length_index(val):
+                    """Map textual length to index 0..5 (0 short ... 5 full toss top)."""
+                    if val is None:
+                        return None
+                    # try global length_map first
+                    lm = globals().get('length_map', None)
+                    if lm is not None:
+                        try:
+                            idx = lm.get(val)
+                            if idx is not None:
+                                ii = int(idx)
+                                # if global map uses 0..4, keep only if within 0..5 else attempt heuristics
+                                if 0 <= ii < N_ROWS:
+                                    return ii
+                        except Exception:
+                            pass
+                    s = str(val).strip().lower()
+                    # priority: full toss -> top row
+                    if ('full' in s and 'toss' in s) or 'fulltoss' in s or 'full_toss' in s:
+                        return 5
+                    if 'york' in s:  # yorker
+                        return 4
+                    # full (but not full toss)
+                    if s == 'full' or ('full' in s and 'toss' not in s):
+                        return 3
+                    # good length / length
+                    if 'good length' in s or ('good' in s and 'length' in s) or (s == 'length' or 'length' in s):
+                        return 2
+                    # short good length
+                    if 'short good' in s or 'back of length' in s or 'short_good' in s:
+                        return 1
+                    if 'short' in s:
+                        return 0
+                    # fallback None
+                    return None
+            
+                # wicket types to mark (exclude run-out etc)
+                wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+            
+                # iterate and fill grids
                 for _, r in plot_df.iterrows():
-                    li = line_map.get(r[line_col], None)
-                    le = length_map.get(r[length_col], None)
+                    li = get_line_index(r[line_col])
+                    le = get_length_index(r[length_col])
                     if li is None or le is None:
                         continue
-                    runs_here = int(r[run_col])
-                    run_grid[le, li] += runs_here
-                    if runs_here == 0:
+                    # safety bounds
+                    if not (0 <= li < N_COLS and 0 <= le < N_ROWS):
+                        continue
+                    # runs
+                    try:
+                        rv = int(r[run_col] if r[run_col] is not None else 0)
+                    except Exception:
+                        try:
+                            rv = int(float(r[run_col]))
+                        except Exception:
+                            rv = 0
+                    run_grid[le, li] += rv
+                    if rv == 0:
                         dot_grid[le, li] += 1
+                    # check dismissal if present in final_df
+                    if 'dismissal' in final_df.columns:
+                        d = r.get('dismissal', '')
+                        if isinstance(d, str) and d.strip().lower() in wicket_set:
+                            # mark wicket (for batsman chart, likely 0 or 1)
+                            wkt_grid[le, li] += 1
             
-                # Determine batter handedness (look for bat_hand column name if available)
+                # Determine batter handedness for mirroring
                 try:
-                    bat_hand_col_name = bat_hand_col  # if your app defines this variable
+                    bat_hand_col_name = bat_hand_col
                 except NameError:
-                    bat_hand_col_name = 'bat_hand'   # fallback to common column name
-            
+                    bat_hand_col_name = 'bat_hand'
                 batting_style_val = None
                 is_lhb = False
                 if bat_hand_col_name in final_df.columns and not final_df[bat_hand_col_name].dropna().empty:
@@ -3170,55 +3271,81 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 if is_lhb:
                     run_grid = np.fliplr(run_grid)
                     dot_grid = np.fliplr(dot_grid)
+                    wkt_grid = np.fliplr(wkt_grid)
             
-                # xtick labels (line positions left->right for RHB). For LHB we want them mirrored as well,
-                # so reverse the xticklabels when is_lhb is True.
+                # xtick labels (line positions left->right for RHB). For LHB we reverse labels to match flipped arrays
                 xticklabels = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                 if is_lhb:
                     xticklabels = xticklabels[::-1]
+                yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss']  # bottom->top
             
-                yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker']
-            
+                # Plotting: two tall heatmaps side-by-side (Dot Balls, Runs)
                 st.markdown("### Pitchmaps")
                 c1, c2 = st.columns([1, 1])
             
+                # dot heatmap (no numbers in cells)
                 with c1:
                     st.markdown("**Dot Balls**")
-                    fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height
+                    fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)
                     im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
-                    ax1.set_xticks(range(5))
-                    ax1.set_yticks(range(5))
+                    ax1.set_xticks(range(N_COLS))
+                    ax1.set_yticks(range(N_ROWS))
                     ax1.set_xticklabels(xticklabels, rotation=45, ha='right')
                     ax1.set_yticklabels(yticklabels)
-                    for i in range(5):
-                        for j in range(5):
-                            val = int(dot_grid[i, j])
-                            # If zero keep it visible as 0 (you can change formatting if needed)
-                            ax1.text(j, i, val if val != 0 else 0, ha='center', va='center', color='black', fontsize=12)
+                    # black minor gridlines for borders
+                    ax1.set_xticks(np.arange(-0.5, N_COLS, 1), minor=True)
+                    ax1.set_yticks(np.arange(-0.5, N_ROWS, 1), minor=True)
+                    ax1.grid(which='minor', color='black', linewidth=0.6, alpha=0.8)
+                    ax1.tick_params(which='minor', bottom=False, left=False)
+                    # annotate only single 'W' if wicket exists in that cell
+                    for i in range(N_ROWS):
+                        for j in range(N_COLS):
+                            if int(wkt_grid[i, j]) > 0:
+                                # show 'W' (single char), not 'N W'
+                                ax1.text(j, i, "W", ha='center', va='center', fontsize=16, weight='bold',
+                                         color='gold', bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
                     cbar1 = fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-                    cbar1.set_label('Dot count')
+                    cbar1.set_label('Dot count', fontsize=10)
                     plt.tight_layout(pad=3.0)
-                    st.pyplot(fig1)
+                    if st:
+                        st.pyplot(fig1)
+                    else:
+                        plt.show()
+                    plt.close(fig1)
             
+                # runs heatmap (no numbers in cells)
                 with c2:
                     st.markdown("**Scoring Balls**")
-                    fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height
+                    fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)
                     im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
-                    ax2.set_xticks(range(5))
-                    ax2.set_yticks(range(5))
+                    ax2.set_xticks(range(N_COLS))
+                    ax2.set_yticks(range(N_ROWS))
                     ax2.set_xticklabels(xticklabels, rotation=45, ha='right')
                     ax2.set_yticklabels(yticklabels)
-                    for i in range(5):
-                        for j in range(5):
-                            val = int(run_grid[i, j])
-                            ax2.text(j, i, val if val != 0 else 0, ha='center', va='center', color='black', fontsize=12)
+                    # black minor gridlines
+                    ax2.set_xticks(np.arange(-0.5, N_COLS, 1), minor=True)
+                    ax2.set_yticks(np.arange(-0.5, N_ROWS, 1), minor=True)
+                    ax2.grid(which='minor', color='black', linewidth=0.6, alpha=0.8)
+                    ax2.tick_params(which='minor', bottom=False, left=False)
+                    # annotate 'W' only where wicket occurred
+                    for i in range(N_ROWS):
+                        for j in range(N_COLS):
+                            if int(wkt_grid[i, j]) > 0:
+                                ax2.text(j, i, "W", ha='center', va='center', fontsize=16, weight='bold',
+                                         color='gold', bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
                     cbar2 = fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-                    cbar2.set_label('Runs (sum)')
+                    cbar2.set_label('Runs (sum)', fontsize=10)
                     plt.tight_layout(pad=3.0)
-                    st.pyplot(fig2)
-            
+                    if st:
+                        st.pyplot(fig2)
+                    else:
+                        plt.show()
+                    plt.close(fig2)
             else:
-                st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+                if st:
+                    st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
+                else:
+                    print("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
 
 
 
