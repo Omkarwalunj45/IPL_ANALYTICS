@@ -3097,10 +3097,10 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             
                 # attempt safe plotting in Streamlit if available; fallbacks included
                 plotted = False
-                try:
-                    safe_st_pyplot  # if you have a utility named this in your app
-                except NameError:
-                    safe_st_pyplot = None
+                # try:
+                #     safe_st_pyplot  # if you have a utility named this in your app
+                # except NameError:
+                #     safe_st_pyplot = None
             
                 if safe_st_pyplot:
                     try:
