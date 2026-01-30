@@ -4819,7 +4819,7 @@ elif sidebar_option == "Strength vs Weakness":
     }
     line_map = LINE_MAP
     length_map = LENGTH_MAP
-   st.write(pf.bowl_style.unique())
+    st.write(pf.bowl_style.unique())
 
     def build_boundaries_grid_local(df_local):
         grid = np.zeros((6,5), dtype=int)
