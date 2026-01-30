@@ -5174,36 +5174,8 @@ elif sidebar_option == "Strength vs Weakness":
             bowl_kinds_present = [k for k in bowl_kinds_present if 'pace' in k.lower() or 'spin' in k.lower()]
         
             # Use the normalized column for unique values
-            bowl_styles_present = unique_vals_union('bowl_style_norm')
+            bowl_styles_present = unique_vals_union('bowl_style')
                         # Normalization map: merge similar styles
-            style_normalization = {
-                'right-arm medium': 'Right-arm Medium-Fast',
-                'rm': 'Right-arm Medium-Fast',
-                'right arm medium': 'Right-arm Medium-Fast',
-                'right-arm medium fast': 'Right-arm Medium-Fast',
-                
-                'left-arm medium': 'Left-arm Medium-Fast',
-                'lm': 'Left-arm Medium-Fast',
-                'left arm medium': 'Left-arm Medium-Fast',
-                'left-arm medium fast': 'Left-arm Medium-Fast',
-                
-                # You can add more if needed, e.g.:
-                # 'right-arm fast medium': 'Right-arm Medium-Fast',
-                # 'rmf': 'Right-arm Medium-Fast',
-            }
-            
-            # Normalize all values in pf and bdf (create a temporary normalized column)
-            for df in [pf, bdf]:
-                if 'bowl_style' in df.columns:
-                    # Create a normalized version
-                    df['bowl_style_norm'] = df['bowl_style'].astype(str).str.strip().str.lower()
-                    df['bowl_style_norm'] = df['bowl_style_norm'].replace(style_normalization)
-                    # If no match in map, keep original (case preserved)
-                    df['bowl_style_norm'] = df.apply(
-                        lambda row: row['bowl_style'] if row['bowl_style_norm'] not in style_normalization.values() else row['bowl_style_norm'],
-                        axis=1
-                    )# use actual data values
-        
             # UI controls
             st.markdown("## Batter — Bowler Kind / Style exploration")
             st.write("Select a Bowler Kind (value as stored) or select a Bowler Style (value as stored).")
@@ -5484,7 +5456,7 @@ elif sidebar_option == "Strength vs Weakness":
 # ---------- When user selects a style ----------
             if chosen_style and chosen_style != '-- none --':
                     # Filter using the normalized column
-                    def filter_by_style(df, col_norm='bowl_style_norm', style=chosen_style):
+                    def filter_by_style(df, col_norm='bowl_style', style=chosen_style):
                         if col_norm not in df.columns:
                             return df.iloc[0:0]
                         # Exact match on normalized value
