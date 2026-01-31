@@ -5752,7 +5752,8 @@ elif sidebar_option == "Strength vs Weakness":
             
             # Required objects check
 # import numpy as np
-# import pandas as pd
+            # import numpy as np
+            # import pandas as pd
             # import matplotlib.pyplot as plt
             # import streamlit as st
             
@@ -5816,7 +5817,7 @@ elif sidebar_option == "Strength vs Weakness":
                             continue
                     return None
             
-                # ---------- grids builder (unchanged - for pitchmaps) ----------
+                # ---------- grids builder ----------
                 def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', runs_col_candidates=('batruns', 'score'),
                                       control_col='control', dismissal_col='dismissal'):
                     if 'length_map' in globals() and isinstance(length_map, dict) and len(length_map) > 0:
@@ -5895,7 +5896,7 @@ elif sidebar_option == "Strength vs Weakness":
                         'n_rows': n_rows, 'n_cols': n_cols
                     }
             
-                # ---------- display utility (pitchmaps - unchanged) ----------
+                # ---------- display utility ----------
                 def display_pitchmaps_from_df(df_src, title_prefix):
                     if df_src is None or df_src.empty:
                         st.info(f"No deliveries to show for {title_prefix}")
@@ -6007,60 +6008,92 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
             
-                # ---------- FIXED: Caught Dismissals Wagon — ONLY base field + red dots ----------
+                # ---------- FIXED: Caught Dismissals Wagon — ONLY base field + red dots, with debug ----------
                 def draw_caught_dismissals_wagon(df_wagon, batter_name):
-                    # Filter ONLY caught dismissals
+                    # Debug Step 1: Filter caught dismissals
+                    print("Debug Step 1: Filtering rows where dismissal contains 'caught'")
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
                     ].copy()
+                    print(f"Number of caught dismissal rows found: {len(caught_df)}")
+                    # commented : Debug for caught
             
+                    # Debug Step 2: Check if empty
+                    print("Debug Step 2: Checking if filtered DataFrame is empty")
                     if caught_df.empty:
                         st.info(f"No caught dismissals found for {batter_name} in this selection.")
+                        print("No caught dismissals - exiting early")
                         return
+                    print("Filtered DataFrame is not empty")
+                    # commented : Debug for caught
             
-                    # Check coordinates exist
+                    # Debug Step 3: Check for coordinate columns
+                    print("Debug Step 3: Checking for 'wagonX' and 'wagonY' columns")
                     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
                         st.warning("Columns 'wagonX' and/or 'wagonY' not found — cannot plot caught dismissals.")
+                        print("Missing coordinate columns - exiting early")
                         return
+                    print("Coordinate columns found")
+                    # commented : Debug for caught
             
-                    # Get positive coordinates directly from dataset
+                    # Debug Step 4: Extract coordinates
+                    print("Debug Step 4: Extracting x_coords and y_coords")
                     x_coords = caught_df['wagonX'].astype(float)
                     y_coords = caught_df['wagonY'].astype(float)
+                    print(f"Extracted {len(x_coords)} coordinate pairs")
+                    print(f"Sample coordinates (first 5): {list(zip(x_coords.head(), y_coords.head()))}")
+                    # commented : Debug for caught
             
-                    # Draw blank base wagon field (no labels, no runs, no %)
+                    # Debug Step 5: Draw blank base field
+                    print("Debug Step 5: Drawing blank base wagon field using empty DataFrame")
                     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
                         try:
-                            # Pass empty DataFrame to get ONLY the base field (circle, pitch, lines, origin)
                             fig_w = draw_cricket_field_with_run_totals_requested(df_wagon.iloc[0:0], "")
-            
-                            # Remove any unwanted text/labels that might be added by the base function
-                            ax = fig_w.gca()
-                            ax.set_title("")  # remove any title
-                            for text in ax.texts:  # remove ALL text elements (zones, runs, %)
-                                text.set_visible(False)
-            
-                            # Add ONLY red scatter points
-                            ax.scatter(
-                                x_coords, y_coords,
-                                color='red', s=120, alpha=0.9, edgecolor='black', linewidth=1.2,
-                                marker='o', zorder=10  # zorder ensures dots are on top
-                            )
-            
-                            # Simple legend only for the red dot
-                            ax.scatter([], [], color='red', s=120, label='Caught Dismissal Locations')
-                            ax.legend(loc='upper right', fontsize=10, frameon=True, bbox_to_anchor=(1.0, 1.0))
-            
-                            # Display
-                            safe_fn = globals().get('safe_st_pyplot', None)
-                            if callable(safe_fn):
-                                safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                            else:
-                                st.pyplot(fig_w)
-            
+                            print("Base field drawn successfully")
                         except Exception as e:
-                            st.error(f"Caught dismissals plot failed: {e}")
+                            st.error(f"Base field drawing failed: {e}")
+                            print(f"Error in drawing base field: {e}")
+                            return
                     else:
                         st.warning("Base wagon drawing function not found — cannot plot caught dismissals.")
+                        print("Base drawing function missing - exiting early")
+                        return
+                    # commented : Debug for caught
+            
+                    # Debug Step 6: Remove all text labels
+                    print("Debug Step 6: Removing all text labels from the axis")
+                    ax = fig_w.gca()
+                    for text in ax.texts:
+                        text.set_visible(False)
+                    print(f"Removed {len(ax.texts)} text elements")
+                    # commented : Debug for caught
+            
+                    # Debug Step 7: Add red scatter points
+                    print("Debug Step 7: Adding red scatter points to the axis")
+                    ax.scatter(
+                        x_coords, y_coords,
+                        color='red', s=120, alpha=0.9, edgecolor='black', linewidth=1.2,
+                        marker='o', zorder=10
+                    )
+                    print("Red scatter points added")
+                    # commented : Debug for caught
+            
+                    # Debug Step 8: Add legend
+                    print("Debug Step 8: Adding legend for red dots")
+                    ax.scatter([], [], color='red', s=120, label='Caught Dismissal Locations')
+                    ax.legend(loc='upper right', fontsize=10, frameon=True, bbox_to_anchor=(1.0, 1.0))
+                    print("Legend added")
+                    # commented : Debug for caught
+            
+                    # Debug Step 9: Display the figure
+                    print("Debug Step 9: Displaying the figure")
+                    safe_fn = globals().get('safe_st_pyplot', None)
+                    if callable(safe_fn):
+                        safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                    else:
+                        st.pyplot(fig_w)
+                    print("Figure displayed")
+                    # commented : Debug for caught
             
                 # ---------- When user selects a kind ----------
                 if chosen_kind and chosen_kind != '-- none --':
@@ -6083,7 +6116,7 @@ elif sidebar_option == "Strength vs Weakness":
                         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
                         draw_wagon_if_available(df_use, player_selected)
             
-                        # Caught dismissals - only red dots on blank base field
+                        # NEW: Caught dismissals wagon (red dots only)
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
             
@@ -6110,7 +6143,7 @@ elif sidebar_option == "Strength vs Weakness":
                         st.markdown(f"### Detailed view — Bowler Style: {chosen_style}")
                         draw_wagon_if_available(df_use, player_selected)
             
-                        # Caught dismissals - only red dots on blank base field
+                        # NEW: Caught dismissals wagon (red dots only)
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
             
