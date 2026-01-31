@@ -5048,10 +5048,10 @@ elif sidebar_option == "Strength vs Weakness":
             if not dismissal_text or str(dismissal_text).strip() == '':
                 return False
             dd = str(dismissal_text).lower()
-                for token in WICKET_TYPES:
+            for token in WICKET_TYPES:
                     if token in dd:
                         return True
-                return False
+            return False
    
         working['is_wkt_tmp'] = working.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, axis=1)
    
