@@ -2298,7 +2298,7 @@ elif sidebar_option == "Matchup Analysis":
         def finalize_and_show(df_list, primary_col_name, title, header_color="#efe6ff"):
             if not df_list:
                 st.info(f"No {title.lower()} data available for this matchup.")
-                return
+                return None
            
             # Concatenate all formatted dataframes
             out = pd.concat(df_list, ignore_index=True)
@@ -2394,9 +2394,12 @@ elif sidebar_option == "Matchup Analysis":
                         selected_df = tdf[tdf[year_col] == int(selected_year)].copy()
                     if not selected_df.empty:
                         st.markdown(f"### Wagon and Pitchmaps for {selected_year}")
-                        # Call wagon and pitchmaps
-                        draw_wagon_if_available(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
-                        display_pitchmaps_from_df(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
+                        # Call wagon and pitchmaps (with safety checks)
+                        try:
+                            draw_wagon_if_available(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
+                            display_pitchmaps_from_df(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
+                        except NameError as ne:
+                            st.warning(f"Visualization functions not available: {ne}. Define draw_wagon_if_available and display_pitchmaps_from_df earlier in the script.")
         # -------------------
         # Match grouping
         # -------------------
@@ -2434,6 +2437,18 @@ elif sidebar_option == "Matchup Analysis":
                         file_name=f"{batter_name}_vs_{bowler_name}_matchwise.csv",
                         mime="text/csv"
                     )
+                # Visualize selected match
+                if all_matches:
+                    match_list = [str(m) for m in match_ids]
+                    selected_match = st.selectbox("Select Match to Visualize Wagon and Pitchmaps", match_list, index=0)
+                    selected_df = tdf[tdf[match_col] == int(selected_match)].copy()
+                    if not selected_df.empty:
+                        st.markdown(f"### Wagon and Pitchmaps for Match {selected_match}")
+                        try:
+                            draw_wagon_if_available(selected_df, f"{batter_name} vs {bowler_name} - Match {selected_match}")
+                            display_pitchmaps_from_df(selected_df, f"{batter_name} vs {bowler_name} - Match {selected_match}")
+                        except NameError as ne:
+                            st.warning(f"Visualization functions not available: {ne}. Define draw_wagon_if_available and display_pitchmaps_from_df earlier in the script.")
         # -------------------
         # Venue grouping
         # -------------------
@@ -2471,6 +2486,18 @@ elif sidebar_option == "Matchup Analysis":
                         file_name=f"{batter_name}_vs_{bowler_name}_venuewise.csv",
                         mime="text/csv"
                     )
+                # Visualize selected venue
+                if all_venues:
+                    venue_list = [str(v) for v in venues]
+                    selected_venue = st.selectbox("Select Venue to Visualize Wagon and Pitchmaps", venue_list, index=0)
+                    selected_df = tdf[tdf[venue_col] == selected_venue].copy()
+                    if not selected_df.empty:
+                        st.markdown(f"### Wagon and Pitchmaps for Venue {selected_venue}")
+                        try:
+                            draw_wagon_if_available(selected_df, f"{batter_name} vs {bowler_name} - Venue {selected_venue}")
+                            display_pitchmaps_from_df(selected_df, f"{batter_name} vs {bowler_name} - Venue {selected_venue}")
+                        except NameError as ne:
+                            st.warning(f"Visualization functions not available: {ne}. Define draw_wagon_if_available and display_pitchmaps_from_df earlier in the script.")
         # -------------------
         # Inning grouping
         # -------------------
@@ -2508,6 +2535,18 @@ elif sidebar_option == "Matchup Analysis":
                         file_name=f"{batter_name}_vs_{bowler_name}_inningwise.csv",
                         mime="text/csv"
                     )
+                # Visualize selected inning
+                if all_inns:
+                    inning_list = [str(inn) for inn in innings]
+                    selected_inning = st.selectbox("Select Inning to Visualize Wagon and Pitchmaps", inning_list, index=0)
+                    selected_df = tdf[tdf[inning_col] == int(selected_inning)].copy()
+                    if not selected_df.empty:
+                        st.markdown(f"### Wagon and Pitchmaps for Inning {selected_inning}")
+                        try:
+                            draw_wagon_if_available(selected_df, f"{batter_name} vs {bowler_name} - Inning {selected_inning}")
+                            display_pitchmaps_from_df(selected_df, f"{batter_name} vs {bowler_name} - Inning {selected_inning}")
+                        except NameError as ne:
+                            st.warning(f"Visualization functions not available: {ne}. Define draw_wagon_if_available and display_pitchmaps_from_df earlier in the script.")
         else:
             st.info("Unknown grouping option selected.")
 
