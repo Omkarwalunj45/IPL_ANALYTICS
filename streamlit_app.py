@@ -11,6 +11,19 @@ st.set_page_config(layout="wide")
 
 # --- helper: render matplotlib fig as fixed-pixel-height image in Streamlit ---
 from PIL import Image
+def draw_wagon_if_available(df_wagon, batter_name):
+    if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
+        try:
+            fig_w = draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
+            safe_fn = globals().get('safe_st_pyplot', None)
+            if callable(safe_fn):
+                safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+            else:
+                st.pyplot(fig_w)
+        except Exception as e:
+            st.error(f"Wagon drawing function exists but raised: {e}")
+    else:
+        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
 
 def display_figure_fixed_height(fig, height_px=1200, bg='white'):
     """
