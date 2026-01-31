@@ -5745,6 +5745,7 @@ elif sidebar_option == "Strength vs Weakness":
             st.dataframe(bs_df, use_container_width=True)
 
             # import numpy as np
+            # import numpy as np
             # import pandas as pd
             # import matplotlib.pyplot as plt
             # import streamlit as st
@@ -5888,7 +5889,7 @@ elif sidebar_option == "Strength vs Weakness":
                         'n_rows': n_rows, 'n_cols': n_cols
                     }
             
-                # ---------- display utility (unchanged) ----------
+                # ---------- display utility (pitchmaps - unchanged) ----------
                 def display_pitchmaps_from_df(df_src, title_prefix):
                     if df_src is None or df_src.empty:
                         st.info(f"No deliveries to show for {title_prefix}")
@@ -5985,7 +5986,7 @@ elif sidebar_option == "Strength vs Weakness":
                     finally:
                         plt.close(fig)
             
-                # ---------- Wagon chart (existing) ----------
+                # ---------- Wagon chart (existing - runs) ----------
                 def draw_wagon_if_available(df_wagon, batter_name):
                     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
                         try:
@@ -6000,9 +6001,9 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
             
-                # ---------- NEW: Caught Dismissals Wagon (red scatter points) ----------
+                # ---------- NEW: Caught Dismissals Scatter (only red dots, no labels) ----------
                 def draw_caught_dismissals_wagon(df_wagon, batter_name):
-                    # Filter only caught dismissals
+                    # Filter only rows where dismissal contains 'caught' (case-insensitive)
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
                     ].copy()
@@ -6016,29 +6017,29 @@ elif sidebar_option == "Strength vs Weakness":
                         st.warning("Columns 'wagonX' and/or 'wagonY' not found — cannot plot caught dismissals.")
                         return
             
-                    # Extract coordinates (positive as per your dataset)
+                    # Get coordinates (positive values as per dataset)
                     x_coords = caught_df['wagonX'].astype(float)
                     y_coords = caught_df['wagonY'].astype(float)
             
-                    # Reuse the same wagon drawing function but override to show only scatter
+                    # Draw the base empty wagon field (no run labels or percentages)
                     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
                         try:
-                            # Get the base empty wagon figure (without run labels)
-                            fig_w = draw_cricket_field_with_run_totals_requested(caught_df.iloc[0:0], batter_name)  # empty df to get blank field
+                            # Pass empty df to get blank field with circle, pitch, lines, origin
+                            fig_w = draw_cricket_field_with_run_totals_requested(df_wagon.iloc[0:0], "")
             
-                            # Add red scatter points on top
-                            ax = fig_w.gca()  # get current axis
+                            # Overlay only red scatter points
+                            ax = fig_w.gca()  # get the axis
                             ax.scatter(
                                 x_coords, y_coords,
-                                color='red', s=80, alpha=0.8, edgecolor='black', linewidth=0.5,
-                                label='Caught Dismissals'
+                                color='red', s=100, alpha=0.9, edgecolor='black', linewidth=1,
+                                label='Caught Dismissal Locations'
                             )
-                            ax.legend(loc='upper right', fontsize=10)
+                            ax.legend(loc='upper right', fontsize=10, frameon=True)
             
-                            # Update title
-                            ax.set_title(f"{batter_name}'s Caught Dismissals", fontsize=14, weight='bold')
+                            # Set title
+                            ax.set_title(f"{batter_name}'s Caught Dismissals", fontsize=14, weight='bold', pad=15)
             
-                            # Display
+                            # Display the figure
                             safe_fn = globals().get('safe_st_pyplot', None)
                             if callable(safe_fn):
                                 safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
@@ -6046,7 +6047,7 @@ elif sidebar_option == "Strength vs Weakness":
                                 st.pyplot(fig_w)
             
                         except Exception as e:
-                            st.error(f"Caught dismissals wagon failed: {e}")
+                            st.error(f"Caught dismissals scatter plot failed: {e}")
                     else:
                         st.warning("Base wagon drawing function not found — cannot plot caught dismissals.")
             
@@ -6070,9 +6071,11 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
                         draw_wagon_if_available(df_use, player_selected)
-                        # NEW: Show caught dismissals wagon right after
+                        
+                        # NEW: Caught dismissals wagon (red dots only)
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
+            
                         display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
             
                 # ---------- When user selects a style ----------
@@ -6095,9 +6098,11 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.markdown(f"### Detailed view — Bowler Style: {chosen_style}")
                         draw_wagon_if_available(df_use, player_selected)
-                        # NEW: Show caught dismissals wagon right after
+                        
+                        # NEW: Caught dismissals wagon (red dots only)
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
+            
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
        
         # The rest of the code (wagon wheels, pitchmaps, shot productivity, etc.) will now use the phase-filtered pf/bdf automatically
