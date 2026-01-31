@@ -2206,6 +2206,14 @@ elif sidebar_option == "Matchup Analysis":
                 return x.copy()
             else:
                 return pd.DataFrame(x)
+    try:
+        safe_get_col
+    except NameError:
+        def safe_get_col(df_local, candidates, default=None):
+            for c in candidates:
+                if c in df_local.columns:
+                    return c
+            return default
     bdf = as_dataframe(df)
     # Detect column names in your data
     batter_col = safe_get_col(bdf, ['bat', 'batsman'], default=None)
@@ -2246,6 +2254,13 @@ elif sidebar_option == "Matchup Analysis":
                 except Exception:
                     pass
         # Download raw matchup CSV
+        csv = matchup_df.to_csv(index=False)
+        st.download_button(
+            label="Download raw matchup rows (CSV)",
+            data=csv,
+            file_name=f"{batter_name}_vs_{bowler_name}_matchup.csv",
+            mime="text/csv"
+        )
         # Helper: Apply formatting to individual summary dataframe
         def format_summary_df(temp_summary):
             """Format a single summary dataframe with proper types"""
@@ -2308,6 +2323,30 @@ elif sidebar_option == "Matchup Analysis":
             st.markdown(f"### {title}")
             st.dataframe(out, use_container_width=True)
             return out
+        # Cumulator function (assuming based on typical stats; adjust as needed)
+        def cumulator(temp_df):
+            if temp_df.empty:
+                return pd.DataFrame()
+            runs_col = safe_get_col(temp_df, ['batruns', 'batsman_runs', 'score', 'runs'])
+            if runs_col is None:
+                return pd.DataFrame()
+            balls = len(temp_df)
+            runs = int(temp_df[runs_col].sum())
+            fours = int((temp_df[runs_col] == 4).sum())
+            sixes = int((temp_df[runs_col] == 6).sum())
+            wkts = int(temp_df['is_wkt'].sum()) if 'is_wkt' in temp_df.columns else 0
+            avg = runs / wkts if wkts > 0 else np.inf
+            sr = (runs / balls * 100) if balls > 0 else 0.0
+            summary = pd.DataFrame({
+                'balls': [balls],
+                'runs': [runs],
+                'wickets': [wkts],
+                'avg': [avg],
+                'sr': [sr],
+                'fours': [fours],
+                'sixes': [sixes]
+            })
+            return summary
         # -------------------
         # Year grouping
         # -------------------
@@ -2323,7 +2362,6 @@ elif sidebar_option == "Matchup Analysis":
                     if temp.empty:
                         continue
                     temp_summary = cumulator(temp)
-                    temp_summary = as_dataframe(temp_summary)
                     if temp_summary.empty:
                         continue
                     # FORMAT BEFORE ADDING TO LIST
@@ -2331,20 +2369,21 @@ elif sidebar_option == "Matchup Analysis":
                     temp_summary.insert(0, 'year', s)
                     all_seasons.append(temp_summary)
                 out = finalize_and_show(all_seasons, 'year', "Yearwise Performance", header_color="#efe6ff")
-                # Add Batter and Bowler columns (in uppercase)
-                out['Batsman'] = str(batter_name)
-                out['Bowler'] = str(bowler_name)
-               
-                # Move them to the front if you want them as leading columns
-                cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
-                out = out[cols]
-                csv = out.to_csv(index=False)
-                st.download_button(
-                    label="Download raw matchup rows (CSV)",
-                    data=csv,
-                    file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
-                    mime="text/csv"
-                )
+                if out is not None:
+                    # Add Batter and Bowler columns (in uppercase)
+                    out['Batsman'] = batter_name
+                    out['Bowler'] = bowler_name
+                   
+                    # Move them to the front if you want them as leading columns
+                    cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
+                    out = out[cols]
+                    csv = out.to_csv(index=False)
+                    st.download_button(
+                        label="Download yearwise summary (CSV)",
+                        data=csv,
+                        file_name=f"{batter_name}_vs_{bowler_name}_yearwise.csv",
+                        mime="text/csv"
+                    )
                 # Visualize selected year
                 if all_seasons:
                     seasons_list = ['Overall'] + [str(s) for s in seasons]
@@ -2355,7 +2394,7 @@ elif sidebar_option == "Matchup Analysis":
                         selected_df = tdf[tdf[year_col] == int(selected_year)].copy()
                     if not selected_df.empty:
                         st.markdown(f"### Wagon and Pitchmaps for {selected_year}")
-                        # Assume you have draw_wagon and display_pitchmaps_from_df from batter section
+                        # Call wagon and pitchmaps
                         draw_wagon_if_available(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
                         display_pitchmaps_from_df(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
         # -------------------
@@ -2373,7 +2412,6 @@ elif sidebar_option == "Matchup Analysis":
                     if temp.empty:
                         continue
                     temp_summary = cumulator(temp)
-                    temp_summary = as_dataframe(temp_summary)
                     if temp_summary.empty:
                         continue
                     # FORMAT BEFORE ADDING TO LIST
@@ -2381,20 +2419,21 @@ elif sidebar_option == "Matchup Analysis":
                     temp_summary.insert(0, 'match_id', m)
                     all_matches.append(temp_summary)
                 out = finalize_and_show(all_matches, 'match_id', "Matchwise Performance", header_color="#efe6ff")
-                # Add Batter and Bowler columns (in uppercase)
-                out['Batsman'] = str(batter_name)
-                out['Bowler'] = str(bowler_name)
-               
-                # Move them to the front if you want them as leading columns
-                cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
-                out = out[cols]
-                csv = out.to_csv(index=False)
-                st.download_button(
-                    label="Download raw matchup rows (CSV)",
-                    data=csv,
-                    file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
-                    mime="text/csv"
-                )
+                if out is not None:
+                    # Add Batter and Bowler columns (in uppercase)
+                    out['Batsman'] = batter_name
+                    out['Bowler'] = bowler_name
+                   
+                    # Move them to the front if you want them as leading columns
+                    cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
+                    out = out[cols]
+                    csv = out.to_csv(index=False)
+                    st.download_button(
+                        label="Download matchwise summary (CSV)",
+                        data=csv,
+                        file_name=f"{batter_name}_vs_{bowler_name}_matchwise.csv",
+                        mime="text/csv"
+                    )
         # -------------------
         # Venue grouping
         # -------------------
@@ -2410,7 +2449,6 @@ elif sidebar_option == "Matchup Analysis":
                     if temp.empty:
                         continue
                     temp_summary = cumulator(temp)
-                    temp_summary = as_dataframe(temp_summary)
                     if temp_summary.empty:
                         continue
                     # FORMAT BEFORE ADDING TO LIST
@@ -2418,20 +2456,21 @@ elif sidebar_option == "Matchup Analysis":
                     temp_summary.insert(0, 'venue', v)
                     all_venues.append(temp_summary)
                 out = finalize_and_show(all_venues, 'venue', "Venuewise Performance", header_color="#efe6ff")
-                # Add Batter and Bowler columns (in uppercase)
-                out['Batsman'] = str(batter_name)
-                out['Bowler'] = str(bowler_name)
-               
-                # Move them to the front if you want them as leading columns
-                cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
-                out = out[cols]
-                csv = out.to_csv(index=False)
-                st.download_button(
-                    label="Download raw matchup rows (CSV)",
-                    data=csv,
-                    file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
-                    mime="text/csv"
-                )
+                if out is not None:
+                    # Add Batter and Bowler columns (in uppercase)
+                    out['Batsman'] = batter_name
+                    out['Bowler'] = bowler_name
+                   
+                    # Move them to the front if you want them as leading columns
+                    cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
+                    out = out[cols]
+                    csv = out.to_csv(index=False)
+                    st.download_button(
+                        label="Download venuewise summary (CSV)",
+                        data=csv,
+                        file_name=f"{batter_name}_vs_{bowler_name}_venuewise.csv",
+                        mime="text/csv"
+                    )
         # -------------------
         # Inning grouping
         # -------------------
@@ -2447,7 +2486,6 @@ elif sidebar_option == "Matchup Analysis":
                     if temp.empty:
                         continue
                     temp_summary = cumulator(temp)
-                    temp_summary = as_dataframe(temp_summary)
                     if temp_summary.empty:
                         continue
                     # FORMAT BEFORE ADDING TO LIST
@@ -2455,22 +2493,23 @@ elif sidebar_option == "Matchup Analysis":
                     temp_summary.insert(0, 'inning', inn)
                     all_inns.append(temp_summary)
                 out = finalize_and_show(all_inns, 'inning', "Inningwise Performance", header_color="#efe6ff")
-                # Add Batter and Bowler columns (in uppercase)
-                out['Batsman'] = str(batter_name)
-                out['Bowler'] = str(bowler_name)
-               
-                # Move them to the front if you want them as leading columns
-                cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
-                out = out[cols]
-                csv = out.to_csv(index=False)
-                st.download_button(
-                    label="Download raw matchup rows (CSV)",
-                    data=csv,
-                    file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
-                    mime="text/csv"
-                )
+                if out is not None:
+                    # Add Batter and Bowler columns (in uppercase)
+                    out['Batsman'] = batter_name
+                    out['Bowler'] = bowler_name
+                   
+                    # Move them to the front if you want them as leading columns
+                    cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
+                    out = out[cols]
+                    csv = out.to_csv(index=False)
+                    st.download_button(
+                        label="Download inningwise summary (CSV)",
+                        data=csv,
+                        file_name=f"{batter_name}_vs_{bowler_name}_inningwise.csv",
+                        mime="text/csv"
+                    )
         else:
-            st.info("Unknown grouping option selected.")
+            st.info("Unknown grouping option selected.")info("Unknown grouping option selected.")
 
 elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
     # Match by Match Analysis - full updated code with sector-label wagon wheel
