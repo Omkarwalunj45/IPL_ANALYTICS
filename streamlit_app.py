@@ -23,14 +23,7 @@ st.set_page_config(layout="wide")
 
 # bowl_styles_present = unique_vals_union('bowl_style')
 
-# UI controls
-st.markdown("## Batter — Bowler Kind / Style exploration")
-st.write("Select a Bowler Kind (value as stored) or select a Bowler Style (value as stored).")
-kind_opts = ['-- none --'] + bowl_kinds_present
-style_opts = ['-- none --'] + bowl_styles_present
 
-chosen_kind = st.selectbox("Bowler Kind", options=kind_opts, index=0)
-chosen_style = st.selectbox("Bowler Style", options=style_opts, index=0)
 
 # ---------- robust map-lookup helpers ----------
 def _norm_key(s):
