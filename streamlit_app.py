@@ -9,19 +9,19 @@ from io import BytesIO
 from PIL import Image
 st.set_page_config(layout="wide")
 
-def unique_vals_union(col):
-    vals = []
-    for df in (pf, bdf):
-        if col in df.columns:
-            vals.extend(df[col].dropna().astype(str).str.strip().tolist())
-    vals = sorted({v for v in vals if str(v).strip() != ''})
-    return vals
+# def unique_vals_union(col):
+#     vals = []
+#     for df in (pf, bdf):
+#         if col in df.columns:
+#             vals.extend(df[col].dropna().astype(str).str.strip().tolist())
+#     vals = sorted({v for v in vals if str(v).strip() != ''})
+#     return vals
 
-bowl_kinds_present = unique_vals_union('bowl_kind') # e.g. ['pace', 'spin']
-# Limit to pace/spin only
-bowl_kinds_present = [k for k in bowl_kinds_present if 'pace' in k.lower() or 'spin' in k.lower()]
+# bowl_kinds_present = unique_vals_union('bowl_kind') # e.g. ['pace', 'spin']
+# # Limit to pace/spin only
+# bowl_kinds_present = [k for k in bowl_kinds_present if 'pace' in k.lower() or 'spin' in k.lower()]
 
-bowl_styles_present = unique_vals_union('bowl_style')
+# bowl_styles_present = unique_vals_union('bowl_style')
 
 # UI controls
 st.markdown("## Batter — Bowler Kind / Style exploration")
