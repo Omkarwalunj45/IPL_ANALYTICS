@@ -6009,91 +6009,98 @@ elif sidebar_option == "Strength vs Weakness":
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
             
                 # ---------- FIXED: Caught Dismissals Wagon — ONLY base field + red dots, with debug ----------
-                def draw_caught_dismissals_wagon(df_wagon, batter_name):
-                    st.write("**Debug Step 1:** Starting caught dismissals wagon plot")
-                
-                    # Step 1: Filter caught dismissals
-                    st.write("**Debug Step 2:** Filtering rows where dismissal contains 'caught'")
-                    caught_df = df_wagon[
-                        df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
-                    ].copy()
-                    st.write(f"Number of caught dismissal rows found: **{len(caught_df)}**")
-                    if len(caught_df) > 0:
-                        st.write("Sample dismissal values:", caught_df['dismissal'].head().tolist())
-                
-                    if caught_df.empty:
-                        st.info(f"No caught dismissals found for {batter_name} in this selection.")
-                        st.write("**Debug:** Exiting early - no caught rows")
-                        return
-                
-                    # Step 2: Check coordinate columns
-                    st.write("**Debug Step 3:** Checking for 'wagonX' and 'wagonY' columns")
-                    if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
-                        st.warning("Columns 'wagonX' and/or 'wagonY' not found — cannot plot.")
-                        st.write("**Debug:** Missing coordinate columns")
-                        return
-                    st.write("Coordinate columns found")
-                
-                    # Step 3: Extract and inspect coordinates
-                    st.write("**Debug Step 4:** Extracting coordinates")
-                    x_coords = caught_df['wagonX'].astype(float)
-                    y_coords = caught_df['wagonY'].astype(float)
-                    st.write(f"Number of coordinate pairs: **{len(x_coords)}**")
-                    if len(x_coords) > 0:
-                        st.write("Sample coordinates (first 5):", list(zip(x_coords.head(), y_coords.head())))
-                
-                    # Step 4: Draw base field
-                    st.write("**Debug Step 5:** Attempting to draw blank base wagon field")
-                    if 'draw_cricket_field_with_run_totals_requested' not in globals() or not callable(globals()['draw_cricket_field_with_run_totals_requested']):
-                        st.warning("Base wagon drawing function not found.")
-                        st.write("**Debug:** draw_cricket_field_with_run_totals_requested is missing")
-                        return
-                
-                    try:
-                        # Use empty DataFrame to get blank field
-                        fig_w = draw_cricket_field_with_run_totals_requested(df_wagon.iloc[0:0], "")
-                        st.write("**Debug Step 6:** Base field created successfully")
-                    except Exception as e:
-                        st.error(f"Base field drawing failed: {e}")
-                        st.write("**Debug:** Error during base field creation")
-                        return
-                
-                    # Step 5: Clean up text labels
-                    st.write("**Debug Step 7:** Removing existing text labels")
+            def draw_caught_dismissals_wagon(df_wagon, batter_name):
+                st.write("**Debug Step 1:** Starting caught dismissals wagon plot")
+            
+                # Step 1: Filter
+                st.write("**Debug Step 2:** Filtering 'caught' dismissals")
+                caught_df = df_wagon[
+                    df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
+                ].copy()
+                st.write(f"Caught rows found: **{len(caught_df)}**")
+                if len(caught_df) > 0:
+                    st.write("Sample dismissals:", caught_df['dismissal'].head(3).tolist())
+            
+                if caught_df.empty:
+                    st.info(f"No caught dismissals for {batter_name}.")
+                    return
+            
+                # Step 2: Coordinates check
+                st.write("**Debug Step 3:** Checking coordinates")
+                if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                    st.warning("Missing 'wagonX' or 'wagonY' columns.")
+                    return
+                x_coords = caught_df['wagonX'].astype(float)
+                y_coords = caught_df['wagonY'].astype(float)
+                st.write(f"Coords extracted: **{len(x_coords)}** points")
+                st.write("X range:", x_coords.min(), "to", x_coords.max())
+                st.write("Y range:", y_coords.min(), "to", y_coords.max())
+                st.write("Sample points (first 5):", list(zip(x_coords.head(), y_coords.head())))
+            
+                # Step 3: Create base figure
+                st.write("**Debug Step 4:** Drawing base field (empty)")
+                if 'draw_cricket_field_with_run_totals_requested' not in globals() or not callable(globals()['draw_cricket_field_with_run_totals_requested']):
+                    st.warning("Base wagon function missing.")
+                    return
+            
+                try:
+                    fig_w = draw_cricket_field_with_run_totals_requested(df_wagon.iloc[0:0], "")
                     ax = fig_w.gca()
-                    original_text_count = len(ax.texts)
-                    for text in ax.texts[:]:  # copy list to avoid modification issues
-                        text.set_visible(False)
-                    st.write(f"Removed **{original_text_count}** text elements")
-                
-                    # Step 6: Add red scatter points
-                    st.write("**Debug Step 8:** Adding red scatter points")
-                    ax.scatter(
-                        x_coords, y_coords,
-                        color='red', s=120, alpha=0.9, edgecolor='black', linewidth=1.2,
-                        marker='o', zorder=10
-                    )
-                    st.write("**Debug:** Scatter points added")
-                
-                    # Step 7: Add minimal legend
-                    st.write("**Debug Step 9:** Adding legend")
-                    ax.scatter([], [], color='red', s=120, label='Caught Dismissal Locations')
-                    ax.legend(loc='upper right', fontsize=10, frameon=True)
-                
-                    # Step 8: Display
-                    st.write("**Debug Step 10:** Rendering final figure")
-                    safe_fn = globals().get('safe_st_pyplot', None)
-                    try:
-                        if callable(safe_fn):
-                            safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                        else:
-                            st.pyplot(fig_w)
-                        st.write("**Debug:** Figure should be visible above")
-                    except Exception as e:
-                        st.error(f"Rendering failed: {e}")
-                        st.write("**Debug:** Error during final rendering")
-                    finally:
-                        plt.close(fig_w)
+                    st.write("**Debug Step 5:** Base field created")
+                except Exception as e:
+                    st.error(f"Base field failed: {e}")
+                    return
+            
+                # Step 4: Force correct limits & aspect (critical fix)
+                st.write("**Debug Step 6:** Forcing axis limits to match 368-unit scale")
+                ax.set_xlim(0, 368)
+                ax.set_ylim(0, 368)
+                ax.set_aspect('equal')  # keep circle round
+                ax.autoscale(False)     # prevent auto-rescaling
+            
+                # Optional: invert Y if your plot has Y increasing downward
+                # ax.invert_yaxis()     # uncomment if dots appear upside-down
+            
+                # Step 5: Remove all text (zone names, runs, %)
+                st.write("**Debug Step 7:** Removing labels")
+                text_count = len(ax.texts)
+                for text in ax.texts[:]:
+                    text.set_visible(False)
+                st.write(f"Removed **{text_count}** text labels")
+            
+                # Step 6: Add red scatter + numbered debug points
+                st.write("**Debug Step 8:** Plotting red dots")
+                ax.scatter(
+                    x_coords, y_coords,
+                    color='red', s=150, alpha=0.9, edgecolor='black', linewidth=1.5,
+                    marker='o', zorder=20
+                )
+            
+                # Add small numbers on dots for debug (remove later if you want clean)
+                for i, (x, y) in enumerate(zip(x_coords, y_coords)):
+                    if i < 10:  # show first 10 only to avoid clutter
+                        ax.text(x, y, str(i+1), color='white', fontsize=8, ha='center', va='center',
+                                bbox=dict(facecolor='black', alpha=0.6, boxstyle='circle,pad=0.3'))
+            
+                st.write("**Debug:** Red dots + numbers plotted (first 10 numbered)")
+            
+                # Step 7: Legend
+                ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
+                ax.legend(loc='upper right', fontsize=10, frameon=True)
+            
+                # Step 8: Final display
+                st.write("**Debug Step 9:** Final rendering")
+                safe_fn = globals().get('safe_st_pyplot', None)
+                try:
+                    if callable(safe_fn):
+                        safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                    else:
+                        st.pyplot(fig_w)
+                    st.write("**Debug Step 10:** Figure should be visible above. Check for red dots.")
+                except Exception as e:
+                    st.error(f"Rendering failed: {e}")
+                finally:
+                    plt.close(fig_w)
                     # commented : Debug for caught
             
                 # ---------- When user selects a kind ----------
