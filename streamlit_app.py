@@ -2511,7 +2511,7 @@ elif sidebar_option == "Matchup Analysis":
         for c in candidates:
             if c in df_local.columns:
                 return c
-    return default
+        return default
     bdf = as_dataframe(df)
     # Detect column names in your data
     batter_col = safe_get_col(bdf, ['bat', 'batsman'], default=None)
