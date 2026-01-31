@@ -2198,6 +2198,321 @@ if sidebar_option == "Player Profile":
 
 elif sidebar_option == "Matchup Analysis":
     st.header("Matchup Analysis")
+    line_map = {
+        'WIDE_OUTSIDE_OFFSTUMP': 0,
+        'OUTSIDE_OFFSTUMP': 1,
+        'ON_THE_STUMPS': 2,
+        'DOWN_LEG': 3,
+        'WIDE_DOWN_LEG': 4
+    }
+    length_map = {
+        'SHORT': 0,
+        'SHORT_OF_A_GOOD_LENGTH': 1,
+        'GOOD_LENGTH': 2,
+        'FULL': 3,
+        'YORKER': 4,
+        'FULLTOSS': 5
+    }
+    # def unique_vals_union(col):
+    #     vals = []
+    #     for df in (pf, bdf):
+    #         if col in df.columns:
+    #             vals.extend(df[col].dropna().astype(str).str.strip().tolist())
+    #     vals = sorted({v for v in vals if str(v).strip() != ''})
+    #     return vals
+    
+    # bowl_kinds_present = unique_vals_union('bowl_kind') # e.g. ['pace', 'spin']
+    # # Limit to pace/spin only
+    # bowl_kinds_present = [k for k in bowl_kinds_present if 'pace' in k.lower() or 'spin' in k.lower()]
+    
+    # bowl_styles_present = unique_vals_union('bowl_style')
+    
+    def display_pitchmaps_from_df(df_src, title_prefix):
+        if df_src is None or df_src.empty:
+            st.info(f"No deliveries to show for {title_prefix}")
+            return
+    
+    # ---------- robust map-lookup helpers ----------
+    def _norm_key(s):
+        if s is None:
+            return ''
+        return str(s).strip().upper().replace(' ', '_').replace('-', '_')
+    
+    def get_map_index(map_obj, raw_val):
+        if raw_val is None:
+            return None
+        sval = str(raw_val).strip()
+        if sval == '' or sval.lower() in ('nan', 'none'):
+            return None
+    
+        if sval in map_obj:
+            return int(map_obj[sval])
+        s_norm = _norm_key(sval)
+        for k in map_obj:
+            try:
+                if isinstance(k, str) and _norm_key(k) == s_norm:
+                    return int(map_obj[k])
+            except Exception:
+                continue
+        for k in map_obj:
+            try:
+                if isinstance(k, str) and (k.lower() in sval.lower() or sval.lower() in k.lower()):
+                    return int(map_obj[k])
+            except Exception:
+                continue
+        return None
+    
+    # ---------- grids builder ----------
+    def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', runs_col_candidates=('batruns', 'score'),
+                          control_col='control', dismissal_col='dismissal'):
+        if 'length_map' in globals() and isinstance(length_map, dict) and len(length_map) > 0:
+            try:
+                max_idx = max(int(v) for v in length_map.values())
+                n_rows = max(5, max_idx + 1)
+            except Exception:
+                n_rows = 5
+        else:
+            n_rows = 5
+            st.warning("length_map not found; defaulting to 5 rows.")
+    
+        length_vals = df_in.get(length_col_name, pd.Series()).dropna().astype(str).str.lower().unique()
+        if any('full toss' in val for val in length_vals):
+            n_rows = max(n_rows, 6)
+    
+        n_cols = 5
+    
+        count = np.zeros((n_rows, n_cols), dtype=int)
+        bounds = np.zeros((n_rows, n_cols), dtype=int)
+        dots = np.zeros((n_rows, n_cols), dtype=int)
+        runs = np.zeros((n_rows, n_cols), dtype=float)
+        wkt = np.zeros((n_rows, n_cols), dtype=int)
+        ctrl_not = np.zeros((n_rows, n_cols), dtype=int)
+    
+        runs_col = None
+        for c in runs_col_candidates:
+            if c in df_in.columns:
+                runs_col = c
+                break
+        if runs_col is None:
+            runs_col = None # will use 0
+    
+        wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+    
+        for _, row in df_in.iterrows():
+            li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
+            le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
+            if li is None or le is None:
+                continue
+            if not (0 <= le < n_rows and 0 <= li < n_cols):
+                continue
+            count[le, li] += 1
+            rv = 0
+            if runs_col:
+                try:
+                    rv = int(row.get(runs_col, 0) or 0)
+                except:
+                    rv = 0
+            runs[le, li] += rv
+            if rv >= 4:
+                bounds[le, li] += 1
+            if rv == 0:
+                dots[le, li] += 1
+            dval = str(row.get(dismissal_col, '') or '').lower()
+            if any(tok in dval for tok in wkt_tokens):
+                wkt[le, li] += 1
+            cval = row.get(control_col, None)
+            if cval is not None:
+                if isinstance(cval, str) and 'not' in cval.lower():
+                    ctrl_not[le, li] += 1
+                elif isinstance(cval, (int, float)) and float(cval) == 0:
+                    ctrl_not[le, li] += 1
+    
+        sr = np.full(count.shape, np.nan)
+        ctrl_pct = np.full(count.shape, np.nan)
+        for i in range(n_rows):
+            for j in range(n_cols):
+                if count[i, j] > 0:
+                    sr[i, j] = runs[i, j] / count[i, j] * 100.0
+                    ctrl_pct[i, j] = (ctrl_not[i, j] / count[i, j]) * 100.0
+    
+        return {
+            'count': count, 'bounds': bounds, 'dots': dots,
+            'runs': runs, 'sr': sr, 'ctrl_pct': ctrl_pct, 'wkt': wkt, 'n_rows': n_rows, 'n_cols': n_cols
+        }
+    
+    # --- helper: render matplotlib fig as fixed-pixel-height image in Streamlit ---
+    from PIL import Image
+    def display_pitchmaps_from_df(df_src, title_prefix):
+        if df_src is None or df_src.empty:
+            st.info(f"No deliveries to show for {title_prefix}")
+            return
+    
+        grids = build_pitch_grids(df_src)
+    
+        bh_col_name = globals().get('bat_hand_col', 'bat_hand')
+        is_lhb = False
+        if bh_col_name in df_src.columns:
+            hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
+            if any(h.upper().startswith('L') for h in hands):
+                is_lhb = True
+    
+        def maybe_flip(arr):
+            return np.fliplr(arr) if is_lhb else arr.copy()
+    
+        # count = maybe_flip(grids['count'])
+        # bounds = maybe_flip(grids['bounds'])
+        # dots = maybe_flip(grids['dots'])
+        # sr = maybe_flip(grids['sr'])
+        # ctrl = maybe_flip(grids['ctrl_pct'])
+        # wkt = maybe_flip(grids['wkt'])
+        # runs = maybe_flip(grids['runs'])
+    
+        # total = count.sum() if count.sum() > 0 else 1.0
+        # perc = count.astype(float) / total * 100.0
+    
+        # xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+        # xticks = xticks_base[::-1] if is_lhb else xticks_base
+    
+        # n_rows = grids['n_rows']
+        # if n_rows >= 6:
+        #     yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
+        # else:
+        #     yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+    
+        # fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+        # plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
+    
+        # plot_list = [
+        #     (perc, '% of balls (heat)', 'Blues'),
+        #     (bounds, 'Boundaries (count)', 'OrRd'),
+        #     (dots, 'Dot balls (count)', 'Blues'),
+        #     (sr, 'SR (runs/100 balls)', 'Reds'),
+        #     (ctrl, 'False Shot % (not in control)', 'PuBu'),
+        #     (runs, 'Runs (sum)', 'Reds')
+        # ]
+    
+        # for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+        #     safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
+        #     flat = safe_arr.flatten()
+        #     if np.all(flat == 0):
+        #         vmin, vmax = 0, 1
+        #     else:
+        #         vmin = float(np.nanmin(flat))
+        #         vmax = float(np.nanpercentile(flat, 95))
+        #         if vmax <= vmin:
+        #             vmax = vmin + 1.0
+    
+        #     im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+        #     ax.set_title(ttl)
+        #     ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
+        #     ax.set_xticklabels(xticks, rotation=45, ha='right')
+        #     ax.set_yticklabels(yticklabels)
+    
+        #     ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
+        #     ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
+        #     ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
+        #     ax.tick_params(which='minor', bottom=False, left=False)
+    
+        #     if ax_idx == 0:
+        #         for i in range(grids['n_rows']):
+        #             for j in range(grids['n_cols']):
+        #                 w_count = int(wkt[i, j])
+        #                 if w_count > 0:
+        #                     w_text = f"{w_count} W" if w_count > 1 else 'W'
+        #                     ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
+        #                             bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    
+        #     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    
+        # plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    
+        # safe_fn = globals().get('safe_st_pyplot', None)
+        # try:
+        #     if callable(safe_fn):
+        #         safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+        #     else:
+        #         st.pyplot(fig)
+        # except Exception:
+        #     st.pyplot(fig)
+        # finally:
+        #     plt.close(fig)
+    
+    # ---------- attempt to draw wagon chart using your existing function ----------
+    def draw_wagon_if_available(df_wagon, batter_name):
+        if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
+            try:
+                fig_w = draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
+                safe_fn = globals().get('safe_st_pyplot', None)
+                if callable(safe_fn):
+                    safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                else:
+                    st.pyplot(fig_w)
+            except Exception as e:
+                st.error(f"Wagon drawing function exists but raised: {e}")
+        else:
+            st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+    
+    def display_figure_fixed_height(fig, height_px=1200, bg='white'):
+        """
+        Save `fig` to buffer, open with PIL, resize to desired height (preserve aspect ratio),
+        and display with st.image using exact pixel dimensions (no auto-scaling).
+        - height_px: desired displayed height in pixels (e.g. 1800)
+        """
+        buf = BytesIO()
+        # Save at a high DPI so the saved image is high-res (avoids blur when resizing)
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=200, facecolor=fig.get_facecolor())
+        buf.seek(0)
+        img = Image.open(buf).convert('RGBA')
+    
+        # preserve aspect ratio, compute new width
+        w, h = img.size
+        if h == 0:
+            st.error("Figure saved with zero height unexpectedly.")
+            return
+        new_h = int(height_px)
+        new_w = int(round((w / h) * new_h))
+    
+        # resize using LANCZOS for quality
+        img_resized = img.resize((new_w, new_h), Image.LANCZOS)
+    
+        # if you prefer a white background (avoid transparency), compose
+        if bg is not None:
+            bg_img = Image.new('RGB', img_resized.size, bg)
+            bg_img.paste(img_resized, mask=img_resized.split()[3] if img_resized.mode == 'RGBA' else None)
+            img_resized = bg_img
+    
+        # display with explicit width (same as new_w) so Streamlit doesn't auto-scale
+        st.image(img_resized, use_container_width=False, width=new_w)
+        plt.close(fig)
+    
+    def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_id=None):
+        """
+        Save fig to buffer, encode to base64, and embed using HTML <img> with fixed height in pixels.
+        This forces the browser to render the exact height (no Streamlit autoscaling).
+        - height_px: desired displayed height in pixels (e.g. 1800)
+        - bg: background color for composition to remove transparency
+        """
+        buf = BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight', dpi=200, facecolor=fig.get_facecolor())
+        buf.seek(0)
+        img = Image.open(buf).convert('RGBA')
+    
+        # Compose over background if required (avoid transparency artifacts)
+        if bg is not None:
+            bg_img = Image.new('RGB', img.size, bg)
+            bg_img.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
+            img = bg_img
+        # encode to base64
+        out_buf = BytesIO()
+        img.save(out_buf, format='PNG')
+        b64 = base64.b64encode(out_buf.getvalue()).decode('ascii')
+    
+        # create HTML; width:auto keeps aspect ratio while height is forced
+        html = f'<img src="data:image/png;base64,{b64}" style="height:{int(height_px)}px; width:auto; display:block; margin-left:auto; margin-right:auto;" />'
+        # Optionally wrap in a container div with max-width:100% to avoid horizontal overflow
+        wrapper = f'<div style="max-width:100%;">{html}</div>'
+        st.markdown(wrapper, unsafe_allow_html=True)
+        plt.close(fig)
     # Defensive helper fallbacks (use your existing ones if present)
     try:
         as_dataframe
