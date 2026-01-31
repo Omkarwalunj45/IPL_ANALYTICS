@@ -6079,7 +6079,7 @@ elif sidebar_option == "Strength vs Weakness":
                     # Plot red dots
                     ax.scatter(
                         x_plot, y_plot,
-                        color='red', s=150, alpha=0.9, edgecolor='black', linewidth=1.5,
+                        color='red', s=80, alpha=0.9, edgecolor='black', linewidth=1.5,
                         marker='o', zorder=20
                     )
             
