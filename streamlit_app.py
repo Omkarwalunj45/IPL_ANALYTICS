@@ -9,6 +9,7 @@ from io import BytesIO
 from PIL import Image
 st.set_page_config(layout="wide")
 
+
 # --- helper: render matplotlib fig as fixed-pixel-height image in Streamlit ---
 from PIL import Image
 def draw_wagon_if_available(df_wagon, batter_name):
