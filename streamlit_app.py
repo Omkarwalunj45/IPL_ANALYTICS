@@ -2503,14 +2503,15 @@ elif sidebar_option == "Matchup Analysis":
                 return x.copy()
             else:
                 return pd.DataFrame(x)
-    try:
-        safe_get_col
-    except NameError:
-        def safe_get_col(df_local, candidates, default=None):
-            for c in candidates:
-                if c in df_local.columns:
-                    return c
-            return default
+    def safe_get_col(df_local, candidates, default=None):
+        """
+        Safely return the first matching column from candidates.
+        If none are found, return default.
+        """
+        for c in candidates:
+            if c in df_local.columns:
+                return c
+    return default
     bdf = as_dataframe(df)
     # Detect column names in your data
     batter_col = safe_get_col(bdf, ['bat', 'batsman'], default=None)
