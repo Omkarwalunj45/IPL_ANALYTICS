@@ -8,7 +8,21 @@ import base64
 from io import BytesIO
 from PIL import Image
 st.set_page_config(layout="wide")
-
+line_map = {
+    'WIDE_OUTSIDE_OFFSTUMP': 0,
+    'OUTSIDE_OFFSTUMP': 1,
+    'ON_THE_STUMPS': 2,
+    'DOWN_LEG': 3,
+    'WIDE_DOWN_LEG': 4
+}
+length_map = {
+    'SHORT': 0,
+    'SHORT_OF_A_GOOD_LENGTH': 1,
+    'GOOD_LENGTH': 2,
+    'FULL': 3,
+    'YORKER': 4,
+    'FULLTOSS': 5
+}
 # def unique_vals_union(col):
 #     vals = []
 #     for df in (pf, bdf):
