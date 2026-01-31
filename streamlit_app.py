@@ -9,6 +9,136 @@ from io import BytesIO
 from PIL import Image
 st.set_page_config(layout="wide")
 
+def unique_vals_union(col):
+    vals = []
+    for df in (pf, bdf):
+        if col in df.columns:
+            vals.extend(df[col].dropna().astype(str).str.strip().tolist())
+    vals = sorted({v for v in vals if str(v).strip() != ''})
+    return vals
+
+bowl_kinds_present = unique_vals_union('bowl_kind') # e.g. ['pace', 'spin']
+# Limit to pace/spin only
+bowl_kinds_present = [k for k in bowl_kinds_present if 'pace' in k.lower() or 'spin' in k.lower()]
+
+bowl_styles_present = unique_vals_union('bowl_style')
+
+# UI controls
+st.markdown("## Batter — Bowler Kind / Style exploration")
+st.write("Select a Bowler Kind (value as stored) or select a Bowler Style (value as stored).")
+kind_opts = ['-- none --'] + bowl_kinds_present
+style_opts = ['-- none --'] + bowl_styles_present
+
+chosen_kind = st.selectbox("Bowler Kind", options=kind_opts, index=0)
+chosen_style = st.selectbox("Bowler Style", options=style_opts, index=0)
+
+# ---------- robust map-lookup helpers ----------
+def _norm_key(s):
+    if s is None:
+        return ''
+    return str(s).strip().upper().replace(' ', '_').replace('-', '_')
+
+def get_map_index(map_obj, raw_val):
+    if raw_val is None:
+        return None
+    sval = str(raw_val).strip()
+    if sval == '' or sval.lower() in ('nan', 'none'):
+        return None
+
+    if sval in map_obj:
+        return int(map_obj[sval])
+    s_norm = _norm_key(sval)
+    for k in map_obj:
+        try:
+            if isinstance(k, str) and _norm_key(k) == s_norm:
+                return int(map_obj[k])
+        except Exception:
+            continue
+    for k in map_obj:
+        try:
+            if isinstance(k, str) and (k.lower() in sval.lower() or sval.lower() in k.lower()):
+                return int(map_obj[k])
+        except Exception:
+            continue
+    return None
+
+# ---------- grids builder ----------
+def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', runs_col_candidates=('batruns', 'score'),
+                      control_col='control', dismissal_col='dismissal'):
+    if 'length_map' in globals() and isinstance(length_map, dict) and len(length_map) > 0:
+        try:
+            max_idx = max(int(v) for v in length_map.values())
+            n_rows = max(5, max_idx + 1)
+        except Exception:
+            n_rows = 5
+    else:
+        n_rows = 5
+        st.warning("length_map not found; defaulting to 5 rows.")
+
+    length_vals = df_in.get(length_col_name, pd.Series()).dropna().astype(str).str.lower().unique()
+    if any('full toss' in val for val in length_vals):
+        n_rows = max(n_rows, 6)
+
+    n_cols = 5
+
+    count = np.zeros((n_rows, n_cols), dtype=int)
+    bounds = np.zeros((n_rows, n_cols), dtype=int)
+    dots = np.zeros((n_rows, n_cols), dtype=int)
+    runs = np.zeros((n_rows, n_cols), dtype=float)
+    wkt = np.zeros((n_rows, n_cols), dtype=int)
+    ctrl_not = np.zeros((n_rows, n_cols), dtype=int)
+
+    runs_col = None
+    for c in runs_col_candidates:
+        if c in df_in.columns:
+            runs_col = c
+            break
+    if runs_col is None:
+        runs_col = None # will use 0
+
+    wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+
+    for _, row in df_in.iterrows():
+        li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
+        le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
+        if li is None or le is None:
+            continue
+        if not (0 <= le < n_rows and 0 <= li < n_cols):
+            continue
+        count[le, li] += 1
+        rv = 0
+        if runs_col:
+            try:
+                rv = int(row.get(runs_col, 0) or 0)
+            except:
+                rv = 0
+        runs[le, li] += rv
+        if rv >= 4:
+            bounds[le, li] += 1
+        if rv == 0:
+            dots[le, li] += 1
+        dval = str(row.get(dismissal_col, '') or '').lower()
+        if any(tok in dval for tok in wkt_tokens):
+            wkt[le, li] += 1
+        cval = row.get(control_col, None)
+        if cval is not None:
+            if isinstance(cval, str) and 'not' in cval.lower():
+                ctrl_not[le, li] += 1
+            elif isinstance(cval, (int, float)) and float(cval) == 0:
+                ctrl_not[le, li] += 1
+
+    sr = np.full(count.shape, np.nan)
+    ctrl_pct = np.full(count.shape, np.nan)
+    for i in range(n_rows):
+        for j in range(n_cols):
+            if count[i, j] > 0:
+                sr[i, j] = runs[i, j] / count[i, j] * 100.0
+                ctrl_pct[i, j] = (ctrl_not[i, j] / count[i, j]) * 100.0
+
+    return {
+        'count': count, 'bounds': bounds, 'dots': dots,
+        'runs': runs, 'sr': sr, 'ctrl_pct': ctrl_pct, 'wkt': wkt, 'n_rows': n_rows, 'n_cols': n_cols
+    }
 
 # --- helper: render matplotlib fig as fixed-pixel-height image in Streamlit ---
 from PIL import Image
