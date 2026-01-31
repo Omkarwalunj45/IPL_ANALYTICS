@@ -5758,6 +5758,12 @@ elif sidebar_option == "Strength vs Weakness":
             # import streamlit as st
             
             # Required objects check
+# import numpy as np
+# import pandas as pd
+# import matplotlib.pyplot as plt
+            # import streamlit as st
+            
+            # Required objects check
             required = ['pf', 'bdf', 'player_selected']
             missing = [r for r in required if r not in globals()]
             if missing:
@@ -6008,11 +6014,11 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
             
-                # ---------- FIXED: Caught Dismissals Wagon — ONLY base field + red dots, with debug ----------
+                # ---------- Caught Dismissals Wagon — base field + red dots ----------
                 def draw_caught_dismissals_wagon(df_wagon, batter_name):
                     st.write("**Debug Step 1:** Starting caught dismissals wagon plot")
-                
-                    # Step 1: Filter caught
+            
+                    # Step 1: Filter
                     st.write("**Debug Step 2:** Filtering 'caught' dismissals")
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
@@ -6020,66 +6026,81 @@ elif sidebar_option == "Strength vs Weakness":
                     st.write(f"Caught rows: **{len(caught_df)}**")
                     if len(caught_df) > 0:
                         st.write("Sample dismissals:", caught_df['dismissal'].head(3).tolist())
-                        st.write("Sample coords:", list(zip(caught_df['wagonX'].head(), caught_df['wagonY'].head())))
-                
+            
                     if caught_df.empty:
                         st.info(f"No caught dismissals for {batter_name}.")
                         return
-                
+            
                     # Step 2: Coordinates
                     st.write("**Debug Step 3:** Extracting coordinates")
+                    if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                        st.warning("Missing 'wagonX' or 'wagonY' columns.")
+                        return
                     x_coords = caught_df['wagonX'].astype(float)
                     y_coords = caught_df['wagonY'].astype(float)
                     st.write(f"Points: **{len(x_coords)}** | X: {x_coords.min()}–{x_coords.max()} | Y: {y_coords.min()}–{y_coords.max()}")
-                
-                    # Step 3: Force base field drawing (trick with 1 dummy row)
-                    st.write("**Debug Step 4:** Forcing base field (using dummy row)")
+                    st.write("Sample points:", list(zip(x_coords.head(), y_coords.head())))
+            
+                    # Step 3: Draw base field with dummy row
+                    st.write("**Debug Step 4:** Drawing base field with dummy row")
                     if 'draw_cricket_field_with_run_totals_requested' not in globals() or not callable(globals()['draw_cricket_field_with_run_totals_requested']):
-                        st.warning("Base wagon function missing.")
+                        st.warning("Base function missing.")
                         return
-                
+            
                     try:
-                        # Create minimal dummy row to trigger full field drawing
-                        dummy_row = df_wagon.iloc[0:1].copy()  # take first real row as template
-                        dummy_row['wagonX'] = 0
-                        dummy_row['wagonY'] = 0
-                        dummy_row['batsman_runs'] = 0  # avoid any run plotting
-                        fig_w = draw_cricket_field_with_run_totals_requested(dummy_row, batter_name)
+                        # Dummy row to force drawing
+                        dummy_df = df_wagon.iloc[0:1].copy() if not df_wagon.empty else pd.DataFrame({'score': [0], 'wagonZone': [1], 'bat_hand': ['R']})
+                        dummy_df['score'] = 0
+                        fig_w = draw_cricket_field_with_run_totals_requested(dummy_df, "")
                         ax = fig_w.gca()
-                        st.write("**Debug Step 5:** Base field drawn with dummy row")
+                        st.write("**Debug Step 5:** Base field drawn")
                     except Exception as e:
                         st.error(f"Base field failed: {e}")
                         return
-                
-                    # Step 4: Clean up — remove ALL text (zones, runs, %)
-                    st.write("**Debug Step 6:** Removing all text labels")
+            
+                    # Step 4: Remove fills (green backgrounds) to make blank
+                    st.write("**Debug Step 6:** Removing green fills")
+                    for patch in ax.patches:
+                        if isinstance(patch, Circle) and patch.get_fill():
+                            patch.set_fill(False)
+                            patch.set_edgecolor('black')
+                            patch.set_linewidth(2)
+                    st.write("**Debug:** Fills removed - should be outline only")
+            
+                    # Step 5: Remove all text
+                    st.write("**Debug Step 7:** Removing labels")
                     text_count = len(ax.texts)
                     for text in ax.texts[:]:
                         text.set_visible(False)
                     st.write(f"Removed **{text_count}** text elements")
-                
-                    # Step 5: Force scale & orientation
-                    st.write("**Debug Step 7:** Setting fixed 0–368 scale")
-                    ax.set_xlim(0, 368)
-                    ax.set_ylim(0, 368)
-                    ax.set_aspect('equal')
-                    ax.autoscale(False)
-                    ax.invert_yaxis()  # Y positive down — matches diagram
-                    st.write("**Debug:** Axis fixed (inverted Y)")
-                
-                    # Step 6: Add red dots
-                    st.write("**Debug Step 8:** Plotting red dots")
+            
+                    # Step 6: Scale & plot red dots
+                    st.write("**Debug Step 8:** Scaling and plotting red dots")
+                    # Scale to normalized -1 to 1 (center at 184,184, radius 184)
+                    center_x = 184
+                    center_y = 184
+                    radius = 184
+                    x_plot = (x_coords - center_x) / radius
+                    y_plot = - (y_coords - center_y) / radius  # flip Y (positive down in diagram)
+            
+                    # For LHB flip X
+                    batting_style_val = dummy_df['bat_hand'].iloc[0] if 'bat_hand' in dummy_df.columns else 'R'
+                    is_lhb = str(batting_style_val).upper().startswith('L')
+                    if is_lhb:
+                        x_plot = -x_plot
+                    st.write("**Debug:** Scaled coords (first 5):", list(zip(x_plot.head(), y_plot.head())))
+            
                     ax.scatter(
-                        x_coords, y_coords,
-                        color='red', s=180, alpha=0.9, edgecolor='black', linewidth=1.5,
+                        x_plot, y_plot,
+                        color='red', s=150, alpha=0.9, edgecolor='black', linewidth=1.5,
                         marker='o', zorder=20
                     )
-                    st.write("**Debug:** Red dots added")
-                
+                    st.write("**Debug:** Red dots plotted in normalized scale")
+            
                     # Step 7: Legend
-                    ax.scatter([], [], color='red', s=180, label='Caught Dismissal Locations')
+                    ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
                     ax.legend(loc='upper right', fontsize=10, frameon=True)
-                
+            
                     # Step 8: Display
                     st.write("**Debug Step 9:** Final rendering")
                     safe_fn = globals().get('safe_st_pyplot', None)
@@ -6088,7 +6109,7 @@ elif sidebar_option == "Strength vs Weakness":
                             safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                         else:
                             st.pyplot(fig_w)
-                        st.write("**Debug Step 10:** Figure rendered — check for green field + red dots")
+                        st.write("**Debug Step 10:** Figure rendered - check for outline + red dots")
                     except Exception as e:
                         st.error(f"Rendering failed: {e}")
                     finally:
