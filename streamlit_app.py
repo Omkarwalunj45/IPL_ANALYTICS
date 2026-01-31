@@ -1939,6 +1939,7 @@ if sidebar_option == "Player Profile":
                     {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]},
                     {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#f3fff3")]},
                 ]
+                
         
                 st.markdown("### Inningwise Bowling Performance")
                 st.dataframe(result_df.style.set_table_styles(inning_table_styles), use_container_width=True)
@@ -2099,9 +2100,12 @@ elif sidebar_option == "Matchup Analysis":
                 )
                 # Visualize selected year
                 if all_seasons:
-                    seasons_list = [str(s) for s in seasons]
+                    seasons_list = ['Overall'] + [str(s) for s in seasons]
                     selected_year = st.selectbox("Select Year to Visualize Wagon and Pitchmaps", seasons_list, index=0)
-                    selected_df = tdf[tdf[year_col] == int(selected_year)].copy()
+                    if selected_year == 'Overall':
+                        selected_df = tdf.copy()
+                    else:
+                        selected_df = tdf[tdf[year_col] == int(selected_year)].copy()
                     if not selected_df.empty:
                         st.markdown(f"### Wagon and Pitchmaps for {selected_year}")
                         # Assume you have draw_wagon and display_pitchmaps_from_df from batter section
