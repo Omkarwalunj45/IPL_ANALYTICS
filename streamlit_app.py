@@ -1946,9 +1946,7 @@ if sidebar_option == "Player Profile":
                 st.info("No inningwise bowling summary available for this player.")
 
 elif sidebar_option == "Matchup Analysis":
-
     st.header("Matchup Analysis")
-
     # Defensive helper fallbacks (use your existing ones if present)
     try:
         as_dataframe
@@ -1960,40 +1958,35 @@ elif sidebar_option == "Matchup Analysis":
                 return x.copy()
             else:
                 return pd.DataFrame(x)
-
-
     bdf = as_dataframe(df)
-
     # Detect column names in your data
     batter_col = safe_get_col(bdf, ['bat', 'batsman'], default=None)
     bowler_col = safe_get_col(bdf, ['bowl', 'bowler'], default=None)
-    match_col  = safe_get_col(bdf, ['p_match', 'match_id'], default=None)
-    year_col   = safe_get_col(bdf, ['season', 'year'], default=None)
+    match_col = safe_get_col(bdf, ['p_match', 'match_id'], default=None)
+    year_col = safe_get_col(bdf, ['season', 'year'], default=None)
     inning_col = safe_get_col(bdf, ['inns', 'inning'], default=None)
-    venue_col  = safe_get_col(bdf, ['ground', 'venue', 'stadium', 'ground_name'], default=None)
-
+    venue_col = safe_get_col(bdf, ['ground', 'venue', 'stadium', 'ground_name'], default=None)
     if batter_col is None or bowler_col is None:
         st.error("Dataframe must contain batter and bowler columns (e.g. 'bat' and 'bowl').")
         st.stop()
-
     # Build unique player lists (filter out nulls and '0')
     unique_batters = sorted([x for x in pd.unique(bdf[batter_col].dropna()) if str(x).strip() not in ("", "0")])
-    unique_bowlers  = sorted([x for x in pd.unique(bdf[bowler_col].dropna())  if str(x).strip() not in ("", "0")])
-
+    unique_bowlers = sorted([x for x in pd.unique(bdf[bowler_col].dropna()) if str(x).strip() not in ("", "0")])
     if not unique_batters or not unique_bowlers:
         st.warning("No batters or bowlers found in the dataset.")
         st.stop()
-
     # Player selectors
     batter_name = st.selectbox("Select a Batter", unique_batters, index=0)
     bowler_name = st.selectbox("Select a Bowler", unique_bowlers, index=0)
-
     # Grouping option
     grouping_option = st.selectbox("Group By", ["Year", "Match", "Venue", "Inning"])
-
+    # PHASE SELECTBOX (for filtering the matchup)
+    phase_opts = ['Overall', 'Powerplay', 'Middle 1', 'Middle 2', 'Death']
+    chosen_phase = st.selectbox("Phase", options=phase_opts, index=0)  # Default Overall
     # Raw matchup rows for download/sanity
     matchup_df = bdf[(bdf[batter_col] == batter_name) & (bdf[bowler_col] == bowler_name)].copy()
-
+    if chosen_phase != 'Overall':
+        matchup_df = matchup_df[matchup_df['PHASE'] == chosen_phase].copy()
     if matchup_df.empty:
         st.warning("No data available for the selected matchup.")
     else:
@@ -2004,29 +1997,26 @@ elif sidebar_option == "Matchup Analysis":
                     matchup_df[col] = pd.to_numeric(matchup_df[col], errors='coerce')
                 except Exception:
                     pass
-
         # Download raw matchup CSV
-
-
         # Helper: Apply formatting to individual summary dataframe
         def format_summary_df(temp_summary):
             """Format a single summary dataframe with proper types"""
             df = temp_summary.copy()
-            
+           
             # Convert ALL numeric columns first
             for col in df.columns:
                 try:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
                 except:
                     pass
-            
+           
             # Now identify and convert integer columns
             for col in df.columns:
                 col_lower = str(col).lower()
                 # Check if column name contains 'innings', 'runs', or 'balls'
-                if any(keyword in col_lower for keyword in ['innings', 'inning', 'runs', 'balls', 'wickets', 'wkts', 'dismissals', 'matches', 'fours', 'sixes', 'dots']):
+                if any(keyword in col_lower for keyword in ['innings', 'inning', 'runs', 'balls', 'wickets', 'wkts', 'dismissals', 'matches', 'fours', 'sixes', 'dots', 'matches']):
                     df[col] = df[col].fillna(0).astype(int)
-            
+           
             # Round all other numeric columns to 2 decimals
             numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
             for nc in numeric_cols:
@@ -2034,84 +2024,42 @@ elif sidebar_option == "Matchup Analysis":
                 if df[nc].dtype == int:
                     continue
                 df[nc] = df[nc].round(2)
-            df=round_up_floats(df)
-            
+           
             return df
-
         # Helper: convert column names to display form (UPPER + spaces)
         def normalize_display_columns(df_in):
             df = df_in.copy()
             df.columns = [str(col).upper().replace('_', ' ') for col in df.columns]
             return df
-
         # Finalize and display helper
         def finalize_and_show(df_list, primary_col_name, title, header_color="#efe6ff"):
             if not df_list:
                 st.info(f"No {title.lower()} data available for this matchup.")
                 return
-            
+           
             # Concatenate all formatted dataframes
             out = pd.concat(df_list, ignore_index=True)
-            # st.write(out)
             # Remove batter and bowler columns if they exist
             cols_to_drop = []
             for col in out.columns:
                 col_lower = str(col).lower()
                 if any(x in col_lower for x in ['bat', 'bowl', 'batsman', 'bowler']):
                     cols_to_drop.append(col)
-            
+           
             out = out.drop(columns=cols_to_drop, errors='ignore')
-            out=round_up_floats(out)
-            # st.write(out)
-            
-            # # Convert to numeric where possible
-            # for col in out.columns:
-            #     out[col] = pd.to_numeric(out[col], errors='ignore')
-            
-            # # Convert specific columns to int, round others to 2 decimals
-            # for col in out.columns:
-            #     if any(x in col.lower() for x in ['innings', 'runs', 'balls']):
-            #         out[col] = out[col].fillna(0).astype(int)
-            #     elif out[col].dtype in ['float64', 'float32', 'float']:
-            #         out[col] = out[col].round(2)
-            
-            # Replace None/NaN with 'sadh'
+           
+            # Replace None/NaN with '-'
             out = out.fillna('-')
-            
+           
             # Capitalize first letter of each column name
             out.columns = [str(col).strip().capitalize() for col in out.columns]
-            
+           
             # Ensure primary column name is also capitalized
             primary_col_name_norm = str(primary_col_name).strip().capitalize()
-            
-            # Put primary column first if present
-            # cols = out.columns.tolist()
-            # if primary_col_name_norm in cols:
-            #     new_order = [primary_col_name_norm] + [c for c in cols if c != primary_col_name_norm]
-            #     out = out[new_order]
-            
-            # Table styling
-            # table_styles = [
-            #     {"selector": "thead th", "props": [("background-color", header_color), ("color", "#000"), ("font-weight", "600")]},
-            #     {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]},
-            #     {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#f7f7fb")]},
-            # ]
-            def beautify_columns(df):
-                df.columns = [
-                    ' '.join(word.capitalize() for word in str(col).replace('_', ' ').split())
-                    for col in df.columns
-                ]
-                return df
-            
-            # Example usage:
-            out = beautify_columns(out)
+           
             st.markdown(f"### {title}")
-            st.write(out)
+            st.dataframe(out, use_container_width=True)
             return out
-            # st.dataframe(out.style.set_table_styles(table_styles), use_container_width=True)
-            
-
-
         # -------------------
         # Year grouping
         # -------------------
@@ -2127,24 +2075,18 @@ elif sidebar_option == "Matchup Analysis":
                     if temp.empty:
                         continue
                     temp_summary = cumulator(temp)
-                    temp_summary=round_up_floats(temp_summary)
-                    # st.write(temp_summary)
-                    # temp_summary = as_dataframe(temp_summary)
+                    temp_summary = as_dataframe(temp_summary)
                     if temp_summary.empty:
                         continue
                     # FORMAT BEFORE ADDING TO LIST
                     temp_summary = format_summary_df(temp_summary)
-                    # st.write(temp_summary)
-                    temp_summary=round_up_floats(temp_summary)
-                    # st.write(temp_summary)
                     temp_summary.insert(0, 'year', s)
                     all_seasons.append(temp_summary)
-
-                out=finalize_and_show(all_seasons, 'year', "Yearwise Performance", header_color="#efe6ff")
-                                # Add Batter and Bowler columns (in uppercase)
+                out = finalize_and_show(all_seasons, 'year', "Yearwise Performance", header_color="#efe6ff")
+                # Add Batter and Bowler columns (in uppercase)
                 out['Batsman'] = str(batter_name)
                 out['Bowler'] = str(bowler_name)
-                
+               
                 # Move them to the front if you want them as leading columns
                 cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
                 out = out[cols]
@@ -2155,7 +2097,16 @@ elif sidebar_option == "Matchup Analysis":
                     file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
                     mime="text/csv"
                 )
-
+                # Visualize selected year
+                if all_seasons:
+                    seasons_list = [str(s) for s in seasons]
+                    selected_year = st.selectbox("Select Year to Visualize Wagon and Pitchmaps", seasons_list, index=0)
+                    selected_df = tdf[tdf[year_col] == int(selected_year)].copy()
+                    if not selected_df.empty:
+                        st.markdown(f"### Wagon and Pitchmaps for {selected_year}")
+                        # Assume you have draw_wagon and display_pitchmaps_from_df from batter section
+                        draw_wagon_if_available(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
+                        display_pitchmaps_from_df(selected_df, f"{batter_name} vs {bowler_name} - {selected_year}")
         # -------------------
         # Match grouping
         # -------------------
@@ -2178,12 +2129,11 @@ elif sidebar_option == "Matchup Analysis":
                     temp_summary = format_summary_df(temp_summary)
                     temp_summary.insert(0, 'match_id', m)
                     all_matches.append(temp_summary)
-
-                out=finalize_and_show(all_seasons, 'year', "Yearwise Performance", header_color="#efe6ff")
-                                # Add Batter and Bowler columns (in uppercase)
+                out = finalize_and_show(all_matches, 'match_id', "Matchwise Performance", header_color="#efe6ff")
+                # Add Batter and Bowler columns (in uppercase)
                 out['Batsman'] = str(batter_name)
                 out['Bowler'] = str(bowler_name)
-                
+               
                 # Move them to the front if you want them as leading columns
                 cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
                 out = out[cols]
@@ -2194,7 +2144,6 @@ elif sidebar_option == "Matchup Analysis":
                     file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
                     mime="text/csv"
                 )
-
         # -------------------
         # Venue grouping
         # -------------------
@@ -2217,14 +2166,12 @@ elif sidebar_option == "Matchup Analysis":
                     temp_summary = format_summary_df(temp_summary)
                     temp_summary.insert(0, 'venue', v)
                     all_venues.append(temp_summary)
-
-                out=finalize_and_show(all_seasons, 'year', "Yearwise Performance", header_color="#efe6ff")
-                                # Add Batter and Bowler columns (in uppercase)
+                out = finalize_and_show(all_venues, 'venue', "Venuewise Performance", header_color="#efe6ff")
+                # Add Batter and Bowler columns (in uppercase)
                 out['Batsman'] = str(batter_name)
                 out['Bowler'] = str(bowler_name)
-                
+               
                 # Move them to the front if you want them as leading columns
-                cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
                 cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
                 out = out[cols]
                 csv = out.to_csv(index=False)
@@ -2234,7 +2181,6 @@ elif sidebar_option == "Matchup Analysis":
                     file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
                     mime="text/csv"
                 )
-
         # -------------------
         # Inning grouping
         # -------------------
@@ -2257,11 +2203,12 @@ elif sidebar_option == "Matchup Analysis":
                     temp_summary = format_summary_df(temp_summary)
                     temp_summary.insert(0, 'inning', inn)
                     all_inns.append(temp_summary)
-
-                finalize_and_show(all_inns, 'inning', "Inningwise Performance", header_color="#e6f7ff")
+                out = finalize_and_show(all_inns, 'inning', "Inningwise Performance", header_color="#efe6ff")
                 # Add Batter and Bowler columns (in uppercase)
                 out['Batsman'] = str(batter_name)
                 out['Bowler'] = str(bowler_name)
+               
+                # Move them to the front if you want them as leading columns
                 cols = ['Batsman', 'Bowler'] + [c for c in out.columns if c not in ['Batsman', 'Bowler']]
                 out = out[cols]
                 csv = out.to_csv(index=False)
@@ -2271,10 +2218,8 @@ elif sidebar_option == "Matchup Analysis":
                     file_name=f"{str(batter_name)}_vs_{str(bowler_name)}_matchup.csv",
                     mime="text/csv"
                 )
-
         else:
             st.info("Unknown grouping option selected.")
-
 
 elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
     # Match by Match Analysis - full updated code with sector-label wagon wheel
