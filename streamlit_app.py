@@ -6011,7 +6011,7 @@ elif sidebar_option == "Strength vs Weakness":
                 # ---------- FIXED: Caught Dismissals Wagon — ONLY base field + red dots, with debug ----------
                 def draw_caught_dismissals_wagon(df_wagon, batter_name):
                     st.write("**Debug Step 1:** Starting caught dismissals wagon plot")
-                
+                    
                     # Step 1: Filter
                     st.write("**Debug Step 2:** Filtering 'caught' dismissals")
                     caught_df = df_wagon[
@@ -6020,15 +6020,17 @@ elif sidebar_option == "Strength vs Weakness":
                     st.write(f"Caught rows found: **{len(caught_df)}**")
                     if len(caught_df) > 0:
                         st.write("Sample dismissals:", caught_df['dismissal'].head(3).tolist())
-                
+                    
                     if caught_df.empty:
                         st.info(f"No caught dismissals for {batter_name}.")
+                        st.write("**Debug:** Exiting early - no caught rows")
                         return
                 
                     # Step 2: Coordinates check
                     st.write("**Debug Step 3:** Checking coordinates")
                     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
                         st.warning("Missing 'wagonX' or 'wagonY' columns.")
+                        st.write("**Debug:** Missing coordinate columns")
                         return
                     x_coords = caught_df['wagonX'].astype(float)
                     y_coords = caught_df['wagonY'].astype(float)
@@ -6037,10 +6039,11 @@ elif sidebar_option == "Strength vs Weakness":
                     st.write("Y range:", y_coords.min(), "to", y_coords.max())
                     st.write("Sample points (first 5):", list(zip(x_coords.head(), y_coords.head())))
                 
-                    # Step 3: Create base figure
-                    st.write("**Debug Step 4:** Drawing base field (empty)")
+                    # Step 3: Draw base field
+                    st.write("**Debug Step 4:** Drawing base field (empty df)")
                     if 'draw_cricket_field_with_run_totals_requested' not in globals() or not callable(globals()['draw_cricket_field_with_run_totals_requested']):
-                        st.warning("Base wagon function missing.")
+                        st.warning("Base function missing.")
+                        st.write("**Debug:** draw_cricket_field_with_run_totals_requested missing")
                         return
                 
                     try:
@@ -6049,59 +6052,59 @@ elif sidebar_option == "Strength vs Weakness":
                         st.write("**Debug Step 5:** Base field created")
                     except Exception as e:
                         st.error(f"Base field failed: {e}")
+                        st.write("**Debug:** Error in base field creation")
                         return
                 
-                    # Step 4: Force correct limits & aspect (critical fix)
-                    st.write("**Debug Step 6:** Forcing axis limits to match 368-unit scale")
-                    ax.set_xlim(0, 368)
-                    ax.set_ylim(0, 368)
-                    ax.set_aspect('equal')  # keep circle round
-                    ax.autoscale(False)     # prevent auto-rescaling
-                
-                    # Optional: invert Y if your plot has Y increasing downward
-                    # ax.invert_yaxis()     # uncomment if dots appear upside-down
-                
-                    # Step 5: Remove all text (zone names, runs, %)
-                    st.write("**Debug Step 7:** Removing labels")
+                    # Step 4: Clean text labels
+                    st.write("**Debug Step 6:** Removing labels")
                     text_count = len(ax.texts)
                     for text in ax.texts[:]:
                         text.set_visible(False)
-                    st.write(f"Removed **{text_count}** text labels")
+                    st.write(f"Removed **{text_count}** labels")
                 
-                    # Step 6: Add red scatter + numbered debug points
-                    st.write("**Debug Step 8:** Plotting red dots")
+                    # Step 5: Force limits & invert Y
+                    st.write("**Debug Step 7:** Setting axis to 0-368 scale, equal aspect")
+                    ax.set_xlim(0, 368)
+                    ax.set_ylim(0, 368)  # adjust if Y starts from top
+                    ax.set_aspect('equal')
+                    ax.autoscale(False)
+                    ax.invert_yaxis()  # flip Y (positive down, as in diagram)
+                    st.write("**Debug:** Axis set (invert Y for diagram)")
+                
+                    # Debug: Add grid/box to see full area
+                    st.write("**Debug Step 8:** Adding debug grid/box")
+                    ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
+                    ax.add_patch(plt.Rectangle((0,0), 368, 368, fill=False, edgecolor='blue', linewidth=2, label='Debug Box (368x368)'))
+                    st.write("**Debug:** Grid and blue box added to show scale")
+                
+                    # Step 6: Add red dots
+                    st.write("**Debug Step 9:** Plotting red dots")
                     ax.scatter(
                         x_coords, y_coords,
                         color='red', s=150, alpha=0.9, edgecolor='black', linewidth=1.5,
                         marker='o', zorder=20
                     )
+                    st.write("**Debug:** Red dots plotted")
                 
-                    # Add small numbers on dots for debug (remove later if you want clean)
-                    for i, (x, y) in enumerate(zip(x_coords, y_coords)):
-                        if i < 10:  # show first 10 only to avoid clutter
-                            ax.text(x, y, str(i+1), color='white', fontsize=8, ha='center', va='center',
-                                    bbox=dict(facecolor='black', alpha=0.6, boxstyle='circle,pad=0.3'))
-                
-                    st.write("**Debug:** Red dots + numbers plotted (first 10 numbered)")
-                
-                    # Step 7: Legend
+                    # Step 7: Add legend
+                    st.write("**Debug Step 10:** Adding legend")
                     ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
                     ax.legend(loc='upper right', fontsize=10, frameon=True)
                 
-                    # Step 8: Final display
-                    st.write("**Debug Step 9:** Final rendering")
+                    # Step 8: Display
+                    st.write("**Debug Step 11:** Final rendering")
                     safe_fn = globals().get('safe_st_pyplot', None)
                     try:
                         if callable(safe_fn):
                             safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                         else:
                             st.pyplot(fig_w)
-                        st.write("**Debug Step 10:** Figure should be visible above. Check for red dots.")
+                        st.write("**Debug Step 12:** Figure should be above. Check for red dots, grid, blue box.")
                     except Exception as e:
                         st.error(f"Rendering failed: {e}")
+                        st.write("**Debug:** Error in rendering")
                     finally:
                         plt.close(fig_w)
-                    # commented : Debug for caught
             
                 # ---------- When user selects a kind ----------
                 if chosen_kind and chosen_kind != '-- none --':
