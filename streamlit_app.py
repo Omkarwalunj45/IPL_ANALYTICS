@@ -2509,7 +2509,7 @@ elif sidebar_option == "Matchup Analysis":
                         mime="text/csv"
                     )
         else:
-            st.info("Unknown grouping option selected.")info("Unknown grouping option selected.")
+            st.info("Unknown grouping option selected.")
 
 elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - full code block
     # Match by Match Analysis - full updated code with sector-label wagon wheel
