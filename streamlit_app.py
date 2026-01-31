@@ -6011,98 +6011,86 @@ elif sidebar_option == "Strength vs Weakness":
                 # ---------- FIXED: Caught Dismissals Wagon — ONLY base field + red dots, with debug ----------
                 def draw_caught_dismissals_wagon(df_wagon, batter_name):
                     st.write("**Debug Step 1:** Starting caught dismissals wagon plot")
-                    
-                    # Step 1: Filter
+                
+                    # Step 1: Filter caught
                     st.write("**Debug Step 2:** Filtering 'caught' dismissals")
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
                     ].copy()
-                    st.write(f"Caught rows found: **{len(caught_df)}**")
+                    st.write(f"Caught rows: **{len(caught_df)}**")
                     if len(caught_df) > 0:
                         st.write("Sample dismissals:", caught_df['dismissal'].head(3).tolist())
-                    
+                        st.write("Sample coords:", list(zip(caught_df['wagonX'].head(), caught_df['wagonY'].head())))
+                
                     if caught_df.empty:
                         st.info(f"No caught dismissals for {batter_name}.")
-                        st.write("**Debug:** Exiting early - no caught rows")
                         return
                 
-                    # Step 2: Coordinates check
-                    st.write("**Debug Step 3:** Checking coordinates")
-                    if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
-                        st.warning("Missing 'wagonX' or 'wagonY' columns.")
-                        st.write("**Debug:** Missing coordinate columns")
-                        return
+                    # Step 2: Coordinates
+                    st.write("**Debug Step 3:** Extracting coordinates")
                     x_coords = caught_df['wagonX'].astype(float)
                     y_coords = caught_df['wagonY'].astype(float)
-                    st.write(f"Coords extracted: **{len(x_coords)}** points")
-                    st.write("X range:", x_coords.min(), "to", x_coords.max())
-                    st.write("Y range:", y_coords.min(), "to", y_coords.max())
-                    st.write("Sample points (first 5):", list(zip(x_coords.head(), y_coords.head())))
+                    st.write(f"Points: **{len(x_coords)}** | X: {x_coords.min()}–{x_coords.max()} | Y: {y_coords.min()}–{y_coords.max()}")
                 
-                    # Step 3: Draw base field
-                    st.write("**Debug Step 4:** Drawing base field (empty df)")
+                    # Step 3: Force base field drawing (trick with 1 dummy row)
+                    st.write("**Debug Step 4:** Forcing base field (using dummy row)")
                     if 'draw_cricket_field_with_run_totals_requested' not in globals() or not callable(globals()['draw_cricket_field_with_run_totals_requested']):
-                        st.warning("Base function missing.")
-                        st.write("**Debug:** draw_cricket_field_with_run_totals_requested missing")
+                        st.warning("Base wagon function missing.")
                         return
                 
                     try:
-                        fig_w = draw_cricket_field_with_run_totals_requested(df_wagon.iloc[0:0], "")
+                        # Create minimal dummy row to trigger full field drawing
+                        dummy_row = df_wagon.iloc[0:1].copy()  # take first real row as template
+                        dummy_row['wagonX'] = 0
+                        dummy_row['wagonY'] = 0
+                        dummy_row['batsman_runs'] = 0  # avoid any run plotting
+                        fig_w = draw_cricket_field_with_run_totals_requested(dummy_row, batter_name)
                         ax = fig_w.gca()
-                        st.write("**Debug Step 5:** Base field created")
+                        st.write("**Debug Step 5:** Base field drawn with dummy row")
                     except Exception as e:
                         st.error(f"Base field failed: {e}")
-                        st.write("**Debug:** Error in base field creation")
                         return
                 
-                    # Step 4: Clean text labels
-                    st.write("**Debug Step 6:** Removing labels")
+                    # Step 4: Clean up — remove ALL text (zones, runs, %)
+                    st.write("**Debug Step 6:** Removing all text labels")
                     text_count = len(ax.texts)
                     for text in ax.texts[:]:
                         text.set_visible(False)
-                    st.write(f"Removed **{text_count}** labels")
+                    st.write(f"Removed **{text_count}** text elements")
                 
-                    # Step 5: Force limits & invert Y
-                    st.write("**Debug Step 7:** Setting axis to 0-368 scale, equal aspect")
+                    # Step 5: Force scale & orientation
+                    st.write("**Debug Step 7:** Setting fixed 0–368 scale")
                     ax.set_xlim(0, 368)
-                    ax.set_ylim(0, 368)  # adjust if Y starts from top
+                    ax.set_ylim(0, 368)
                     ax.set_aspect('equal')
                     ax.autoscale(False)
-                    ax.invert_yaxis()  # flip Y (positive down, as in diagram)
-                    st.write("**Debug:** Axis set (invert Y for diagram)")
-                
-                    # Debug: Add grid/box to see full area
-                    st.write("**Debug Step 8:** Adding debug grid/box")
-                    ax.grid(True, which='both', linestyle='--', linewidth=0.5, color='gray')
-                    ax.add_patch(plt.Rectangle((0,0), 368, 368, fill=False, edgecolor='blue', linewidth=2, label='Debug Box (368x368)'))
-                    st.write("**Debug:** Grid and blue box added to show scale")
+                    ax.invert_yaxis()  # Y positive down — matches diagram
+                    st.write("**Debug:** Axis fixed (inverted Y)")
                 
                     # Step 6: Add red dots
-                    st.write("**Debug Step 9:** Plotting red dots")
+                    st.write("**Debug Step 8:** Plotting red dots")
                     ax.scatter(
                         x_coords, y_coords,
-                        color='red', s=150, alpha=0.9, edgecolor='black', linewidth=1.5,
+                        color='red', s=180, alpha=0.9, edgecolor='black', linewidth=1.5,
                         marker='o', zorder=20
                     )
-                    st.write("**Debug:** Red dots plotted")
+                    st.write("**Debug:** Red dots added")
                 
-                    # Step 7: Add legend
-                    st.write("**Debug Step 10:** Adding legend")
-                    ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
+                    # Step 7: Legend
+                    ax.scatter([], [], color='red', s=180, label='Caught Dismissal Locations')
                     ax.legend(loc='upper right', fontsize=10, frameon=True)
                 
                     # Step 8: Display
-                    st.write("**Debug Step 11:** Final rendering")
+                    st.write("**Debug Step 9:** Final rendering")
                     safe_fn = globals().get('safe_st_pyplot', None)
                     try:
                         if callable(safe_fn):
                             safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                         else:
                             st.pyplot(fig_w)
-                        st.write("**Debug Step 12:** Figure should be above. Check for red dots, grid, blue box.")
+                        st.write("**Debug Step 10:** Figure rendered — check for green field + red dots")
                     except Exception as e:
                         st.error(f"Rendering failed: {e}")
-                        st.write("**Debug:** Error in rendering")
                     finally:
                         plt.close(fig_w)
             
