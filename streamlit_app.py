@@ -5764,6 +5764,12 @@ elif sidebar_option == "Strength vs Weakness":
             # import streamlit as st
             
             # Required objects check
+# import numpy as np
+# import pandas as pd
+# import matplotlib.pyplot as plt
+# import streamlit as st
+            
+            # Required objects check
             required = ['pf', 'bdf', 'player_selected']
             missing = [r for r in required if r not in globals()]
             if missing:
@@ -6014,106 +6020,89 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
             
-                # ---------- Caught Dismissals Wagon — base field + red dots ----------
+                # ---------- Caught Dismissals Wagon — exact same field style + red dots ----------
                 def draw_caught_dismissals_wagon(df_wagon, batter_name):
-                    st.write("**Debug Step 1:** Starting caught dismissals wagon plot")
-            
-                    # Step 1: Filter
-                    st.write("**Debug Step 2:** Filtering 'caught' dismissals")
+                    # Filter caught dismissals
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
                     ].copy()
-                    st.write(f"Caught rows: **{len(caught_df)}**")
-                    if len(caught_df) > 0:
-                        st.write("Sample dismissals:", caught_df['dismissal'].head(3).tolist())
             
                     if caught_df.empty:
                         st.info(f"No caught dismissals for {batter_name}.")
                         return
             
-                    # Step 2: Coordinates
-                    st.write("**Debug Step 3:** Extracting coordinates")
+                    # Extract coordinates
                     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
                         st.warning("Missing 'wagonX' or 'wagonY' columns.")
                         return
+            
                     x_coords = caught_df['wagonX'].astype(float)
                     y_coords = caught_df['wagonY'].astype(float)
-                    st.write(f"Points: **{len(x_coords)}** | X: {x_coords.min()}–{x_coords.max()} | Y: {y_coords.min()}–{y_coords.max()}")
-                    st.write("Sample points:", list(zip(x_coords.head(), y_coords.head())))
             
-                    # Step 3: Draw base field with dummy row
-                    st.write("**Debug Step 4:** Drawing base field with dummy row")
-                    if 'draw_cricket_field_with_run_totals_requested' not in globals() or not callable(globals()['draw_cricket_field_with_run_totals_requested']):
-                        st.warning("Base function missing.")
-                        return
+                    # Create figure with EXACT same style
+                    fig, ax = plt.subplots(figsize=(10, 10))
+                    ax.set_aspect('equal')
+                    ax.axis('off')
             
-                    try:
-                        # Dummy row to force drawing
-                        dummy_df = df_wagon.iloc[0:1].copy() if not df_wagon.empty else pd.DataFrame({'score': [0], 'wagonZone': [1], 'bat_hand': ['R']})
-                        dummy_df['score'] = 0
-                        fig_w = draw_cricket_field_with_run_totals_requested(dummy_df, "")
-                        ax = fig_w.gca()
-                        st.write("**Debug Step 5:** Base field drawn")
-                    except Exception as e:
-                        st.error(f"Base field failed: {e}")
-                        return
+                    # Outer field: #228B22 (dark green)
+                    ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
+                    ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
             
-                    # Step 4: Remove fills (green backgrounds) to make blank
-                    st.write("**Debug Step 6:** Removing green fills")
-                    for patch in ax.patches:
-                        if isinstance(patch, Circle) and patch.get_fill():
-                            patch.set_fill(False)
-                            patch.set_edgecolor('black')
-                            patch.set_linewidth(2)
-                    st.write("**Debug:** Fills removed - should be outline only")
+                    # Inner circle: #66bb6a (lighter green)
+                    ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
+                    ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
             
-                    # Step 5: Remove all text
-                    st.write("**Debug Step 7:** Removing labels")
-                    text_count = len(ax.texts)
-                    for text in ax.texts[:]:
-                        text.set_visible(False)
-                    st.write(f"Removed **{text_count}** text elements")
+                    # Pitch rectangle: tan
+                    pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
+                    ax.add_patch(pitch_rect)
             
-                    # Step 6: Scale & plot red dots
-                    st.write("**Debug Step 8:** Scaling and plotting red dots")
-                    # Scale to normalized -1 to 1 (center at 184,184, radius 184)
+                    # Radial lines
+                    angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                    for angle in angles:
+                        x = math.cos(angle)
+                        y = math.sin(angle)
+                        ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
+            
+                    # Scale coordinates to normalized -1 to 1
                     center_x = 184
                     center_y = 184
                     radius = 184
                     x_plot = (x_coords - center_x) / radius
-                    y_plot = - (y_coords - center_y) / radius  # flip Y (positive down in diagram)
+                    y_plot = - (y_coords - center_y) / radius  # flip Y (positive down)
             
-                    # For LHB flip X
-                    batting_style_val = dummy_df['bat_hand'].iloc[0] if 'bat_hand' in dummy_df.columns else 'R'
+                    # LHB flip X if needed
+                    batting_style_val = df_wagon['bat_hand'].iloc[0] if 'bat_hand' in df_wagon.columns and not df_wagon.empty else 'R'
                     is_lhb = str(batting_style_val).upper().startswith('L')
                     if is_lhb:
                         x_plot = -x_plot
-                    st.write("**Debug:** Scaled coords (first 5):", list(zip(x_plot.head(), y_plot.head())))
             
+                    # Plot red dots
                     ax.scatter(
                         x_plot, y_plot,
                         color='red', s=150, alpha=0.9, edgecolor='black', linewidth=1.5,
                         marker='o', zorder=20
                     )
-                    st.write("**Debug:** Red dots plotted in normalized scale")
             
-                    # Step 7: Legend
+                    # Legend
                     ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
                     ax.legend(loc='upper right', fontsize=10, frameon=True)
             
-                    # Step 8: Display
-                    st.write("**Debug Step 9:** Final rendering")
+                    # Limits
+                    ax.set_xlim(-1.2, 1.2)
+                    ax.set_ylim(-1.2, 1.2)
+                    ax.set_aspect('equal')
+            
+                    # Display
                     safe_fn = globals().get('safe_st_pyplot', None)
                     try:
                         if callable(safe_fn):
-                            safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                            safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                         else:
-                            st.pyplot(fig_w)
-                        st.write("**Debug Step 10:** Figure rendered - check for outline + red dots")
-                    except Exception as e:
-                        st.error(f"Rendering failed: {e}")
+                            st.pyplot(fig)
+                    except Exception:
+                        st.pyplot(fig)
                     finally:
-                        plt.close(fig_w)
+                        plt.close(fig)
             
                 # ---------- When user selects a kind ----------
                 if chosen_kind and chosen_kind != '-- none --':
@@ -6136,7 +6125,6 @@ elif sidebar_option == "Strength vs Weakness":
                         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
                         draw_wagon_if_available(df_use, player_selected)
             
-                        # NEW: Caught dismissals wagon (red dots only)
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
             
@@ -6163,12 +6151,11 @@ elif sidebar_option == "Strength vs Weakness":
                         st.markdown(f"### Detailed view — Bowler Style: {chosen_style}")
                         draw_wagon_if_available(df_use, player_selected)
             
-                        # NEW: Caught dismissals wagon (red dots only)
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
             
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
-       
+                   
         # The rest of the code (wagon wheels, pitchmaps, shot productivity, etc.) will now use the phase-filtered pf/bdf automatically
        
         # ... (continue with the rest of your original code from here, like st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'> Wagon wheels — Pace & Spin</div>", unsafe_allow_html=True) and so on)
