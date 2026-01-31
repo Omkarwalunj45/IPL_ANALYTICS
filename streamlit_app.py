@@ -5038,7 +5038,7 @@ elif sidebar_option == "Strength vs Weakness":
             working['dismissal_clean_tmp'] = working.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
        
             WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw']
-            def is_bowler_wicket_local(out_flag_val, dismissal_text):
+        def is_bowler_wicket_local(out_flag_val, dismissal_text):
                 try:
                     if int(out_flag_val) != 1:
                         return False
