@@ -339,7 +339,27 @@ import requests
 import pandas as pd
 import numpy as np
 import streamlit as st
+st.sidebar.header("Select Years")
+years = st.sidebar.slider(
+    "Select year range",
+    min_value=2021,
+    max_value=2026,
+    value=(2021, 2026),  # default full range
+    step=1
+)
+selected_years = list(range(years[0], years[1] + 1))
+st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
 
+# ────────────────────────────────────────────────
+# Tournament multi-select
+# ────────────────────────────────────────────────
+st.sidebar.header("Select Tournaments")
+all_tournaments = list(TOURNAMENTS.keys())
+selected_tournaments = st.sidebar.multiselect(
+    "Choose tournaments to load",
+    options=all_tournaments,
+    default=["IPL"]  # start with IPL for speed
+)
 # --- your tournaments mapping (leave as you had it; local names will be auto-resolved to parquet if present) ---
 TOURNAMENTS = {
     "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",
