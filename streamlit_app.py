@@ -347,7 +347,7 @@ TOURNAMENTS = {
     
     # Dropbox direct download links (dl=1)
     "T20 Blast": "https://www.dropbox.com/scl/fi/5424aydb5tet950h2ue97/IPL_APP_T20_Blast.csv?rlkey=tint323016ydixtylb27ur95s&st=9xi9nxjh&dl=1",
-    "T20I":      "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=4m80ckfy&dl=0",
+    "T20I":      "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=4m80ckfy&dl=1",
 }
 
 # ────────────────────────────────────────────────
