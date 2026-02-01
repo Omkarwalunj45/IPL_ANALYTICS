@@ -501,10 +501,10 @@ def load_filtered_data(selected_tournaments, selected_years):
                 df_temp = df_temp.reindex(columns=first_columns)
             
             df_temp['tournament'] = tournament  # tag source
-        df_temp = load_single_tournament(tournament, source, tuple(selected_years))
+            df_temp = load_single_tournament(tournament, source, tuple(selected_years))
         
-        if not df_temp.empty:
-            dfs.append(df_temp)
+            if not df_temp.empty:
+                dfs.append(df_temp)
 
         except Exception as e:
             st.error(f"Failed to load {tournament}: {e}")
