@@ -329,14 +329,22 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
 st.title('IPL Performance Analysis Portal')
 
+@st.cache_data
+def load_data():
+    path = "Datasets/ipl_bbb_21_25_2.xlsx"
+    df = pd.read_excel(path)
+
+    return df
+
+# df = load_data()    
 import streamlit as st
 import pandas as pd
 import requests
-from io import BytesIO
-# ────────────────────────────────────────────────
-# Tournament → source (local path or Dropbox direct link)
+@@ -344,108 +336,195 @@ def load_data():
+# Tournament → file path or direct Dropbox URL
 # ────────────────────────────────────────────────
 TOURNAMENTS = {
+    "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",               # your local .xlsx file
     "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",
     "CPL": "Datasets/IPL_APP_CPL.csv",
     "ILT20": "Datasets/IPL_APP_ILT20.csv",
@@ -344,117 +352,250 @@ TOURNAMENTS = {
     "MLC": "Datasets/IPL_APP_MLC.csv",
     "SA20": "Datasets/IPL_APP_SA20.csv",
     "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
-   
-    # Dropbox direct download links (dl=1)
+    
+    # Large files from Dropbox (direct dl=1 links)
     "T20 Blast": "https://www.dropbox.com/scl/fi/5424aydb5tet950h2ue97/IPL_APP_T20_Blast.csv?rlkey=tint323016ydixtylb27ur95s&st=9xi9nxjh&dl=1",
-    "T20I": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=4m80ckfy&dl=1",
+    "T20I": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=l4m924ec&dl=1",
 }
+
 # ────────────────────────────────────────────────
-# Sidebar: Year slider + Tournament multi-select
+# Year range slider (2021–2026)
+# Helper: Get columns that exist in data (for filtering)
 # ────────────────────────────────────────────────
-st.sidebar.header("Data Selection")
-# Year range
+st.sidebar.header("Select Years")
+years = st.sidebar.slider(
+    "Select year range",
+    min_value=2021,
+    max_value=2026,
+    value=(2021, 2026),  # default full range
+    step=1
+)
+selected_years = list(range(years[0], years[1] + 1))
+st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
+ESSENTIAL_COLUMNS = ['p_match', 'inns', 'bat', 'team_bat', 'bowl', 'team_bowl',
+       'ball', 'ball_id', 'outcome', 'score', 'out', 'dismissal', 
+       'over', 'noball', 'wide', 'byes', 'legbyes',
+       'inns_runs', 'inns_wkts', 'year', 'ground', 'country',
+       'competition', 'bat_hand', 'bowl_style', 'bowl_kind',
+       'batruns', 'ballfaced', 'bowlruns', 'wagonX', 'wagonY', 'wagonZone',
+       'line', 'length', 'shot', 'control']  # Add your essential columns here
+
+# ────────────────────────────────────────────────
+# Tournament multi-select
+# Optimized loading per tournament with chunking
+# ────────────────────────────────────────────────
+st.sidebar.header("Select Tournaments")
+all_tournaments = list(TOURNAMENTS.keys())
+selected_tournaments = st.sidebar.multiselect(
+    "Choose tournaments to load",
+    options=all_tournaments,
+    default=["IPL"]  # start with IPL for speed
+)
+@st.cache_data(ttl="24h", show_spinner=False)
+def load_single_tournament(tournament, source, selected_years):
+    """Load and filter a single tournament - cached individually"""
+    try:
+        # Determine year column name by reading just first row
+        if source.startswith("http"):
+            resp = requests.get(source, timeout=180, stream=True)
+            resp.raise_for_status()
+            content = BytesIO(resp.content)
+            
+            # Read only first row to detect year column
+            sample = pd.read_csv(content, nrows=1)
+            content.seek(0)  # Reset stream
+            
+            year_col = next((c for c in sample.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+            
+            # Read in chunks for large files
+            chunks = []
+            for chunk in pd.read_csv(content, chunksize=50000, low_memory=False):
+                if year_col and year_col in chunk.columns:
+                    # Filter years immediately
+                    chunk = chunk[chunk[year_col].astype(str).str[:4].astype(int).isin(selected_years)]
+                if not chunk.empty:
+                    chunks.append(chunk)
+            
+            if not chunks:
+                return pd.DataFrame()
+            df_temp = pd.concat(chunks, ignore_index=True)
+        
+        else:  # Local file
+            if source.endswith('.xlsx'):
+                df_temp = pd.read_excel(source, engine='openpyxl')
+            else:
+                # Read CSV in chunks
+                sample = pd.read_csv(source, nrows=1)
+                year_col = next((c for c in sample.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+                
+                chunks = []
+                for chunk in pd.read_csv(source, chunksize=50000, low_memory=False):
+                    if year_col and year_col in chunk.columns:
+                        chunk = chunk[chunk[year_col].astype(str).str[:4].astype(int).isin(selected_years)]
+                    if not chunk.empty:
+                        chunks.append(chunk)
+                
+                if not chunks:
+                    return pd.DataFrame()
+                df_temp = pd.concat(chunks, ignore_index=True)
+        
+        # Keep only essential columns if they exist (reduces memory)
+        existing_cols = [c for c in ESSENTIAL_COLUMNS if c in df_temp.columns]
+        if existing_cols:
+            other_cols = [c for c in df_temp.columns if c not in ESSENTIAL_COLUMNS]
+            # Keep essential + a few others
+            df_temp = df_temp[existing_cols + other_cols[:10]]  # Adjust as needed
+        
+        df_temp['tournament'] = tournament
+        
+        return df_temp
+    
+    except Exception as e:
+        st.error(f"Failed to load {tournament}: {e}")
+        return pd.DataFrame()
+
+# ────────────────────────────────────────────────
+# Optimized loading + year filtering
+# Main data loader - combines cached tournaments
+# ────────────────────────────────────────────────
+@st.cache_data(ttl="24h", show_spinner="Loading selected data (may take a moment for large leagues)…")
+def load_filtered_data(selected_tournaments, selected_years):
+    """Load multiple tournaments by combining individually cached results"""
+    if not selected_tournaments:
+        return pd.DataFrame()
+
+    dfs = []
+    first_columns = None
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
+    for tournament in selected_tournaments:
+    for idx, tournament in enumerate(selected_tournaments):
+        status_text.text(f"Loading {tournament}... ({idx+1}/{len(selected_tournaments)})")
+        
+        source = TOURNAMENTS.get(tournament)
+        if not source:
+            continue
+
+        try:
+            # Load file
+            if source.startswith("http"):  # Dropbox
+                resp = requests.get(source, timeout=180)
+                resp.raise_for_status()
+                content = BytesIO(resp.content)
+                df_temp = pd.read_csv(content, low_memory=False)
+            else:  # Local in repo
+                df_temp = pd.read_excel(source) if source.endswith('.xlsx') else pd.read_csv(source, low_memory=False)
+            
+            # Assume there's a 'year' or 'season' column (adjust name if different)
+            year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+            if year_col:
+                # Filter only selected years (early filter = huge speedup)
+                df_temp = df_temp[df_temp[year_col].astype(str).str[:4].astype(int).isin(selected_years)]
+            
+            if df_temp.empty:
+                continue
+            
+            # Standardize column order
+            if first_columns is None:
+                first_columns = df_temp.columns.tolist()
+            else:
+                df_temp = df_temp.reindex(columns=first_columns)
+            
+            df_temp['tournament'] = tournament  # tag source
+        df_temp = load_single_tournament(tournament, source, tuple(selected_years))
+        
+        if not df_temp.empty:
+            dfs.append(df_temp)
+
+        except Exception as e:
+            st.error(f"Failed to load {tournament}: {e}")
+            continue
+        progress_bar.progress((idx + 1) / len(selected_tournaments))
+    
+    progress_bar.empty()
+    status_text.empty()
+
+    if not dfs:
+        return pd.DataFrame()
+
+    merged_df = pd.concat(dfs, ignore_index=True)
+    # Align columns before concatenating
+    all_columns = set()
+    for df in dfs:
+        all_columns.update(df.columns)
+    
+    aligned_dfs = []
+    for df in dfs:
+        aligned_dfs.append(df.reindex(columns=sorted(all_columns), fill_value=None))
+    
+    merged_df = pd.concat(aligned_dfs, ignore_index=True)
+    
+    # Convert to categorical for memory efficiency
+    for col in ['bat', 'bowl', 'tournament']:
+        if col in merged_df.columns:
+            merged_df[col] = merged_df[col].astype('category')
+    
+    return merged_df
+
+# Load only when selections are made
+df = load_filtered_data(selected_tournaments, selected_years)
+# ────────────────────────────────────────────────
+# UI Components
+# ────────────────────────────────────────────────
+st.sidebar.header("Select Years")
 years = st.sidebar.slider(
     "Select year range",
     min_value=2021,
     max_value=2026,
     value=(2021, 2026),
-    step=1,
-    key="year_slider"
+    step=1
 )
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
-# Tournaments
+
+st.sidebar.header("Select Tournaments")
 all_tournaments = list(TOURNAMENTS.keys())
 selected_tournaments = st.sidebar.multiselect(
-    "Select tournaments to load",
+    "Choose tournaments to load",
     options=all_tournaments,
-    default=["IPL"],
-    key="tournament_select"
+    default=["IPL"]
 )
+
+# Feedback
+if not df.empty:
+    st.success(f"Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s)")
+    st.sidebar.write("Data loaded successfully!")
+# Add a manual refresh button
+if st.sidebar.button("🔄 Refresh Data"):
+    st.cache_data.clear()
+    st.rerun()
+
 # ────────────────────────────────────────────────
-# Optimized loading function
-# ────────────────────────────────────────────────
-@st.cache_data(
-    ttl="24h",
-    show_spinner=False, # we'll use custom spinner
-    hash_funcs={pd.DataFrame: id} # better hashing for dataframes
-)
-def load_filtered_data(selected_tournaments, selected_years):
-    if not selected_tournaments:
-        return pd.DataFrame()
-   
-    with st.spinner(f"Loading {len(selected_tournaments)} tournament(s) for years {years[0]}–{years[1]}…"):
-        dfs = []
-        first_columns = None
-       
-        for tournament in selected_tournaments:
-            source = TOURNAMENTS.get(tournament)
-            if not source:
-                st.warning(f"Source not found for {tournament}")
-                continue
-           
-            try:
-                # Load file
-                if source.startswith("http"): # Dropbox
-                    resp = requests.get(source, timeout=200)
-                    resp.raise_for_status()
-                    content = BytesIO(resp.content)
-                    df_temp = pd.read_csv(content, low_memory=False, dtype_backend='numpy_nullable')
-                else: # Local repo file
-                    if source.endswith('.xlsx'):
-                        df_temp = pd.read_excel(source, engine='openpyxl', dtype_backend='numpy_nullable')
-                    else:
-                        df_temp = pd.read_csv(source, low_memory=False, dtype_backend='numpy_nullable')
-               
-                # Early year filtering (huge speedup for large files)
-                year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
-                if year_col:
-                    # Convert to int safely
-                    df_temp[year_col] = pd.to_numeric(df_temp[year_col].astype(str).str[:4], errors='coerce')
-                    df_temp = df_temp[df_temp[year_col].isin(selected_years)].copy()
-               
-                if df_temp.empty:
-                    st.info(f"No data for {tournament} in selected years.")
-                    continue
-               
-                # Standardize columns
-                if first_columns is None:
-                    first_columns = df_temp.columns.tolist()
-                else:
-                    df_temp = df_temp.reindex(columns=first_columns)
-               
-                df_temp['tournament'] = tournament
-                dfs.append(df_temp)
-               
-            except Exception as e:
-                st.error(f"Failed to load {tournament}: {str(e)}")
-                continue
-       
-        if not dfs:
-            return pd.DataFrame()
-       
-        merged_df = pd.concat(dfs, ignore_index=True)
-        return merged_df
-# ────────────────────────────────────────────────
-# Load & show feedback
+# Load data
 # ────────────────────────────────────────────────
 if selected_tournaments:
-    df = load_filtered_data(selected_tournaments, selected_years)
-   
+    with st.spinner("Loading data..."):
+        df = load_filtered_data(selected_tournaments, selected_years)
+    
     if not df.empty:
-        st.success(f"Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) ({years[0]}–{years[1]})")
-        st.sidebar.markdown("**Data ready!**")
-       
-        # Optional: show quick stats
-        with st.sidebar.expander("Loaded summary"):
-            st.write(df['tournament'].value_counts().to_frame("Rows"))
+        st.success(f"✅ Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s)")
+        
+        # Show memory usage
+        memory_mb = df.memory_usage(deep=True).sum() / 1024**2
+        st.sidebar.metric("Data Size", f"{memory_mb:.1f} MB")
+        
+        # Preview
+        with st.expander("📊 Data Preview"):
+            st.dataframe(df.head(100))
     else:
-        st.warning("No matching data found for the selected tournaments and years.")
+        st.warning("No data found for selected filters.")
 else:
-    st.info("Please select at least one tournament to load data.")
+    st.warning("No data loaded yet. Select at least one tournament and year range.")
+DF_gen=df
+    st.info("👈 Select at least one tournament from the sidebar")
     df = pd.DataFrame()
-# Now df is ready for the rest of your app
+
 DF_gen = df
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
     """
