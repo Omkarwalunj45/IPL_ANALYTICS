@@ -468,7 +468,6 @@ def load_filtered_data(selected_tournaments, selected_years):
     progress_bar = st.progress(0)
     status_text = st.empty()
 
-    for tournament in selected_tournaments:
     for idx, tournament in enumerate(selected_tournaments):
         status_text.text(f"Loading {tournament}... ({idx+1}/{len(selected_tournaments)})")
         
