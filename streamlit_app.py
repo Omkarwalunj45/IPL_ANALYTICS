@@ -107,7 +107,7 @@ def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', run
         runs_col = None # will use 0
 
     wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
-
+    dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
     for _, row in df_in.iterrows():
         li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
         le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
@@ -2354,7 +2354,7 @@ elif sidebar_option == "Matchup Analysis":
             runs_col = None # will use 0
    
         wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
-   
+        dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
         for _, row in df_in.iterrows():
             li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
             le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
@@ -5940,7 +5940,7 @@ elif sidebar_option == "Strength vs Weakness":
                         runs_col = None  # will use 0
             
                     wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
-            
+                    dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
                     for _, row in df_in.iterrows():
                         li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
                         le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
@@ -7009,7 +7009,7 @@ elif sidebar_option == "Strength vs Weakness":
                 runs_col = None # will use 0
     
             wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
-    
+            dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
             for _, row in df_in.iterrows():
                 li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
                 le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
