@@ -815,7 +815,7 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
     d['is_three'] = (d['runs_off_bat'] == 3).astype(int)
     d['is_four'] = (d['runs_off_bat'] == 4).astype(int)
     d['is_six'] = (d['runs_off_bat'] == 6).astype(int)
-
+    d = d.dropna(subset=['batsman', 'match_id'])
     # last snapshot per batsman per match
     last_bat_snapshot = (
         d.groupby(['batsman', 'match_id'], sort=False, as_index=False)
