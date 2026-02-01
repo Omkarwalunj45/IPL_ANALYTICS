@@ -328,166 +328,116 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
 st.title('IPL Performance Analysis Portal')
-
-@st.cache_data
-def load_data():
-    path = "Datasets/ipl_bbb_21_25_2.xlsx"
-    df = pd.read_excel(path)
-
-    return df
-
-# df = load_data()    
-import streamlit as st
-import pandas as pd
-import requests
+# ===========================
+# Fast loader (parquet-first)
+# Paste this block in place of your old loader code
+# ===========================
+import os
+import hashlib
 from io import BytesIO
+import requests
+import pandas as pd
+import numpy as np
+import streamlit as st
 
-# ────────────────────────────────────────────────
-# Tournament → file path or direct Dropbox URL
-# ────────────────────────────────────────────────
+# --- your tournaments mapping (leave as you had it; local names will be auto-resolved to parquet if present) ---
 TOURNAMENTS = {
-    "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",               # your local .xlsx file
+    "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",
     "CPL": "Datasets/IPL_APP_CPL.csv",
     "ILT20": "Datasets/IPL_APP_ILT20.csv",
     "LPL": "Datasets/IPL_APP_LPL.csv",
     "MLC": "Datasets/IPL_APP_MLC.csv",
     "SA20": "Datasets/IPL_APP_SA20.csv",
     "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
-    
-    # Large files from Dropbox (direct dl=1 links)
+    # keep remote links if any (they will be handled)
     "T20 Blast": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=ih914nfa&dl=1",
     "T20I": "https://www.dropbox.com/scl/fi/pzxfy9bqoqtaiknli5oi2/IPL_APP_T20I.csv?rlkey=8xl4wb37yuq1ej85w122ldlxk&st=4m8xk916&dl=1",
 }
 
-# ────────────────────────────────────────────────
-# Year range slider (2021–2026)
-# ────────────────────────────────────────────────
-st.sidebar.header("Select Years")
-years = st.sidebar.slider(
-    "Select year range",
-    min_value=2021,
-    max_value=2026,
-    value=(2021, 2026),  # default full range
-    step=1
-)
-selected_years = list(range(years[0], years[1] + 1))
-st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
-
-# ────────────────────────────────────────────────
-# Tournament multi-select
-# ────────────────────────────────────────────────
-st.sidebar.header("Select Tournaments")
-all_tournaments = list(TOURNAMENTS.keys())
-selected_tournaments = st.sidebar.multiselect(
-    "Choose tournaments to load",
-    options=all_tournaments,
-    default=["IPL"]  # start with IPL for speed
-)
-
-# ────────────────────────────────────────────────
-# Optimized loading + year filtering
-# ────────────────────────────────────────────────
-@st.cache_data(ttl="24h", show_spinner="Loading selected data (may take a moment for large leagues)…")
-import os
-import hashlib
-import requests
-from io import BytesIO
-import pandas as pd
-import numpy as np
-import streamlit as st
-
-CACHE_DIR = "./.cache_data"
+CACHE_DIR = ".cache_data"
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 def _hash_args(selected_tournaments, selected_years):
     key = "|".join(sorted(selected_tournaments)) + "|" + f"{min(selected_years)}-{max(selected_years)}"
     return hashlib.md5(key.encode()).hexdigest()
 
-@st.cache_data(ttl=24*3600, show_spinner="Loading selected data (may take a moment)...")
-def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, csv_chunksize=200_000):
+def _prefer_parquet_path(path):
     """
-    Fast loader:
-      - chunked reads for CSV
-      - caches per selection to ./ .cache_data/<hash>.parquet
-      - tries to use parquet preconverted for local xlsx files (recommended)
-    Args:
-      selected_tournaments: list of keys in TOURNAMENTS
-      selected_years: list of ints
-      usecols: list of column names you actually need (recommended)
-      csv_chunksize: chunk size for read_csv
-    Returns:
-      pandas.DataFrame (possibly empty)
+    Given a local path like 'Datasets/xxx.csv' or 'Datasets/xxx.xlsx' or 'Datasets/xxx',
+    return the path to use:
+      - if path is local and a .parquet sibling exists, prefer it
+      - if path itself endswith .parquet and exists, use it
+      - otherwise return original path unchanged
+    """
+    if not isinstance(path, str):
+        return path
+    # if remote URL, return as-is
+    if path.lower().startswith("http"):
+        return path
+    base, ext = os.path.splitext(path)
+    parquet_candidate = base + ".parquet"
+    if os.path.exists(parquet_candidate):
+        return parquet_candidate
+    # if given path is parquet and exists, keep
+    if ext.lower() == ".parquet" and os.path.exists(path):
+        return path
+    # maybe user gave a base name without ext and a parquet exists
+    if os.path.exists(path):
+        return path
+    # fallback: if csv/xlsx variant exists, use it; else return original
+    csv_candidate = base + ".csv"
+    xlsx_candidate = base + ".xlsx"
+    if os.path.exists(csv_candidate):
+        return csv_candidate
+    if os.path.exists(xlsx_candidate):
+        return xlsx_candidate
+    return path
+
+@st.cache_data(ttl=24*3600, show_spinner="Loading selected data (may take a moment for large leagues)…")
+def load_filtered_data(selected_tournaments, selected_years, usecols=None, csv_chunksize=200_000):
+    """
+    Fast loader that prefers parquet files stored locally in Datasets/.
+    - selected_tournaments: list of keys from TOURNAMENTS
+    - selected_years: list of ints (e.g. [2021,2022,...])
+    - usecols: optional list of columns to read (speeds up read)
     """
     if not selected_tournaments:
         return pd.DataFrame()
 
-    # local cache per selection
+    # cache filename for this selection
     cache_hash = _hash_args(selected_tournaments, selected_years)
-    cache_path = os.path.join(CACHE_DIR, f"merged_{cache_hash}.parquet")
-    if os.path.exists(cache_path):
+    cached_path = os.path.join(CACHE_DIR, f"merged_{cache_hash}.parquet")
+    if os.path.exists(cached_path):
         try:
-            df_cached = pd.read_parquet(cache_path)
+            df_cached = pd.read_parquet(cached_path)
             return df_cached
         except Exception:
-            # fallback to re-create cache
+            # if cache corrupted, continue to rebuild
             pass
 
     dfs = []
     first_columns = None
 
     for tournament in selected_tournaments:
-        source = TOURNAMENTS.get(tournament)
-        if not source:
+        src = TOURNAMENTS.get(tournament)
+        if not src:
             continue
 
+        src = _prefer_parquet_path(src)
+
         try:
-            # ---------- LOCAL FILES ----------
-            if not str(source).lower().startswith("http"):
-                # If local xlsx exists, prefer a same-folder parquet (much faster). If not, we read the xlsx/ csv.
-                if source.endswith(".xlsx"):
-                    parquet_equiv = os.path.splitext(source)[0] + ".parquet"
-                    if os.path.exists(parquet_equiv):
-                        # fast read
-                        df_temp = pd.read_parquet(parquet_equiv, columns=usecols)
-                    else:
-                        # read excel (slow) but we will convert & save to parquet for next time
-                        df_temp = pd.read_excel(source, usecols=usecols)
-                        try:
-                            df_temp.to_parquet(parquet_equiv, index=False)
-                        except Exception:
-                            pass
-                else:
-                    # CSV: stream in chunks and filter by year on the fly
-                    if source.endswith(".csv"):
-                        reader = pd.read_csv(source, usecols=usecols, chunksize=csv_chunksize, low_memory=True)
-                        parts = []
-                        for chunk in reader:
-                            year_col = next((c for c in chunk.columns if 'year' in c.lower() or 'season' in c.lower()), None)
-                            if year_col:
-                                # try to extract numeric year safely
-                                try:
-                                    chunk_years = pd.to_numeric(chunk[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
-                                    chunk = chunk[chunk_years.isin(selected_years)]
-                                except Exception:
-                                    pass
-                            if not chunk.empty:
-                                parts.append(chunk)
-                        df_temp = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=usecols)
-                    else:
-                        # Unknown local ext: try pandas autodetect
-                        df_temp = pd.read_csv(source, usecols=usecols) if source.endswith(".csv") else pd.read_excel(source, usecols=usecols)
+            # ---------- LOCAL parquet ----------
+            if isinstance(src, str) and os.path.exists(src) and src.lower().endswith(".parquet"):
+                # fast parquet read (supports `columns` param)
+                df_temp = pd.read_parquet(src, columns=usecols) if usecols else pd.read_parquet(src)
 
-            # ---------- REMOTE (dropbox/http) ----------
-            else:
-                # Use requests to fetch bytes (we keep it simple: read into BytesIO then chunk)
-                resp = requests.get(source, timeout=180)
-                resp.raise_for_status()
-                content = BytesIO(resp.content)
-
-                if str(source).lower().endswith(".csv") or '.csv?' in source.lower():
-                    reader = pd.read_csv(content, usecols=usecols, chunksize=csv_chunksize, low_memory=True)
+            # ---------- LOCAL CSV or XLSX ----------
+            elif isinstance(src, str) and os.path.exists(src):
+                if src.lower().endswith(".csv"):
+                    # chunked CSV read + early year filtering
                     parts = []
-                    for chunk in reader:
+                    for chunk in pd.read_csv(src, usecols=usecols, chunksize=csv_chunksize, low_memory=True):
+                        # try identify year column and filter
                         year_col = next((c for c in chunk.columns if 'year' in c.lower() or 'season' in c.lower()), None)
                         if year_col:
                             try:
@@ -499,61 +449,318 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
                             parts.append(chunk)
                     df_temp = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=usecols)
                 else:
-                    # remote excel -> read into pandas (slow). If used often, convert to parquet offline.
-                    df_temp = pd.read_excel(content, usecols=usecols)
+                    # xlsx -> try to read (slower). We expect parquet present normally.
+                    df_temp = pd.read_excel(src, usecols=usecols) if usecols else pd.read_excel(src)
+
+            # ---------- REMOTE (http/https) ----------
+            elif isinstance(src, str) and src.lower().startswith("http"):
+                resp = requests.get(src, timeout=120)
+                resp.raise_for_status()
+                bio = BytesIO(resp.content)
+                if src.lower().endswith(".csv") or ".csv?" in src.lower():
+                    parts = []
+                    for chunk in pd.read_csv(bio, usecols=usecols, chunksize=csv_chunksize, low_memory=True):
+                        year_col = next((c for c in chunk.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+                        if year_col:
+                            try:
+                                chunk_years = pd.to_numeric(chunk[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+                                chunk = chunk[chunk_years.isin(selected_years)]
+                            except Exception:
+                                pass
+                        if not chunk.empty:
+                            parts.append(chunk)
+                    df_temp = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=usecols)
+                else:
+                    # remote excel
+                    df_temp = pd.read_excel(bio, usecols=usecols) if usecols else pd.read_excel(bio)
+            else:
+                # cannot find the source; warn & skip
+                st.warning(f"Source not found for tournament '{tournament}': {src} (skipping)")
+                continue
 
             if df_temp is None or len(df_temp) == 0:
                 continue
 
-            # Filter by year if possible (extra safe)
+            # extra safe year filter in case earlier stage didn't do it
             year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
             if year_col:
                 try:
-                    df_temp_years = pd.to_numeric(df_temp[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
-                    df_temp = df_temp[df_temp_years.isin(selected_years)]
+                    yvals = pd.to_numeric(df_temp[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+                    df_temp = df_temp[yvals.isin(selected_years)]
                 except Exception:
                     pass
 
-            # Tag source
+            if df_temp.empty:
+                continue
+
+            # tag source
             df_temp['tournament'] = tournament
 
-            # Standardize columns order on first file read
+            # standardize column order across files (keep first file's order)
             if first_columns is None:
                 first_columns = df_temp.columns.tolist()
             else:
-                # reindex to first_columns where possible (keeps consistent frames)
+                # reindex but keep any new columns after the base ones
                 common = [c for c in first_columns if c in df_temp.columns]
                 others = [c for c in df_temp.columns if c not in common]
                 df_temp = df_temp[common + others]
 
             dfs.append(df_temp)
 
-        except Exception as exc:
-            st.warning(f"Failed to load {tournament}: {str(exc)[:200]} (skipping)")
+        except Exception as e:
+            # don't crash entire app for one broken file
+            st.warning(f"Failed to load {tournament} ({src}): {str(e)[:200]} (skipping)")
 
     if not dfs:
         return pd.DataFrame()
 
     merged_df = pd.concat(dfs, ignore_index=True)
 
-    # Save merged small cache (parquet) for instant reuse
+    # save merged cache for instant reuse next run
     try:
-        merged_df.to_parquet(cache_path, index=False)
+        merged_df.to_parquet(cached_path, index=False)
     except Exception:
         pass
 
     return merged_df
 
-
-# Load only when selections are made
+# ---------------------------
+# Replace your previous loader call with this (example usage)
+# ---------------------------
+# (keep your existing sidebar year / tournament selection code above)
 df = load_filtered_data(selected_tournaments, selected_years)
 
-# Feedback
 if not df.empty:
     st.success(f"Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s)")
     st.sidebar.write("Data loaded successfully!")
 else:
     st.warning("No data loaded yet. Select at least one tournament and year range.")
+
+# @st.cache_data
+# def load_data():
+#     path = "Datasets/ipl_bbb_21_25_2.xlsx"
+#     df = pd.read_excel(path)
+
+#     return df
+
+# # df = load_data()    
+# import streamlit as st
+# import pandas as pd
+# import requests
+# from io import BytesIO
+
+# # ────────────────────────────────────────────────
+# # Tournament → file path or direct Dropbox URL
+# # ────────────────────────────────────────────────
+# TOURNAMENTS = {
+#     "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",               # your local .xlsx file
+#     "CPL": "Datasets/IPL_APP_CPL.csv",
+#     "ILT20": "Datasets/IPL_APP_ILT20.csv",
+#     "LPL": "Datasets/IPL_APP_LPL.csv",
+#     "MLC": "Datasets/IPL_APP_MLC.csv",
+#     "SA20": "Datasets/IPL_APP_SA20.csv",
+#     "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
+    
+#     # Large files from Dropbox (direct dl=1 links)
+#     "T20 Blast": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=ih914nfa&dl=1",
+#     "T20I": "https://www.dropbox.com/scl/fi/pzxfy9bqoqtaiknli5oi2/IPL_APP_T20I.csv?rlkey=8xl4wb37yuq1ej85w122ldlxk&st=4m8xk916&dl=1",
+# }
+
+# # ────────────────────────────────────────────────
+# # Year range slider (2021–2026)
+# # ────────────────────────────────────────────────
+# st.sidebar.header("Select Years")
+# years = st.sidebar.slider(
+#     "Select year range",
+#     min_value=2021,
+#     max_value=2026,
+#     value=(2021, 2026),  # default full range
+#     step=1
+# )
+# selected_years = list(range(years[0], years[1] + 1))
+# st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
+
+# # ────────────────────────────────────────────────
+# # Tournament multi-select
+# # ────────────────────────────────────────────────
+# st.sidebar.header("Select Tournaments")
+# all_tournaments = list(TOURNAMENTS.keys())
+# selected_tournaments = st.sidebar.multiselect(
+#     "Choose tournaments to load",
+#     options=all_tournaments,
+#     default=["IPL"]  # start with IPL for speed
+# )
+
+# # ────────────────────────────────────────────────
+# # Optimized loading + year filtering
+# # ────────────────────────────────────────────────
+# @st.cache_data(ttl="24h", show_spinner="Loading selected data (may take a moment for large leagues)…")
+# import os
+# import hashlib
+# import requests
+# from io import BytesIO
+# import pandas as pd
+# import numpy as np
+# import streamlit as st
+
+# CACHE_DIR = "./.cache_data"
+# os.makedirs(CACHE_DIR, exist_ok=True)
+
+# def _hash_args(selected_tournaments, selected_years):
+#     key = "|".join(sorted(selected_tournaments)) + "|" + f"{min(selected_years)}-{max(selected_years)}"
+#     return hashlib.md5(key.encode()).hexdigest()
+
+# @st.cache_data(ttl=24*3600, show_spinner="Loading selected data (may take a moment)...")
+# def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, csv_chunksize=200_000):
+#     """
+#     Fast loader:
+#       - chunked reads for CSV
+#       - caches per selection to ./ .cache_data/<hash>.parquet
+#       - tries to use parquet preconverted for local xlsx files (recommended)
+#     Args:
+#       selected_tournaments: list of keys in TOURNAMENTS
+#       selected_years: list of ints
+#       usecols: list of column names you actually need (recommended)
+#       csv_chunksize: chunk size for read_csv
+#     Returns:
+#       pandas.DataFrame (possibly empty)
+#     """
+#     if not selected_tournaments:
+#         return pd.DataFrame()
+
+#     # local cache per selection
+#     cache_hash = _hash_args(selected_tournaments, selected_years)
+#     cache_path = os.path.join(CACHE_DIR, f"merged_{cache_hash}.parquet")
+#     if os.path.exists(cache_path):
+#         try:
+#             df_cached = pd.read_parquet(cache_path)
+#             return df_cached
+#         except Exception:
+#             # fallback to re-create cache
+#             pass
+
+#     dfs = []
+#     first_columns = None
+
+#     for tournament in selected_tournaments:
+#         source = TOURNAMENTS.get(tournament)
+#         if not source:
+#             continue
+
+#         try:
+#             # ---------- LOCAL FILES ----------
+#             if not str(source).lower().startswith("http"):
+#                 # If local xlsx exists, prefer a same-folder parquet (much faster). If not, we read the xlsx/ csv.
+#                 if source.endswith(".xlsx"):
+#                     parquet_equiv = os.path.splitext(source)[0] + ".parquet"
+#                     if os.path.exists(parquet_equiv):
+#                         # fast read
+#                         df_temp = pd.read_parquet(parquet_equiv, columns=usecols)
+#                     else:
+#                         # read excel (slow) but we will convert & save to parquet for next time
+#                         df_temp = pd.read_excel(source, usecols=usecols)
+#                         try:
+#                             df_temp.to_parquet(parquet_equiv, index=False)
+#                         except Exception:
+#                             pass
+#                 else:
+#                     # CSV: stream in chunks and filter by year on the fly
+#                     if source.endswith(".csv"):
+#                         reader = pd.read_csv(source, usecols=usecols, chunksize=csv_chunksize, low_memory=True)
+#                         parts = []
+#                         for chunk in reader:
+#                             year_col = next((c for c in chunk.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+#                             if year_col:
+#                                 # try to extract numeric year safely
+#                                 try:
+#                                     chunk_years = pd.to_numeric(chunk[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+#                                     chunk = chunk[chunk_years.isin(selected_years)]
+#                                 except Exception:
+#                                     pass
+#                             if not chunk.empty:
+#                                 parts.append(chunk)
+#                         df_temp = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=usecols)
+#                     else:
+#                         # Unknown local ext: try pandas autodetect
+#                         df_temp = pd.read_csv(source, usecols=usecols) if source.endswith(".csv") else pd.read_excel(source, usecols=usecols)
+
+#             # ---------- REMOTE (dropbox/http) ----------
+#             else:
+#                 # Use requests to fetch bytes (we keep it simple: read into BytesIO then chunk)
+#                 resp = requests.get(source, timeout=180)
+#                 resp.raise_for_status()
+#                 content = BytesIO(resp.content)
+
+#                 if str(source).lower().endswith(".csv") or '.csv?' in source.lower():
+#                     reader = pd.read_csv(content, usecols=usecols, chunksize=csv_chunksize, low_memory=True)
+#                     parts = []
+#                     for chunk in reader:
+#                         year_col = next((c for c in chunk.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+#                         if year_col:
+#                             try:
+#                                 chunk_years = pd.to_numeric(chunk[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+#                                 chunk = chunk[chunk_years.isin(selected_years)]
+#                             except Exception:
+#                                 pass
+#                         if not chunk.empty:
+#                             parts.append(chunk)
+#                     df_temp = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=usecols)
+#                 else:
+#                     # remote excel -> read into pandas (slow). If used often, convert to parquet offline.
+#                     df_temp = pd.read_excel(content, usecols=usecols)
+
+#             if df_temp is None or len(df_temp) == 0:
+#                 continue
+
+#             # Filter by year if possible (extra safe)
+#             year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+#             if year_col:
+#                 try:
+#                     df_temp_years = pd.to_numeric(df_temp[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+#                     df_temp = df_temp[df_temp_years.isin(selected_years)]
+#                 except Exception:
+#                     pass
+
+#             # Tag source
+#             df_temp['tournament'] = tournament
+
+#             # Standardize columns order on first file read
+#             if first_columns is None:
+#                 first_columns = df_temp.columns.tolist()
+#             else:
+#                 # reindex to first_columns where possible (keeps consistent frames)
+#                 common = [c for c in first_columns if c in df_temp.columns]
+#                 others = [c for c in df_temp.columns if c not in common]
+#                 df_temp = df_temp[common + others]
+
+#             dfs.append(df_temp)
+
+#         except Exception as exc:
+#             st.warning(f"Failed to load {tournament}: {str(exc)[:200]} (skipping)")
+
+#     if not dfs:
+#         return pd.DataFrame()
+
+#     merged_df = pd.concat(dfs, ignore_index=True)
+
+#     # Save merged small cache (parquet) for instant reuse
+#     try:
+#         merged_df.to_parquet(cache_path, index=False)
+#     except Exception:
+#         pass
+
+#     return merged_df
+
+
+# # Load only when selections are made
+# df = load_filtered_data(selected_tournaments, selected_years)
+
+# # Feedback
+# if not df.empty:
+#     st.success(f"Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s)")
+#     st.sidebar.write("Data loaded successfully!")
+# else:
+#     st.warning("No data loaded yet. Select at least one tournament and year range.")
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
     """
     Renames 'Royal Challengers Bangalore' to 'Royal Challengers Bengaluru' in team_bat, team_bowl, and winner columns.
