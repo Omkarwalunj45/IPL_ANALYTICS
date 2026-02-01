@@ -349,7 +349,18 @@ years = st.sidebar.slider(
 )
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
-
+TOURNAMENTS = {
+    "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",
+    "CPL": "Datasets/IPL_APP_CPL.csv",
+    "ILT20": "Datasets/IPL_APP_ILT20.csv",
+    "LPL": "Datasets/IPL_APP_LPL.csv",
+    "MLC": "Datasets/IPL_APP_MLC.csv",
+    "SA20": "Datasets/IPL_APP_SA20.csv",
+    "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
+    # keep remote links if any (they will be handled)
+    "T20 Blast": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=ih914nfa&dl=1",
+    "T20I": "https://www.dropbox.com/scl/fi/pzxfy9bqoqtaiknli5oi2/IPL_APP_T20I.csv?rlkey=8xl4wb37yuq1ej85w122ldlxk&st=4m8xk916&dl=1",
+}
 # ────────────────────────────────────────────────
 # Tournament multi-select
 # ────────────────────────────────────────────────
