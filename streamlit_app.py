@@ -332,7 +332,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import BytesIO
-
 # ────────────────────────────────────────────────
 # Tournament → source (local path or Dropbox direct link)
 # ────────────────────────────────────────────────
@@ -344,17 +343,15 @@ TOURNAMENTS = {
     "MLC": "Datasets/IPL_APP_MLC.csv",
     "SA20": "Datasets/IPL_APP_SA20.csv",
     "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
-    
+   
     # Dropbox direct download links (dl=1)
     "T20 Blast": "https://www.dropbox.com/scl/fi/5424aydb5tet950h2ue97/IPL_APP_T20_Blast.csv?rlkey=tint323016ydixtylb27ur95s&st=9xi9nxjh&dl=1",
-    "T20I":      "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=4m80ckfy&dl=1",
+    "T20I": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=4m80ckfy&dl=1",
 }
-
 # ────────────────────────────────────────────────
 # Sidebar: Year slider + Tournament multi-select
 # ────────────────────────────────────────────────
 st.sidebar.header("Data Selection")
-
 # Year range
 years = st.sidebar.slider(
     "Select year range",
@@ -366,7 +363,6 @@ years = st.sidebar.slider(
 )
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
-
 # Tournaments
 all_tournaments = list(TOURNAMENTS.keys())
 selected_tournaments = st.sidebar.multiselect(
@@ -375,82 +371,80 @@ selected_tournaments = st.sidebar.multiselect(
     default=["IPL"],
     key="tournament_select"
 )
-
 # ────────────────────────────────────────────────
 # Optimized loading function
 # ────────────────────────────────────────────────
 @st.cache_data(
     ttl="24h",
-    show_spinner=False,  # we'll use custom spinner
-    hash_funcs={pd.DataFrame: id}  # better hashing for dataframes
+    show_spinner=False, # we'll use custom spinner
+    hash_funcs={pd.DataFrame: id} # better hashing for dataframes
 )
 def load_filtered_data(selected_tournaments, selected_years):
     if not selected_tournaments:
         return pd.DataFrame()
-    
+   
     with st.spinner(f"Loading {len(selected_tournaments)} tournament(s) for years {years[0]}–{years[1]}…"):
         dfs = []
         first_columns = None
-        
+       
         for tournament in selected_tournaments:
             source = TOURNAMENTS.get(tournament)
             if not source:
                 st.warning(f"Source not found for {tournament}")
                 continue
-            
+           
             try:
                 # Load file
-                if source.startswith("http"):  # Dropbox
+                if source.startswith("http"): # Dropbox
                     resp = requests.get(source, timeout=200)
                     resp.raise_for_status()
                     content = BytesIO(resp.content)
                     df_temp = pd.read_csv(content, low_memory=False, dtype_backend='numpy_nullable')
-                else:  # Local repo file
+                else: # Local repo file
                     if source.endswith('.xlsx'):
                         df_temp = pd.read_excel(source, engine='openpyxl', dtype_backend='numpy_nullable')
                     else:
                         df_temp = pd.read_csv(source, low_memory=False, dtype_backend='numpy_nullable')
-                
+               
                 # Early year filtering (huge speedup for large files)
                 year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
                 if year_col:
                     # Convert to int safely
                     df_temp[year_col] = pd.to_numeric(df_temp[year_col].astype(str).str[:4], errors='coerce')
-                    df_temp = df_temp[df_temp[year_col].isin(selected_years)]
-                
+                    df_temp = df_temp[df_temp[year_col].isin(selected_years)].copy()
+               
                 if df_temp.empty:
                     st.info(f"No data for {tournament} in selected years.")
                     continue
-                
+               
                 # Standardize columns
                 if first_columns is None:
                     first_columns = df_temp.columns.tolist()
                 else:
                     df_temp = df_temp.reindex(columns=first_columns)
-                
+               
                 df_temp['tournament'] = tournament
                 dfs.append(df_temp)
-                
+               
             except Exception as e:
                 st.error(f"Failed to load {tournament}: {str(e)}")
                 continue
-        
+       
         if not dfs:
             return pd.DataFrame()
-        
+       
         merged_df = pd.concat(dfs, ignore_index=True)
         return merged_df
-
 # ────────────────────────────────────────────────
 # Load & show feedback
 # ────────────────────────────────────────────────
 if selected_tournaments:
     df = load_filtered_data(selected_tournaments, selected_years)
-    
+   
     if not df.empty:
         st.success(f"Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) ({years[0]}–{years[1]})")
         st.sidebar.markdown("**Data ready!**")
-        
+       
         # Optional: show quick stats
         with st.sidebar.expander("Loaded summary"):
             st.write(df['tournament'].value_counts().to_frame("Rows"))
@@ -459,10 +453,8 @@ if selected_tournaments:
 else:
     st.info("Please select at least one tournament to load data.")
     df = pd.DataFrame()
-
 # Now df is ready for the rest of your app
 DF_gen = df
-
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
     """
     Renames 'Royal Challengers Bangalore' to 'Royal Challengers Bengaluru' in team_bat, team_bowl, and winner columns.
@@ -732,7 +724,6 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
     if df is None:
         return pd.DataFrame()
     d = df.copy()
-
     # ---- normalize column names ----
     if 'p_match' in d.columns:
         d = d.rename(columns={'p_match': 'match_id'})
@@ -748,10 +739,8 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
         d = d.rename(columns={'score': 'runs_off_bat'})
     elif 'runs_off_bat' not in d.columns:
         d['runs_off_bat'] = 0
-
     # ensure stable RangeIndex
     d.index = pd.RangeIndex(len(d))
-
     # ---- safe ball ordering ----
     if 'ball_id' in d.columns:
         tmp = pd.to_numeric(d['ball_id'], errors='coerce')
@@ -760,59 +749,47 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
         d['__ball_sort__'] = tmp
     else:
         d['__ball_sort__'] = pd.Series(np.arange(len(d)), index=d.index)
-
     # ---- dismissal normalization & flags ----
     special_runout_types = set(['run out', 'obstructing the field', 'retired out', 'retired not out (hurt)'])
     d['dismissal_clean'] = d.get('dismissal', '').astype(str).str.lower().str.strip()
     d['dismissal_clean'] = d['dismissal_clean'].replace({'nan': '', 'none': ''})
-
     # p_bat and p_out are integers, handle missing as NaN
     d['p_bat_num'] = d.get('p_bat', pd.Series(np.nan, index=d.index)).astype(float)
     d['p_out_num'] = d.get('p_out', pd.Series(np.nan, index=d.index)).astype(float)
-
     # out is boolean (True/False), convert to 0/1
     d['out_flag'] = d.get('out', False).astype(int)
-
     # ensure match_id exists
     if 'match_id' not in d.columns:
         d['match_id'] = 0
-
     # sort by match, inning, and ball order
     d.sort_values(['match_id', 'inning', '__ball_sort__'], inplace=True, kind='stable')
     d.reset_index(drop=True, inplace=True)
-
     # initialize dismissal outputs
     d['dismissed_player'] = None
     d['bowler_wkt'] = 0
-
     # resolve dismissals per specified logic
     for match in d['match_id'].unique():
         for inning in d[d['match_id'] == match]['inning'].unique():
             idxs = d[(d['match_id'] == match) & (d['inning'] == inning)].index.tolist()
             idxs = sorted(idxs, key=lambda i: d.at[i, '__ball_sort__'])
             for pos, i in enumerate(idxs):
-                if d.at[i, 'out_flag'] != 1:  # Check if out=True
+                if d.at[i, 'out_flag'] != 1: # Check if out=True
                     continue
-
                 disc = (d.at[i, 'dismissal_clean'] or '').strip()
                 striker = d.at[i, 'batsman'] if 'batsman' in d.columns else None
-
                 # Rule 1: out=True and dismissal not in [blank, nan, special] -> striker out, bowler credit
                 if disc and disc not in special_runout_types:
                     d.at[i, 'dismissed_player'] = striker
                     d.at[i, 'bowler_wkt'] = 1
                     continue
-
                 # Rule 2: out=True and dismissal in special
                 if disc in special_runout_types:
                     pbat = d.at[i, 'p_bat_num']
                     pout = d.at[i, 'p_out_num']
-
                     if (not pd.isna(pbat)) and (not pd.isna(pout)) and (pbat == pout):
                         d.at[i, 'dismissed_player'] = striker
                         d.at[i, 'bowler_wkt'] = 0
                         continue
-
                     # Nonstriker dismissed: find last different batter in same match and inning
                     nonstriker = None
                     last_idx_of_nonstriker = None
@@ -822,13 +799,11 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
                             nonstriker = prev_bat
                             last_idx_of_nonstriker = j
                             break
-
                     if nonstriker is None:
                         # No valid nonstriker: do not attribute dismissal
                         d.at[i, 'dismissed_player'] = None
                         d.at[i, 'bowler_wkt'] = 0
                         continue
-
                     prev_out_flag = d.at[last_idx_of_nonstriker, 'out_flag'] if last_idx_of_nonstriker is not None else 0
                     if prev_out_flag == 0:
                         d.at[i, 'dismissed_player'] = nonstriker
@@ -837,16 +812,13 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
                         # Nonstriker already dismissed: do not attribute dismissal
                         d.at[i, 'dismissed_player'] = None
                         d.at[i, 'bowler_wkt'] = 0
-
     # ---- compute per-delivery summaries ----
     d['cur_bat_runs'] = pd.to_numeric(d.get('cur_bat_runs', 0), errors='coerce').fillna(0).astype(int)
     d['cur_bat_bf'] = pd.to_numeric(d.get('cur_bat_bf', 0), errors='coerce').fillna(0).astype(int)
-
     # legal ball: both wide & noball must be 0
     d['noball'] = pd.to_numeric(d.get('noball', 0), errors='coerce').fillna(0).astype(int)
     d['wide'] = pd.to_numeric(d.get('wide', 0), errors='coerce').fillna(0).astype(int)
     d['legal_ball'] = ((d['noball'] == 0) & (d['wide'] == 0)).astype(int)
-
     # per-delivery run flags
     d['runs_off_bat'] = pd.to_numeric(d.get('runs_off_bat', 0), errors='coerce').fillna(0).astype(int)
     d['is_dot'] = ((d['runs_off_bat'] == 0) & (d['legal_ball'] == 1)).astype(int)
@@ -858,18 +830,15 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
     d = d.dropna(subset=['batsman', 'match_id'])
     # last snapshot per batsman per match
     last_bat_snapshot = (
-        d.groupby(['batsman', 'match_id'], sort=False).agg({'cur_bat_runs': 'last', 'cur_bat_bf': 'last'}).reset_index()
+        d.groupby(['batsman', 'match_id'], sort=False).agg(match_runs=('cur_bat_runs', 'last'), match_balls=('cur_bat_bf', 'last')).reset_index()
     )
-
     runs_per_match = last_bat_snapshot[['batsman', 'match_runs', 'match_balls', 'match_id']].copy()
     innings_count = runs_per_match.groupby('batsman')['match_id'].nunique().reset_index().rename(columns={'match_id': 'innings'})
     total_runs = runs_per_match.groupby('batsman')['match_runs'].sum().reset_index().rename(columns={'match_runs': 'runs'})
     total_balls = runs_per_match.groupby('batsman')['match_balls'].sum().reset_index().rename(columns={'match_balls': 'balls'})
-
     # dismissals: count per resolved dismissed_player, ensuring unique dismissals
     dismissals_df = d[d['dismissed_player'].notna()].groupby(['dismissed_player', 'match_id', 'inning']).size().reset_index(name='dismissals')
     dismissals_df = dismissals_df.groupby('dismissed_player')['dismissals'].sum().reset_index().rename(columns={'dismissed_player': 'batsman'})
-
     # boundary & running counts
     fours = d.groupby('batsman')['is_four'].sum().reset_index().rename(columns={'is_four': 'fours'})
     sixes = d.groupby('batsman')['is_six'].sum().reset_index().rename(columns={'is_six': 'sixes'})
@@ -877,20 +846,16 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
     ones = d.groupby('batsman')['is_one'].sum().reset_index().rename(columns={'is_one': 'ones'})
     twos = d.groupby('batsman')['is_two'].sum().reset_index().rename(columns={'is_two': 'twos'})
     threes = d.groupby('batsman')['is_three'].sum().reset_index().rename(columns={'is_three': 'threes'})
-
     # match-level thresholds: 30s (30-49), 50s (50-99), 100s (>=100)
     thirties = runs_per_match[(runs_per_match['match_runs'] >= 30) & (runs_per_match['match_runs'] < 50)].groupby('batsman').size().reset_index(name='30s')
     fifties = runs_per_match[(runs_per_match['match_runs'] >= 50) & (runs_per_match['match_runs'] < 100)].groupby('batsman').size().reset_index(name='50s')
     hundreds = runs_per_match[runs_per_match['match_runs'] >= 100].groupby('batsman').size().reset_index(name='100s')
-
     highest_score = runs_per_match.groupby('batsman')['match_runs'].max().reset_index().rename(columns={'match_runs': 'HS'})
     median_runs = runs_per_match.groupby('batsman')['match_runs'].median().reset_index().rename(columns={'match_runs': 'median'})
-
     boundary_runs = (d.groupby('batsman').apply(lambda x: int((x['is_four'] * 4).sum() + (x['is_six'] * 6).sum()))
                      .reset_index(name='boundary_runs'))
     running_runs = (d.groupby('batsman').apply(lambda x: int((x['is_one'] * 1).sum() + (x['is_two'] * 2).sum() + (x['is_three'] * 3).sum()))
                     .reset_index(name='running_runs'))
-
     # Merge master batting record
     bat_rec = innings_count.merge(total_runs, on='batsman', how='left')
     bat_rec = bat_rec.merge(total_balls, on='batsman', how='left')
@@ -908,20 +873,17 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
     bat_rec = bat_rec.merge(hundreds, on='batsman', how='left')
     bat_rec = bat_rec.merge(highest_score, on='batsman', how='left')
     bat_rec = bat_rec.merge(median_runs, on='batsman', how='left')
-
     # fill NaNs & cast types
     fill_zero_cols = ['30s', '50s', '100s', 'runs', 'balls', 'dismissals', 'sixes', 'fours',
                       'dots', 'ones', 'twos', 'threes', 'boundary_runs', 'running_runs', 'HS', 'median']
     for col in fill_zero_cols:
         if col in bat_rec.columns:
             bat_rec[col] = bat_rec[col].fillna(0)
-
     int_cols = ['30s', '50s', '100s', 'runs', 'balls', 'dismissals', 'sixes', 'fours',
                 'dots', 'ones', 'twos', 'threes', 'boundary_runs', 'running_runs']
     for col in int_cols:
         if col in bat_rec.columns:
             bat_rec[col] = bat_rec[col].astype(int)
-
     # basic ratios & metrics
     bat_rec['RPI'] = bat_rec.apply(lambda x: (x['runs'] / x['innings']) if x['innings'] > 0 else np.nan, axis=1)
     bat_rec['SR'] = bat_rec.apply(lambda x: (x['runs'] / x['balls'] * 100) if x['balls'] > 0 else np.nan, axis=1)
@@ -929,18 +891,15 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
     bat_rec['BPB'] = bat_rec.apply(lambda x: bpb(x['balls'], (x.get('fours', 0) + x.get('sixes', 0))), axis=1)
     bat_rec['BP6'] = bat_rec.apply(lambda x: bp6(x['balls'], x.get('sixes', 0)), axis=1)
     bat_rec['BP4'] = bat_rec.apply(lambda x: bp4(x['balls'], x.get('fours', 0)), axis=1)
-
     def compute_nbdry_sr(row):
         run_count = (row.get('dots', 0) * 0 + row.get('ones', 0) * 1 + row.get('twos', 0) * 2 + row.get('threes', 0) * 3)
         denom = (row.get('dots', 0) + row.get('ones', 0) + row.get('twos', 0) + row.get('threes', 0))
         return (run_count / denom * 100) if denom > 0 else 0
     bat_rec['nbdry_sr'] = bat_rec.apply(compute_nbdry_sr, axis=1)
-
     bat_rec['AVG'] = bat_rec.apply(lambda x: avg(x['runs'], x.get('dismissals', 0), x['innings']), axis=1)
     bat_rec['dot_percentage'] = bat_rec.apply(lambda x: (x['dots'] / x['balls'] * 100) if x['balls'] > 0 else 0, axis=1)
     bat_rec['Bdry%'] = bat_rec.apply(lambda x: (x['boundary_runs'] / x['runs'] * 100) if x['runs'] > 0 else 0, axis=1)
     bat_rec['Running%'] = bat_rec.apply(lambda x: (x['running_runs'] / x['runs'] * 100) if x['runs'] > 0 else 0, axis=1)
-
     # latest team
     if 'batting_team' in d.columns:
         latest_team = (d.sort_values(['match_id', 'inning', '__ball_sort__'])
@@ -949,13 +908,11 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
         bat_rec = bat_rec.merge(latest_team, on='batsman', how='left')
     else:
         bat_rec['batting_team'] = np.nan
-
     # phase-wise aggregation
     if 'over' in d.columns:
         d['phase'] = d['over'].apply(categorize_phase)
     else:
         d['phase'] = 'Unknown'
-
     phase_stats = d.groupby(['batsman', 'phase']).agg({
         'runs_off_bat': 'sum',
         'legal_ball': 'sum',
@@ -964,7 +921,6 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
         'is_six': 'sum',
         'match_id': 'nunique',
     }).reset_index()
-
     phase_stats.rename(columns={
         'runs_off_bat': 'Runs',
         'legal_ball': 'Balls',
@@ -973,20 +929,17 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
         'is_six': 'Sixes',
         'match_id': 'Innings'
     }, inplace=True)
-
     # Add phase dismissals
     phase_dismissals = d[d['dismissed_player'].notna()].groupby(['dismissed_player', 'phase', 'match_id', 'inning']).size().reset_index(name='Dismissals')
     phase_dismissals = phase_dismissals.groupby(['dismissed_player', 'phase'])['Dismissals'].sum().reset_index()
     phase_dismissals.rename(columns={'dismissed_player': 'batsman'}, inplace=True)
     phase_stats = phase_stats.merge(phase_dismissals, on=['batsman', 'phase'], how='left')
     phase_stats['Dismissals'] = phase_stats['Dismissals'].fillna(0).astype(int)
-
     phase_stats['BPB'] = phase_stats.apply(lambda x: bpb(x['Balls'], (x['Fours'] + x['Sixes'])), axis=1)
     phase_stats['BPD'] = phase_stats.apply(lambda x: bpd(x['Balls'], x['Dismissals']), axis=1)
     phase_stats['SR'] = phase_stats.apply(lambda x: (x['Runs'] / x['Balls'] * 100) if x['Balls'] > 0 else 0, axis=1)
     phase_stats['AVG'] = phase_stats.apply(lambda x: avg(x['Runs'], x['Dismissals'], x['Innings']), axis=1)
     phase_stats['DOT%'] = phase_stats.apply(lambda x: (x['Dots'] / x['Balls'] * 100) if x['Balls'] > 0 else 0, axis=1)
-
     if not phase_stats.empty:
         phase_pivot = phase_stats.pivot(index='batsman', columns='phase',
                                         values=['SR', 'AVG', 'DOT%', 'BPB', 'BPD', 'Innings', 'Runs', 'Balls'])
@@ -995,9 +948,7 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
         phase_pivot.reset_index(inplace=True)
     else:
         phase_pivot = pd.DataFrame({'batsman': []})
-
     bat_rec = bat_rec.merge(phase_pivot, on='batsman', how='left')
-
     bat_rec.reset_index(drop=True, inplace=True)
     return bat_rec
 # bowlerstat - bowling summary with exact dismissal rules
