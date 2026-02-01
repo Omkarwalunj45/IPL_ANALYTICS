@@ -355,7 +355,7 @@ TOURNAMENTS = {
     "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
     
     # Large files from Dropbox (direct dl=1 links)
-    "T20 Blast": "https://www.dropbox.com/scl/fi/5424aydb5tet950h2ue97/IPL_APP_T20_Blast.csv?rlkey=tint323016ydixtylb27ur95s&st=9xi9nxjh&dl=1",
+    "T20 Blast": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=ih914nfa&dl=1",
     "T20I": "https://www.dropbox.com/scl/fi/pzxfy9bqoqtaiknli5oi2/IPL_APP_T20I.csv?rlkey=8xl4wb37yuq1ej85w122ldlxk&st=4m8xk916&dl=1",
 }
 
