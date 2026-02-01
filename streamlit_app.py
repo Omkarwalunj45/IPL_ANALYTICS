@@ -388,55 +388,162 @@ selected_tournaments = st.sidebar.multiselect(
 # Optimized loading + year filtering
 # ────────────────────────────────────────────────
 @st.cache_data(ttl="24h", show_spinner="Loading selected data (may take a moment for large leagues)…")
-def load_filtered_data(selected_tournaments, selected_years):
+import os
+import hashlib
+import requests
+from io import BytesIO
+import pandas as pd
+import numpy as np
+import streamlit as st
+
+CACHE_DIR = "./.cache_data"
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+def _hash_args(selected_tournaments, selected_years):
+    key = "|".join(sorted(selected_tournaments)) + "|" + f"{min(selected_years)}-{max(selected_years)}"
+    return hashlib.md5(key.encode()).hexdigest()
+
+@st.cache_data(ttl=24*3600, show_spinner="Loading selected data (may take a moment)...")
+def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, csv_chunksize=200_000):
+    """
+    Fast loader:
+      - chunked reads for CSV
+      - caches per selection to ./ .cache_data/<hash>.parquet
+      - tries to use parquet preconverted for local xlsx files (recommended)
+    Args:
+      selected_tournaments: list of keys in TOURNAMENTS
+      selected_years: list of ints
+      usecols: list of column names you actually need (recommended)
+      csv_chunksize: chunk size for read_csv
+    Returns:
+      pandas.DataFrame (possibly empty)
+    """
     if not selected_tournaments:
         return pd.DataFrame()
-    
+
+    # local cache per selection
+    cache_hash = _hash_args(selected_tournaments, selected_years)
+    cache_path = os.path.join(CACHE_DIR, f"merged_{cache_hash}.parquet")
+    if os.path.exists(cache_path):
+        try:
+            df_cached = pd.read_parquet(cache_path)
+            return df_cached
+        except Exception:
+            # fallback to re-create cache
+            pass
+
     dfs = []
     first_columns = None
-    
+
     for tournament in selected_tournaments:
         source = TOURNAMENTS.get(tournament)
         if not source:
             continue
-        
+
         try:
-            # Load file
-            if source.startswith("http"):  # Dropbox
+            # ---------- LOCAL FILES ----------
+            if not str(source).lower().startswith("http"):
+                # If local xlsx exists, prefer a same-folder parquet (much faster). If not, we read the xlsx/ csv.
+                if source.endswith(".xlsx"):
+                    parquet_equiv = os.path.splitext(source)[0] + ".parquet"
+                    if os.path.exists(parquet_equiv):
+                        # fast read
+                        df_temp = pd.read_parquet(parquet_equiv, columns=usecols)
+                    else:
+                        # read excel (slow) but we will convert & save to parquet for next time
+                        df_temp = pd.read_excel(source, usecols=usecols)
+                        try:
+                            df_temp.to_parquet(parquet_equiv, index=False)
+                        except Exception:
+                            pass
+                else:
+                    # CSV: stream in chunks and filter by year on the fly
+                    if source.endswith(".csv"):
+                        reader = pd.read_csv(source, usecols=usecols, chunksize=csv_chunksize, low_memory=True)
+                        parts = []
+                        for chunk in reader:
+                            year_col = next((c for c in chunk.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+                            if year_col:
+                                # try to extract numeric year safely
+                                try:
+                                    chunk_years = pd.to_numeric(chunk[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+                                    chunk = chunk[chunk_years.isin(selected_years)]
+                                except Exception:
+                                    pass
+                            if not chunk.empty:
+                                parts.append(chunk)
+                        df_temp = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=usecols)
+                    else:
+                        # Unknown local ext: try pandas autodetect
+                        df_temp = pd.read_csv(source, usecols=usecols) if source.endswith(".csv") else pd.read_excel(source, usecols=usecols)
+
+            # ---------- REMOTE (dropbox/http) ----------
+            else:
+                # Use requests to fetch bytes (we keep it simple: read into BytesIO then chunk)
                 resp = requests.get(source, timeout=180)
                 resp.raise_for_status()
                 content = BytesIO(resp.content)
-                df_temp = pd.read_csv(content, low_memory=False)
-            else:  # Local in repo
-                df_temp = pd.read_excel(source) if source.endswith('.xlsx') else pd.read_csv(source, low_memory=False)
-            
-            # Assume there's a 'year' or 'season' column (adjust name if different)
+
+                if str(source).lower().endswith(".csv") or '.csv?' in source.lower():
+                    reader = pd.read_csv(content, usecols=usecols, chunksize=csv_chunksize, low_memory=True)
+                    parts = []
+                    for chunk in reader:
+                        year_col = next((c for c in chunk.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+                        if year_col:
+                            try:
+                                chunk_years = pd.to_numeric(chunk[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+                                chunk = chunk[chunk_years.isin(selected_years)]
+                            except Exception:
+                                pass
+                        if not chunk.empty:
+                            parts.append(chunk)
+                    df_temp = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=usecols)
+                else:
+                    # remote excel -> read into pandas (slow). If used often, convert to parquet offline.
+                    df_temp = pd.read_excel(content, usecols=usecols)
+
+            if df_temp is None or len(df_temp) == 0:
+                continue
+
+            # Filter by year if possible (extra safe)
             year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
             if year_col:
-                # Filter only selected years (early filter = huge speedup)
-                df_temp = df_temp[df_temp[year_col].astype(str).str[:4].astype(int).isin(selected_years)]
-            
-            if df_temp.empty:
-                continue
-            
-            # Standardize column order
+                try:
+                    df_temp_years = pd.to_numeric(df_temp[year_col].astype(str).str[:4], errors='coerce').fillna(0).astype(int)
+                    df_temp = df_temp[df_temp_years.isin(selected_years)]
+                except Exception:
+                    pass
+
+            # Tag source
+            df_temp['tournament'] = tournament
+
+            # Standardize columns order on first file read
             if first_columns is None:
                 first_columns = df_temp.columns.tolist()
             else:
-                df_temp = df_temp.reindex(columns=first_columns)
-            
-            df_temp['tournament'] = tournament  # tag source
+                # reindex to first_columns where possible (keeps consistent frames)
+                common = [c for c in first_columns if c in df_temp.columns]
+                others = [c for c in df_temp.columns if c not in common]
+                df_temp = df_temp[common + others]
+
             dfs.append(df_temp)
-        
-        except Exception as e:
-            st.error(f"Failed to load {tournament}: {e}")
-            continue
-    
+
+        except Exception as exc:
+            st.warning(f"Failed to load {tournament}: {str(exc)[:200]} (skipping)")
+
     if not dfs:
         return pd.DataFrame()
-    
+
     merged_df = pd.concat(dfs, ignore_index=True)
+
+    # Save merged small cache (parquet) for instant reuse
+    try:
+        merged_df.to_parquet(cache_path, index=False)
+    except Exception:
+        pass
+
     return merged_df
+
 
 # Load only when selections are made
 df = load_filtered_data(selected_tournaments, selected_years)
