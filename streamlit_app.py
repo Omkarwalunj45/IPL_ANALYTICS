@@ -107,7 +107,8 @@ def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', run
         runs_col = None # will use 0
 
     wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
-    dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
+    # Pre-process dismissal column to handle NA safely (add this)
+    dismissal_series = df_in.get(dismissal_col, pd.Series(dtype='object')).fillna('').astype(str).str.lower()
     for _, row in df_in.iterrows():
         li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
         le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
@@ -127,7 +128,7 @@ def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', run
             bounds[le, li] += 1
         if rv == 0:
             dots[le, li] += 1
-        dval = str(row.get(dismissal_col, '') or '').lower()
+        dval = dismissal_series.iloc[_]
         if any(tok in dval for tok in wkt_tokens):
             wkt[le, li] += 1
         cval = row.get(control_col, None)
