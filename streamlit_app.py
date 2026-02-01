@@ -818,9 +818,7 @@ def cumulator(df: pd.DataFrame) -> pd.DataFrame:
     d = d.dropna(subset=['batsman', 'match_id'])
     # last snapshot per batsman per match
     last_bat_snapshot = (
-        d.groupby(['batsman', 'match_id'], sort=False, as_index=False)
-         .agg({'cur_bat_runs': 'last', 'cur_bat_bf': 'last'})
-         .rename(columns={'cur_bat_runs': 'match_runs', 'cur_bat_bf': 'match_balls'})
+        d.groupby(['batsman', 'match_id'], sort=False).agg({'cur_bat_runs': 'last', 'cur_bat_bf': 'last'}).reset_index()
     )
 
     runs_per_match = last_bat_snapshot[['batsman', 'match_runs', 'match_balls', 'match_id']].copy()
