@@ -330,97 +330,137 @@ st.title('IPL Performance Analysis Portal')
 
 import streamlit as st
 import pandas as pd
+import requests
+from io import BytesIO
 
 # ────────────────────────────────────────────────
-# All tournaments now in Parquet format
+# Tournament → source (local path or Dropbox direct link)
 # ────────────────────────────────────────────────
 TOURNAMENTS = {
-    "IPL": "Datasets/ipl_bbb_21_25_2.parquet",
-    "CPL": "Datasets/IPL_APP_CPL.parquet",
-    "ILT20": "Datasets/IPL_APP_ILT20.parquet",
-    "LPL": "Datasets/IPL_APP_LPL.parquet",
-    "MLC": "Datasets/IPL_APP_MLC.parquet",
-    "SA20": "Datasets/IPL_APP_SA20.parquet",
-    "Super Smash": "Datasets/IPL_APP_SuperSmash.parquet",
-    "T20 Blast": "Datasets/IPL_APP_T20_Blast.parquet",
-    "T20I": "Datasets/IPL_APP_T20I_2.parquet",
+    "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",
+    "CPL": "Datasets/IPL_APP_CPL.csv",
+    "ILT20": "Datasets/IPL_APP_ILT20.csv",
+    "LPL": "Datasets/IPL_APP_LPL.csv",
+    "MLC": "Datasets/IPL_APP_MLC.csv",
+    "SA20": "Datasets/IPL_APP_SA20.csv",
+    "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
+    
+    # Dropbox direct download links (dl=1)
+    "T20 Blast": "https://www.dropbox.com/scl/fi/5424aydb5tet950h2ue97/IPL_APP_T20_Blast.csv?rlkey=tint323016ydixtylb27ur95s&st=9xi9nxjh&dl=1",
+    "T20I":      "https://www.dropbox.com/scl/fi/pzxfy9bqoqtaiknli5oi2/IPL_APP_T20I.csv?rlkey=8xl4wb37yuq1ej85w122ldlxk&st=4m8xk916&dl=1",
 }
 
 # ────────────────────────────────────────────────
-# Year range slider (2021–2026)
+# Sidebar: Year slider + Tournament multi-select
 # ────────────────────────────────────────────────
-st.sidebar.header("Select Years")
+st.sidebar.header("Data Selection")
+
+# Year range
 years = st.sidebar.slider(
     "Select year range",
     min_value=2021,
     max_value=2026,
-    value=(2024, 2025),
-    step=1
+    value=(2021, 2026),
+    step=1,
+    key="year_slider"
 )
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
 
-# ────────────────────────────────────────────────
-# Tournament multi-select
-# ────────────────────────────────────────────────
-st.sidebar.header("Select Tournaments")
+# Tournaments
 all_tournaments = list(TOURNAMENTS.keys())
 selected_tournaments = st.sidebar.multiselect(
-    "Choose tournaments to load",
+    "Select tournaments to load",
     options=all_tournaments,
-    default=["IPL"]
+    default=["IPL"],
+    key="tournament_select"
 )
 
 # ────────────────────────────────────────────────
-# Fast Parquet loading with year filtering
+# Optimized loading function
 # ────────────────────────────────────────────────
-@st.cache_data(ttl="24h", show_spinner="Loading data...")
+@st.cache_data(
+    ttl="24h",
+    show_spinner=False,  # we'll use custom spinner
+    hash_funcs={pd.DataFrame: id}  # better hashing for dataframes
+)
 def load_filtered_data(selected_tournaments, selected_years):
     if not selected_tournaments:
         return pd.DataFrame()
     
-    dfs = []
-    
-    for tournament in selected_tournaments:
-        source = TOURNAMENTS.get(tournament)
-        if not source:
-            continue
+    with st.spinner(f"Loading {len(selected_tournaments)} tournament(s) for years {years[0]}–{years[1]}…"):
+        dfs = []
+        first_columns = None
         
-        try:
-            # Load parquet file (super fast!)
-            df_temp = pd.read_parquet(source)
-            
-            # Find year column and filter
-            year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
-            if year_col:
-                df_temp = df_temp[df_temp[year_col].astype(str).str[:4].astype(int).isin(selected_years)]
-            
-            if df_temp.empty:
+        for tournament in selected_tournaments:
+            source = TOURNAMENTS.get(tournament)
+            if not source:
+                st.warning(f"Source not found for {tournament}")
                 continue
             
-            df_temp['tournament'] = tournament
-            dfs.append(df_temp)
+            try:
+                # Load file
+                if source.startswith("http"):  # Dropbox
+                    resp = requests.get(source, timeout=200)
+                    resp.raise_for_status()
+                    content = BytesIO(resp.content)
+                    df_temp = pd.read_csv(content, low_memory=False, dtype_backend='numpy_nullable')
+                else:  # Local repo file
+                    if source.endswith('.xlsx'):
+                        df_temp = pd.read_excel(source, engine='openpyxl', dtype_backend='numpy_nullable')
+                    else:
+                        df_temp = pd.read_csv(source, low_memory=False, dtype_backend='numpy_nullable')
+                
+                # Early year filtering (huge speedup for large files)
+                year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+                if year_col:
+                    # Convert to int safely
+                    df_temp[year_col] = pd.to_numeric(df_temp[year_col].astype(str).str[:4], errors='coerce')
+                    df_temp = df_temp[df_temp[year_col].isin(selected_years)]
+                
+                if df_temp.empty:
+                    st.info(f"No data for {tournament} in selected years.")
+                    continue
+                
+                # Standardize columns
+                if first_columns is None:
+                    first_columns = df_temp.columns.tolist()
+                else:
+                    df_temp = df_temp.reindex(columns=first_columns)
+                
+                df_temp['tournament'] = tournament
+                dfs.append(df_temp)
+                
+            except Exception as e:
+                st.error(f"Failed to load {tournament}: {str(e)}")
+                continue
         
-        except Exception as e:
-            st.error(f"Failed to load {tournament}: {e}")
-            continue
-    
-    if not dfs:
-        return pd.DataFrame()
-    
-    merged_df = pd.concat(dfs, ignore_index=True)
-    return merged_df
+        if not dfs:
+            return pd.DataFrame()
+        
+        merged_df = pd.concat(dfs, ignore_index=True)
+        return merged_df
 
-# Load data
-df = load_filtered_data(tuple(selected_tournaments), tuple(selected_years))
-
-# Feedback
-if not df.empty:
-    memory_mb = df.memory_usage(deep=True).sum() / 1024**2
-    st.success(f"✅ **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) | {memory_mb:.1f} MB")
+# ────────────────────────────────────────────────
+# Load & show feedback
+# ────────────────────────────────────────────────
+if selected_tournaments:
+    df = load_filtered_data(selected_tournaments, selected_years)
+    
+    if not df.empty:
+        st.success(f"Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) ({years[0]}–{years[1]})")
+        st.sidebar.markdown("**Data ready!**")
+        
+        # Optional: show quick stats
+        with st.sidebar.expander("Loaded summary"):
+            st.write(df['tournament'].value_counts().to_frame("Rows"))
+    else:
+        st.warning("No matching data found for the selected tournaments and years.")
 else:
-    st.warning("No data loaded. Select tournament(s) and year range.")
+    st.info("Please select at least one tournament to load data.")
+    df = pd.DataFrame()
 
+# Now df is ready for the rest of your app
 DF_gen = df
 
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
