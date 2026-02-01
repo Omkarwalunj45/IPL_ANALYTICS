@@ -327,24 +327,23 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
 st.title('IPL Performance Analysis Portal')
+
 import streamlit as st
 import pandas as pd
-import requests
-from io import BytesIO
 
 # ────────────────────────────────────────────────
-# Tournament → file path or direct Dropbox URL
+# All tournaments now in Parquet format
 # ────────────────────────────────────────────────
 TOURNAMENTS = {
-    "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",
-    "CPL": "Datasets/IPL_APP_CPL.csv",
-    "ILT20": "Datasets/IPL_APP_ILT20.csv",
-    "LPL": "Datasets/IPL_APP_LPL.csv",
-    "MLC": "Datasets/IPL_APP_MLC.csv",
-    "SA20": "Datasets/IPL_APP_SA20.csv",
-    "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
-    "T20 Blast": "https://www.dropbox.com/scl/fi/5424aydb5tet950h2ue97/IPL_APP_T20_Blast.csv?rlkey=tint323016ydixtylb27ur95s&st=9xi9nxjh&dl=1",
-    "T20I": "https://www.dropbox.com/scl/fi/hyo26qc396k76lmawvt9i/IPL_APP_T20I_2.csv?rlkey=bc1rzwx1k64qwkkq9xxk6hpxc&st=l4m924ec&dl=1",
+    "IPL": "Datasets/ipl_bbb_21_25_2.parquet",
+    "CPL": "Datasets/IPL_APP_CPL.parquet",
+    "ILT20": "Datasets/IPL_APP_ILT20.parquet",
+    "LPL": "Datasets/IPL_APP_LPL.parquet",
+    "MLC": "Datasets/IPL_APP_MLC.parquet",
+    "SA20": "Datasets/IPL_APP_SA20.parquet",
+    "Super Smash": "Datasets/IPL_APP_SuperSmash.parquet",
+    "T20 Blast": "Datasets/IPL_APP_T20_Blast.parquet",
+    "T20I": "Datasets/IPL_APP_T20I_2.parquet",
 }
 
 # ────────────────────────────────────────────────
@@ -355,7 +354,7 @@ years = st.sidebar.slider(
     "Select year range",
     min_value=2021,
     max_value=2026,
-    value=(2024, 2026),  # DEFAULT TO SMALLER RANGE (KEY CHANGE!)
+    value=(2024, 2025),
     step=1
 )
 selected_years = list(range(years[0], years[1] + 1))
@@ -373,7 +372,7 @@ selected_tournaments = st.sidebar.multiselect(
 )
 
 # ────────────────────────────────────────────────
-# SIMPLIFIED + FASTER loading
+# Fast Parquet loading with year filtering
 # ────────────────────────────────────────────────
 @st.cache_data(ttl="24h", show_spinner="Loading data...")
 def load_filtered_data(selected_tournaments, selected_years):
@@ -388,17 +387,8 @@ def load_filtered_data(selected_tournaments, selected_years):
             continue
         
         try:
-            # Load file
-            if source.startswith("http"):
-                resp = requests.get(source, timeout=180)
-                resp.raise_for_status()
-                content = BytesIO(resp.content)
-                df_temp = pd.read_csv(content, low_memory=False)
-            else:
-                if source.endswith('.xlsx'):
-                    df_temp = pd.read_excel(source)
-                else:
-                    df_temp = pd.read_csv(source, low_memory=False)
+            # Load parquet file (super fast!)
+            df_temp = pd.read_parquet(source)
             
             # Find year column and filter
             year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
@@ -419,12 +409,6 @@ def load_filtered_data(selected_tournaments, selected_years):
         return pd.DataFrame()
     
     merged_df = pd.concat(dfs, ignore_index=True)
-    
-    # Memory optimization - convert to category
-    for col in ['bat', 'bowl', 'tournament']:
-        if col in merged_df.columns:
-            merged_df[col] = merged_df[col].astype('category')
-    
     return merged_df
 
 # Load data
@@ -438,6 +422,7 @@ else:
     st.warning("No data loaded. Select tournament(s) and year range.")
 
 DF_gen = df
+
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
     """
     Renames 'Royal Challengers Bangalore' to 'Royal Challengers Bengaluru' in team_bat, team_bowl, and winner columns.
