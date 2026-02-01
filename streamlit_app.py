@@ -329,12 +329,122 @@ st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)'
 st.title('IPL Performance Analysis Portal')
 @st.cache_data
 def load_data():
-    path = "Datasets/ipl_bbb_21_25.xlsx"
+    path = "Datasets/ipl_bbb_21_25_2.xlsx"
     df = pd.read_excel(path)
 
     return df
 
-df = load_data()    
+# df = load_data()    
+import streamlit as st
+import pandas as pd
+import requests
+from io import BytesIO
+
+# ────────────────────────────────────────────────
+# Tournament → file path or direct Dropbox URL
+# ────────────────────────────────────────────────
+TOURNAMENTS = {
+    "IPL": "Datasets/ipl_bbb_21_25_2.xlsx",               # your local .xlsx file
+    "CPL": "Datasets/IPL_APP_CPL.csv",
+    "ILT20": "Datasets/IPL_APP_ILT20.csv",
+    "LPL": "Datasets/IPL_APP_LPL.csv",
+    "MLC": "Datasets/IPL_APP_MLC.csv",
+    "SA20": "Datasets/IPL_APP_SA20.csv",
+    "Super Smash": "Datasets/IPL_APP_SuperSmash.csv",
+    
+    # Large files from Dropbox (direct dl=1 links)
+    "T20 Blast": "https://www.dropbox.com/scl/fi/5424aydb5tet950h2ue97/IPL_APP_T20_Blast.csv?rlkey=tint323016ydixtylb27ur95s&st=9xi9nxjh&dl=1",
+    "T20I": "https://www.dropbox.com/scl/fi/pzxfy9bqoqtaiknli5oi2/IPL_APP_T20I.csv?rlkey=8xl4wb37yuq1ej85w122ldlxk&st=4m8xk916&dl=1",
+}
+
+# ────────────────────────────────────────────────
+# Year range slider (2021–2026)
+# ────────────────────────────────────────────────
+st.sidebar.header("Select Years")
+years = st.sidebar.slider(
+    "Select year range",
+    min_value=2021,
+    max_value=2026,
+    value=(2021, 2026),  # default full range
+    step=1
+)
+selected_years = list(range(years[0], years[1] + 1))
+st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
+
+# ────────────────────────────────────────────────
+# Tournament multi-select
+# ────────────────────────────────────────────────
+st.sidebar.header("Select Tournaments")
+all_tournaments = list(TOURNAMENTS.keys())
+selected_tournaments = st.sidebar.multiselect(
+    "Choose tournaments to load",
+    options=all_tournaments,
+    default=["IPL"]  # start with IPL for speed
+)
+
+# ────────────────────────────────────────────────
+# Optimized loading + year filtering
+# ────────────────────────────────────────────────
+@st.cache_data(ttl="24h", show_spinner="Loading selected data (may take a moment for large leagues)…")
+def load_filtered_data(selected_tournaments, selected_years):
+    if not selected_tournaments:
+        return pd.DataFrame()
+    
+    dfs = []
+    first_columns = None
+    
+    for tournament in selected_tournaments:
+        source = TOURNAMENTS.get(tournament)
+        if not source:
+            continue
+        
+        try:
+            # Load file
+            if source.startswith("http"):  # Dropbox
+                resp = requests.get(source, timeout=180)
+                resp.raise_for_status()
+                content = BytesIO(resp.content)
+                df_temp = pd.read_csv(content, low_memory=False)
+            else:  # Local in repo
+                df_temp = pd.read_excel(source) if source.endswith('.xlsx') else pd.read_csv(source, low_memory=False)
+            
+            # Assume there's a 'year' or 'season' column (adjust name if different)
+            year_col = next((c for c in df_temp.columns if 'year' in c.lower() or 'season' in c.lower()), None)
+            if year_col:
+                # Filter only selected years (early filter = huge speedup)
+                df_temp = df_temp[df_temp[year_col].astype(str).str[:4].astype(int).isin(selected_years)]
+            
+            if df_temp.empty:
+                continue
+            
+            # Standardize column order
+            if first_columns is None:
+                first_columns = df_temp.columns.tolist()
+            else:
+                df_temp = df_temp.reindex(columns=first_columns)
+            
+            df_temp['tournament'] = tournament  # tag source
+            dfs.append(df_temp)
+        
+        except Exception as e:
+            st.error(f"Failed to load {tournament}: {e}")
+            continue
+    
+    if not dfs:
+        return pd.DataFrame()
+    
+    merged_df = pd.concat(dfs, ignore_index=True)
+    return merged_df
+
+# Load only when selections are made
+df = load_filtered_data(selected_tournaments, selected_years)
+
+# Feedback
+if not df.empty:
+    st.success(f"Loaded **{len(df):,} rows** from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s)")
+    st.sidebar.write("Data loaded successfully!")
+else:
+    st.warning("No data loaded yet. Select at least one tournament and year range.")
 DF_gen=df
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
     """
