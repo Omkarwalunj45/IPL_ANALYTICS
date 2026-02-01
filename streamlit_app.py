@@ -340,7 +340,6 @@ def load_data():
 import streamlit as st
 import pandas as pd
 import requests
-def load_data():
 # Tournament → file path or direct Dropbox URL
 # ────────────────────────────────────────────────
 TOURNAMENTS = {
