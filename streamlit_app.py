@@ -591,8 +591,8 @@ if selected_tournaments:
 else:
     st.warning("No data loaded yet. Select at least one tournament and year range.")
 DF_gen=df
-    st.info("👈 Select at least one tournament from the sidebar")
-    df = pd.DataFrame()
+st.info("👈 Select at least one tournament from the sidebar")
+# df = pd.DataFrame()
 
 DF_gen = df
 def rename_rcb(df: pd.DataFrame) -> pd.DataFrame:
