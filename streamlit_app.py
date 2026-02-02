@@ -6474,118 +6474,321 @@ elif sidebar_option == "Strength vs Weakness":
                             st.error(f"Wagon drawing function exists but raised: {e}")
                     else:
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
-            
-                # ---------- Caught Dismissals Wagon — exact same field style + red dots ----------
-                def draw_caught_dismissals_wagon(df_wagon, batter_name):
+
+                import streamlit as st
+                import pandas as pd
+                import plotly.graph_objects as go
+                import numpy as np
+                
+                def draw_caught_dismissals_wagon_interactive(df_wagon, batter_name):
+                    """
+                    Interactive wagon wheel showing caught dismissals with hover info.
+                    Only shows catches within the boundary circle.
+                    """
                     # Filter caught dismissals
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
                     ].copy()
-            
+                    
                     if caught_df.empty:
                         st.info(f"No caught dismissals for {batter_name}.")
                         return
-            
-                    # Extract coordinates
+                    
+                    # Check for required columns
                     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
                         st.warning("Missing 'wagonX' or 'wagonY' columns.")
                         return
-            
-                    x_coords = caught_df['wagonX'].astype(float)
-                    y_coords = caught_df['wagonY'].astype(float)
-            
-                    # Create figure with EXACT same style
-                    fig, ax = plt.subplots(figsize=(10, 10))
-                    ax.set_aspect('equal')
-                    ax.axis('off')
-            
-                    # Outer field: #228B22 (dark green)
-                    ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
-                    ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
-            
-                    # Inner circle: #66bb6a (lighter green)
-                    ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
-                    ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
-            
-                    # Pitch rectangle: tan
-                    pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
-                    ax.add_patch(pitch_rect)
-            
-                    # Radial lines
-                    angles = np.linspace(0, 2*np.pi, 9)[:-1]
-                    for angle in angles:
-                        x = math.cos(angle)
-                        y = math.sin(angle)
-                        ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
-            
+                    
                     # Scale coordinates to normalized -1 to 1
                     center_x = 184
                     center_y = 184
                     radius = 184
-                    x_plot = (x_coords - center_x) / radius
-                    y_plot = - (y_coords - center_y) / radius  # flip Y (positive down)
-            
+                    
+                    caught_df['x_plot'] = (caught_df['wagonX'].astype(float) - center_x) / radius
+                    caught_df['y_plot'] = -(caught_df['wagonY'].astype(float) - center_y) / radius
+                    
                     # LHB flip X if needed
                     batting_style_val = df_wagon['bat_hand'].iloc[0] if 'bat_hand' in df_wagon.columns and not df_wagon.empty else 'R'
                     is_lhb = str(batting_style_val).upper().startswith('L')
                     if is_lhb:
-                        x_plot = -x_plot
-            
-                    # Plot red dots
-                    ax.scatter(
-                        x_plot, y_plot,
-                        color='red', s=80, alpha=0.9, edgecolor='black', linewidth=1.5,
-                        marker='o', zorder=20
+                        caught_df['x_plot'] = -caught_df['x_plot']
+                    
+                    # FILTER: Only keep dots within the boundary circle (radius = 1)
+                    caught_df['distance'] = np.sqrt(caught_df['x_plot']**2 + caught_df['y_plot']**2)
+                    caught_df = caught_df[caught_df['distance'] <= 1.0].copy()
+                    
+                    if caught_df.empty:
+                        st.info(f"No caught dismissals within the boundary for {batter_name}.")
+                        return
+                    
+                    # Prepare hover text with available info
+                    hover_texts = []
+                    for _, row in caught_df.iterrows():
+                        parts = []
+                        
+                        if 'bowl' in caught_df.columns:
+                            parts.append(f"<b>Bowler:</b> {row['bowl']}")
+                        
+                        if 'bowl_style' in caught_df.columns:
+                            parts.append(f"<b>Bowler Style:</b> {row['bowl_style']}")
+                        
+                        if 'bowl_kind' in caught_df.columns:
+                            parts.append(f"<b>Bowler Kind:</b> {row['bowl_kind']}")
+                        
+                        if 'line' in caught_df.columns:
+                            parts.append(f"<b>Line:</b> {row['line']}")
+                        
+                        if 'length' in caught_df.columns:
+                            parts.append(f"<b>Length:</b> {row['length']}")
+                        
+                        if 'shot' in caught_df.columns:
+                            parts.append(f"<b>Shot:</b> {row['shot']}")
+                        
+                        if 'score' in caught_df.columns or 'runs' in caught_df.columns:
+                            runs = row.get('score', row.get('runs', '-'))
+                            parts.append(f"<b>Runs:</b> {runs}")
+                        
+                        # Add dismissal info
+                        if 'dismissal' in caught_df.columns:
+                            parts.append(f"<b>Dismissal:</b> {row['dismissal']}")
+                        
+                        hover_texts.append("<br>".join(parts))
+                    
+                    # Create Plotly figure
+                    fig = go.Figure()
+                    
+                    # Outer boundary circle (dark green)
+                    theta_boundary = np.linspace(0, 2*np.pi, 100)
+                    fig.add_trace(go.Scatter(
+                        x=np.cos(theta_boundary),
+                        y=np.sin(theta_boundary),
+                        mode='lines',
+                        line=dict(color='black', width=3),
+                        fill='toself',
+                        fillcolor='rgba(34, 139, 34, 0.3)',  # #228B22 with transparency
+                        hoverinfo='skip',
+                        showlegend=False
+                    ))
+                    
+                    # Inner circle (lighter green)
+                    theta_inner = np.linspace(0, 2*np.pi, 100)
+                    fig.add_trace(go.Scatter(
+                        x=0.5 * np.cos(theta_inner),
+                        y=0.5 * np.sin(theta_inner),
+                        mode='lines',
+                        line=dict(color='white', width=1),
+                        fill='toself',
+                        fillcolor='rgba(102, 187, 106, 0.4)',  # #66bb6a
+                        hoverinfo='skip',
+                        showlegend=False
+                    ))
+                    
+                    # Pitch rectangle
+                    pitch_x = [-0.04, 0.04, 0.04, -0.04, -0.04]
+                    pitch_y = [-0.08, -0.08, 0.08, 0.08, -0.08]
+                    fig.add_trace(go.Scatter(
+                        x=pitch_x,
+                        y=pitch_y,
+                        mode='lines',
+                        fill='toself',
+                        fillcolor='tan',
+                        line=dict(color='tan', width=1),
+                        hoverinfo='skip',
+                        showlegend=False
+                    ))
+                    
+                    # Radial lines
+                    angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                    for angle in angles:
+                        fig.add_trace(go.Scatter(
+                            x=[0, np.cos(angle)],
+                            y=[0, np.sin(angle)],
+                            mode='lines',
+                            line=dict(color='rgba(255, 255, 255, 0.25)', width=1),
+                            hoverinfo='skip',
+                            showlegend=False
+                        ))
+                    
+                    # Plot caught dismissal dots with hover info
+                    fig.add_trace(go.Scatter(
+                        x=caught_df['x_plot'],
+                        y=caught_df['y_plot'],
+                        mode='markers',
+                        marker=dict(
+                            size=12,
+                            color='red',
+                            opacity=0.9,
+                            line=dict(color='black', width=1.5)
+                        ),
+                        text=hover_texts,
+                        hovertemplate='%{text}<extra></extra>',
+                        name='Caught Dismissals',
+                        showlegend=True
+                    ))
+                    
+                    # Layout
+                    fig.update_layout(
+                        title=dict(
+                            text=f"{batter_name} - Caught Dismissals (Hover for details)",
+                            font=dict(size=16, color='black')
+                        ),
+                        width=700,
+                        height=700,
+                        xaxis=dict(
+                            range=[-1.2, 1.2],
+                            showgrid=False,
+                            zeroline=False,
+                            showticklabels=False,
+                            scaleanchor='y',
+                            scaleratio=1
+                        ),
+                        yaxis=dict(
+                            range=[-1.2, 1.2],
+                            showgrid=False,
+                            zeroline=False,
+                            showticklabels=False
+                        ),
+                        plot_bgcolor='white',
+                        hovermode='closest',
+                        showlegend=True,
+                        legend=dict(
+                            x=0.02,
+                            y=0.98,
+                            bgcolor='rgba(255, 255, 255, 0.8)',
+                            bordercolor='black',
+                            borderwidth=1
+                        )
                     )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Optional: Show summary table
+                    st.markdown(f"**Total caught dismissals within boundary:** {len(caught_df)}")
+                    
+                    # Show detailed table with dismissal info
+                    if not caught_df.empty:
+                        display_cols = []
+                        for col in ['bowl', 'bowl_style', 'bowl_kind', 'line', 'length', 'shot', 'score', 'dismissal']:
+                            if col in caught_df.columns:
+                                display_cols.append(col)
+                        
+                        if display_cols:
+                            with st.expander("📊 View Dismissal Details Table"):
+                                st.dataframe(
+                                    caught_df[display_cols].reset_index(drop=True),
+                                    use_container_width=True
+                                )
+                # ---------- Caught Dismissals Wagon — exact same field style + red dots ----------
+                # def draw_caught_dismissals_wagon(df_wagon, batter_name):
+                #     # Filter caught dismissals
+                #     caught_df = df_wagon[
+                #         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
+                #     ].copy()
             
-                    # Legend
-                    ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
-                    ax.legend(loc='upper right', fontsize=10, frameon=True)
+                #     if caught_df.empty:
+                #         st.info(f"No caught dismissals for {batter_name}.")
+                #         return
             
-                    # Limits
-                    ax.set_xlim(-1.2, 1.2)
-                    ax.set_ylim(-1.2, 1.2)
-                    ax.set_aspect('equal')
+                #     # Extract coordinates
+                #     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                #         st.warning("Missing 'wagonX' or 'wagonY' columns.")
+                #         return
             
-                    # Display
-                    safe_fn = globals().get('safe_st_pyplot', None)
-                    try:
-                        if callable(safe_fn):
-                            safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                        else:
-                            st.pyplot(fig)
-                    except Exception:
-                        st.pyplot(fig)
-                    finally:
-                        plt.close(fig)
+                #     x_coords = caught_df['wagonX'].astype(float)
+                #     y_coords = caught_df['wagonY'].astype(float)
             
-                # ---------- When user selects a kind ----------
-                if chosen_kind and chosen_kind != '-- none --':
-                    def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
-                        if col not in df.columns:
-                            return df.iloc[0:0]
-                        mask = df[col].astype(str).str.lower().str.contains(str(kind).lower(), na=False)
-                        if not mask.any():
-                            norm_kind = _norm_key(kind)
-                            mask = df[col].apply(lambda x: _norm_key(x) == norm_kind)
-                        return df[mask].copy()
+                #     # Create figure with EXACT same style
+                #     fig, ax = plt.subplots(figsize=(10, 10))
+                #     ax.set_aspect('equal')
+                #     ax.axis('off')
             
-                    sel_pf = filter_by_kind(pf)
-                    sel_bdf = filter_by_kind(bdf)
+                #     # Outer field: #228B22 (dark green)
+                #     ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
+                #     ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
             
-                    df_use = sel_pf if not sel_pf.empty else sel_bdf
-                    if df_use.empty:
-                        st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
-                    else:
-                        st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
-                        draw_wagon_if_available(df_use, player_selected)
+                #     # Inner circle: #66bb6a (lighter green)
+                #     ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
+                #     ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
             
-                        st.markdown(f"#### {player_selected}'s Caught Dismissals")
-                        draw_caught_dismissals_wagon(df_use, player_selected)
+                #     # Pitch rectangle: tan
+                #     pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
+                #     ax.add_patch(pitch_rect)
             
-                        display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
+                #     # Radial lines
+                #     angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                #     for angle in angles:
+                #         x = math.cos(angle)
+                #         y = math.sin(angle)
+                #         ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
             
-                # ---------- When user selects a style ----------
+                #     # Scale coordinates to normalized -1 to 1
+                #     center_x = 184
+                #     center_y = 184
+                #     radius = 184
+                #     x_plot = (x_coords - center_x) / radius
+                #     y_plot = - (y_coords - center_y) / radius  # flip Y (positive down)
+            
+                #     # LHB flip X if needed
+                #     batting_style_val = df_wagon['bat_hand'].iloc[0] if 'bat_hand' in df_wagon.columns and not df_wagon.empty else 'R'
+                #     is_lhb = str(batting_style_val).upper().startswith('L')
+                #     if is_lhb:
+                #         x_plot = -x_plot
+            
+                #     # Plot red dots
+                #     ax.scatter(
+                #         x_plot, y_plot,
+                #         color='red', s=80, alpha=0.9, edgecolor='black', linewidth=1.5,
+                #         marker='o', zorder=20
+                #     )
+            
+                #     # Legend
+                #     ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
+                #     ax.legend(loc='upper right', fontsize=10, frameon=True)
+            
+                #     # Limits
+                #     ax.set_xlim(-1.2, 1.2)
+                #     ax.set_ylim(-1.2, 1.2)
+                #     ax.set_aspect('equal')
+            
+                #     # Display
+                #     safe_fn = globals().get('safe_st_pyplot', None)
+                #     try:
+                #         if callable(safe_fn):
+                #             safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                #         else:
+                #             st.pyplot(fig)
+                #     except Exception:
+                #         st.pyplot(fig)
+                #     finally:
+                #         plt.close(fig)
+            
+                # # ---------- When user selects a kind ----------
+                # if chosen_kind and chosen_kind != '-- none --':
+                #     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
+                #         if col not in df.columns:
+                #             return df.iloc[0:0]
+                #         mask = df[col].astype(str).str.lower().str.contains(str(kind).lower(), na=False)
+                #         if not mask.any():
+                #             norm_kind = _norm_key(kind)
+                #             mask = df[col].apply(lambda x: _norm_key(x) == norm_kind)
+                #         return df[mask].copy()
+            
+                #     sel_pf = filter_by_kind(pf)
+                #     sel_bdf = filter_by_kind(bdf)
+            
+                #     df_use = sel_pf if not sel_pf.empty else sel_bdf
+                #     if df_use.empty:
+                #         st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
+                #     else:
+                #         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
+                #         draw_wagon_if_available(df_use, player_selected)
+            
+                #         st.markdown(f"#### {player_selected}'s Caught Dismissals")
+                #         draw_caught_dismissals_wagon(df_use, player_selected)
+            
+                #         display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
+            
+                # # ---------- When user selects a style ----------
                 if chosen_style and chosen_style != '-- none --':
                     def filter_by_style(df, col='bowl_style', style=chosen_style):
                         if col not in df.columns:
@@ -6607,9 +6810,11 @@ elif sidebar_option == "Strength vs Weakness":
                         draw_wagon_if_available(df_use, player_selected)
             
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
-                        draw_caught_dismissals_wagon(df_use, player_selected)
+                        draw_caught_dismissals_wagon_interactive(df_use, player_selected)
             
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
+
+            
                    
         # The rest of the code (wagon wheels, pitchmaps, shot productivity, etc.) will now use the phase-filtered pf/bdf automatically
        
