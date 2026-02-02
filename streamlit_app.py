@@ -6245,18 +6245,32 @@ elif sidebar_option == "Strength vs Weakness":
 
         # ------------------ compute RAA / DAA (robustly) ------------------
         def compute_RAA_DAA_for_group_column(group_col):
+            """
+            Compute RAA (Runs Above Average) and DAA (Dismissals Above Average) for a given group column.
+            
+            CHANGES MADE:
+            1. Added dismissals calculation using wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+            2. Added AVG (runs per dismissal)
+            3. Added BPB (balls per boundary, where boundary = 4 or 6)
+            4. Changed average calculation to WEIGHTED average based on runs scored:
+               - Weighted SR = Σ(runs_i * SR_i) / Σ(runs_i)
+               - Weighted BPD = Σ(runs_i * BPD_i) / Σ(runs_i)
+               - Weighted AVG = Σ(runs_i * AVG_i) / Σ(runs_i)
+               - Weighted BPB = Σ(runs_i * BPB_i) / Σ(runs_i)
+            """
             out = {}
             if group_col not in bdf.columns:
                 return out
-            
+        
             working = bdf.copy()
             working[group_col] = working[group_col].astype(str).str.lower().fillna('unknown')
             working[runs_col] = pd.to_numeric(working.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
             working['out_flag_tmp'] = pd.to_numeric(working.get('out', 0), errors='coerce').fillna(0).astype(int)
             working['dismissal_clean_tmp'] = working.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
+        
+            # CHANGE 1: Use specific wicket tokens for dismissals
+            WKT_TOKENS = {'caught', 'bowled', 'stumped', 'lbw'}
             
-            # Updated wicket types as per request (only caught, bowled, stumped, lbw)
-            WICKET_TYPES = ['caught', 'bowled', 'stumped', 'lbw']
             def is_bowler_wicket_local(out_flag_val, dismissal_text):
                 try:
                     if int(out_flag_val) != 1:
@@ -6267,18 +6281,27 @@ elif sidebar_option == "Strength vs Weakness":
                 if not dismissal_text or str(dismissal_text).strip() == '':
                     return False
                 dd = str(dismissal_text).lower()
-                for token in WICKET_TYPES:
+                # Check if any wicket token is in dismissal text
+                for token in WKT_TOKENS:
                     if token in dd:
                         return True
                 return False
+        
+            working['is_wkt_tmp'] = working.apply(
+                lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, 
+                axis=1
+            )
             
-            working['is_wkt_tmp'] = working.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, axis=1)
-            
-            # Assume top7_flag exists to ignore bowlers
+            # CHANGE 2: Calculate boundaries (4s and 6s)
+            working['is_boundary'] = working[runs_col].isin([4, 6]).astype(int)
+        
+            # Get top 7 batters
             top7 = working[working.get('top7_flag', 0) == 1].copy()
+        
             if top7.empty:
                 if 'p_bat' in working.columns and pd.api.types.is_numeric_dtype(working['p_bat']):
                     top7 = working[pd.to_numeric(working['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
+        
             if top7.empty:
                 if all(c in working.columns for c in ['p_match', 'inns', COL_BAT]):
                     tmp = working.dropna(subset=[COL_BAT, 'p_match', 'inns']).copy()
@@ -6293,89 +6316,127 @@ elif sidebar_option == "Strength vs Weakness":
                         top7_df = pd.DataFrame(recs, columns=['p_match', 'inns', COL_BAT])
                         top7_df['top7_flag'] = 1
                         top7 = working.merge(top7_df, how='inner', on=['p_match', 'inns', COL_BAT])
+            
             if top7.empty:
                 return out
+        
+            # Aggregate per match/batter/group
+            gb_keys = ['p_match', 'inns', COL_BAT, group_col] if all(c in top7.columns for c in ['p_match', 'inns']) else ['p_match', COL_BAT, group_col]
             
-            # Add boundary flags if available
-            top7['is_four'] = top7.get('is_four', 0).astype(int)
-            top7['is_six'] = top7.get('is_six', 0).astype(int)
+            per_mb = (top7.groupby(gb_keys, as_index=False)
+                      .agg(
+                          runs=(runs_col, 'sum'),
+                          balls=(runs_col, 'count'),
+                          dismissals=('is_wkt_tmp', 'sum'),
+                          boundaries=('is_boundary', 'sum')  # CHANGE 3: Add boundaries
+                      ))
             
-            # Per batter per group stats (for weighted averages)
-            per_batter_group = top7.groupby([COL_BAT, group_col], as_index=False).agg(
-                runs=(runs_col, 'sum'),
-                balls=('legal_ball', 'sum') if 'legal_ball' in top7.columns else (runs_col, 'count'),
-                dismissals=('is_wkt_tmp', 'sum'),
-                fours=('is_four', 'sum'),
-                sixes=('is_six', 'sum')
+            # CHANGE 4: Calculate all metrics including AVG and BPB
+            per_mb['SR'] = per_mb.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
+            per_mb['BPD'] = per_mb.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
+            per_mb['AVG'] = per_mb.apply(lambda r: (r['runs'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
+            per_mb['BPB'] = per_mb.apply(lambda r: (r['balls'] / r['boundaries']) if r['boundaries'] > 0 else np.nan, axis=1)
+        
+            # Aggregate per batter per group (keep runs for weighting)
+            per_batter_group = per_mb.groupby([COL_BAT, group_col], as_index=False).agg(
+                total_runs=('runs', 'sum'),
+                mean_SR=('SR', 'mean'), 
+                mean_BPD=('BPD', 'mean'),
+                mean_AVG=('AVG', 'mean'),
+                mean_BPB=('BPB', 'mean')
             )
+        
+            # CHANGE 5: Calculate WEIGHTED averages by group (weighted by runs scored)
+            def weighted_avg(df, value_col):
+                """Calculate weighted average: Σ(runs_i * value_i) / Σ(runs_i)"""
+                df_clean = df.dropna(subset=[value_col, 'total_runs'])
+                if df_clean.empty or df_clean['total_runs'].sum() == 0:
+                    return np.nan
+                return (df_clean['total_runs'] * df_clean[value_col]).sum() / df_clean['total_runs'].sum()
             
-            per_batter_group['SR'] = per_batter_group.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
-            per_batter_group['BPD'] = per_batter_group.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
-            per_batter_group['AVG'] = per_batter_group.apply(lambda r: (r['runs'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
-            per_batter_group['BPB'] = per_batter_group.apply(lambda r: (r['balls'] / (r['fours'] + r['sixes'])) if (r['fours'] + r['sixes']) > 0 else np.nan, axis=1)
-            
-            # Weighted averages per group (weighted by runs for SR/AVG, by balls for BPD/BPB)
-            avg_by_group = per_batter_group.groupby(group_col).apply(lambda g:
-                pd.Series({
-                    'weighted_SR': np.average(g['SR'], weights=g['runs']) if g['runs'].sum() > 0 else np.nan,
-                    'weighted_BPD': np.average(g['BPD'], weights=g['balls']) if g['balls'].sum() > 0 else np.nan,
-                    'weighted_AVG': np.average(g['AVG'], weights=g['runs']) if g['runs'].sum() > 0 else np.nan,
-                    'weighted_BPB': np.average(g['BPB'], weights=g['balls']) if g['balls'].sum() > 0 else np.nan,
-                    'total_runs': g['runs'].sum(),
-                    'total_balls': g['balls'].sum(),
-                    'total_dismissals': g['dismissals'].sum(),
-                    'total_boundaries': (g['fours'] + g['sixes']).sum()
+            avg_by_group = per_batter_group.groupby(group_col).apply(
+                lambda g: pd.Series({
+                    'avg_SR_top7': weighted_avg(g, 'mean_SR'),
+                    'avg_BPD_top7': weighted_avg(g, 'mean_BPD'),
+                    'avg_AVG_top7': weighted_avg(g, 'mean_AVG'),
+                    'avg_BPB_top7': weighted_avg(g, 'mean_BPB')
                 })
             ).reset_index()
-            
-            # For selected batter
+        
+            # Process selected player data
             sel = pf.copy()
             sel[group_col] = sel.get(group_col, "").astype(str).str.lower().fillna('unknown')
             sel[runs_col] = pd.to_numeric(sel.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
             sel['out_flag_tmp'] = pd.to_numeric(sel.get('out', 0), errors='coerce').fillna(0).astype(int)
             sel['dismissal_clean_tmp'] = sel.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
-            sel['is_wkt_tmp'] = sel.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, axis=1)
-            sel['is_four'] = sel.get('is_four', 0).astype(int)
-            sel['is_six'] = sel.get('is_six', 0).astype(int)
-            
+            sel['is_wkt_tmp'] = sel.apply(
+                lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, 
+                axis=1
+            )
+            sel['is_boundary'] = sel[runs_col].isin([4, 6]).astype(int)
+        
+            # Aggregate selected player by group
             sel_grp = sel.groupby(group_col).agg(
-                runs=(runs_col, 'sum'),
-                balls=('legal_ball', 'sum') if 'legal_ball' in sel.columns else (runs_col, 'count'),
+                runs=(runs_col, 'sum'), 
+                balls=(runs_col, 'count'), 
                 dismissals=('is_wkt_tmp', 'sum'),
-                fours=('is_four', 'sum'),
-                sixes=('is_six', 'sum')
+                boundaries=('is_boundary', 'sum')
             ).reset_index()
             
             sel_grp['SR'] = sel_grp.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
             sel_grp['BPD'] = sel_grp.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
             sel_grp['AVG'] = sel_grp.apply(lambda r: (r['runs'] / r['dismissals']) if r['dismissals'] > 0 else np.nan, axis=1)
-            sel_grp['BPB'] = sel_grp.apply(lambda r: (r['balls'] / (r['fours'] + r['sixes'])) if (r['fours'] + r['sixes']) > 0 else np.nan, axis=1)
-            sel_grp['Dis'] = sel_grp['dismissals']
-            
-            # Merge with weighted benchmark
+            sel_grp['BPB'] = sel_grp.apply(lambda r: (r['balls'] / r['boundaries']) if r['boundaries'] > 0 else np.nan, axis=1)
+        
+            # Merge with group averages
             merged = pd.merge(sel_grp, avg_by_group, how='left', on=group_col)
-            merged['RAA'] = merged['SR'] - merged['weighted_SR']
-            merged['DAA'] = merged['BPD'] - merged['weighted_BPD']
-            
-            # Fill output dict
+        
+            # Calculate differences
             for _, row in merged.iterrows():
                 g = row[group_col]
+                sel_sr = row['SR']
+                sel_bpd = row['BPD']
+                sel_avg = row['AVG']
+                sel_bpb = row['BPB']
+                
+                avg_sr = row.get('avg_SR_top7', np.nan)
+                avg_bpd = row.get('avg_BPD_top7', np.nan)
+                avg_avg = row.get('avg_AVG_top7', np.nan)
+                avg_bpb = row.get('avg_BPB_top7', np.nan)
+                
+                # Safe float conversion
+                try:
+                    avg_sr = float(avg_sr) if not pd.isna(avg_sr) else np.nan
+                except:
+                    avg_sr = np.nan
+                try:
+                    avg_bpd = float(avg_bpd) if not pd.isna(avg_bpd) else np.nan
+                except:
+                    avg_bpd = np.nan
+                try:
+                    avg_avg = float(avg_avg) if not pd.isna(avg_avg) else np.nan
+                except:
+                    avg_avg = np.nan
+                try:
+                    avg_bpb = float(avg_bpb) if not pd.isna(avg_bpb) else np.nan
+                except:
+                    avg_bpb = np.nan
+                
+                # Calculate differences (Above Average metrics)
+                RAA = (sel_sr - avg_sr) if (not np.isnan(sel_sr) and not np.isnan(avg_sr)) else np.nan
+                DAA = (sel_bpd - avg_bpd) if (not np.isnan(sel_bpd) and not np.isnan(avg_bpd)) else np.nan
+                AAA = (sel_avg - avg_avg) if (not np.isnan(sel_avg) and not np.isnan(avg_avg)) else np.nan  # Average Above Average
+                BAA = (sel_bpb - avg_bpb) if (not np.isnan(sel_bpb) and not np.isnan(avg_bpb)) else np.nan  # Boundary Above Average
+                
                 out[str(g).lower()] = {
-                    'Runs': row['runs'],
-                    'Balls': row['balls'],
-                    'Dis': row['Dis'],
-                    'AVG': row['AVG'],
-                    'SR': row['SR'],
-                    'BPB': row['BPB'],
-                    'BPD': row['BPD'],
-                    'RAA': row['RAA'],
-                    'DAA': row['DAA'],
-                    'weighted_SR_top7': row['weighted_SR'],
-                    'weighted_BPD_top7': row['weighted_BPD'],
-                    'weighted_AVG_top7': row['weighted_AVG'],
-                    'weighted_BPB_top7': row['weighted_BPB']
+                    'selected_SR': sel_sr,
+                    'selected_BPD': sel_bpd,
+                    'selected_AVG': sel_avg,
+                    'selected_BPB': sel_bpb,
+                    'RAA': RAA,
+                    'DAA': DAA  # Boundary Above Average (lower is better)
                 }
-            
+        
             return out
         # def compute_RAA_DAA_for_group_column(group_col):
         #     out = {}
