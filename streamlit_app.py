@@ -626,14 +626,14 @@ if all(r[1] is None for r in resolved_files):
     st.stop()
 
 # Show debug info of resolved files (helpful to confirm which file each tournament maps to)
-with st.expander("Debug: Files resolved for each selected tournament (remove in production)"):
-    for t, p, m, s in resolved_files:
-        st.write({
-            "tournament": t,
-            "path": p,
-            "mtime": datetime.fromtimestamp(m).isoformat() if m else None,
-            "size_bytes": s
-        })
+# with st.expander("Debug: Files resolved for each selected tournament (remove in production)"):
+#     for t, p, m, s in resolved_files:
+#         st.write({
+#             "tournament": t,
+#             "path": p,
+#             "mtime": datetime.fromtimestamp(m).isoformat() if m else None,
+#             "size_bytes": s
+#         })
 
 file_signatures = tuple(resolved_files)
 
@@ -659,33 +659,33 @@ if df.empty:
     st.stop()
 
 # Inform user of successful load and summary
-st.success(
-    f"Loaded {len(df):,} rows from "
-    f"{len(df['tournament'].unique()):,} tournament(s), "
-    f"{len(selected_years)} year(s)."
-)
+# st.success(
+#     f"Loaded {len(df):,} rows from "
+#     f"{len(df['tournament'].unique()):,} tournament(s), "
+#     f"{len(selected_years)} year(s)."
+# )
 
 DF_gen = df
 
 # Debugging: show unique tournaments & a small sample per tournament
-with st.expander("Debug: data overview (per-tournament samples)"):
-    st.write("Tournaments present in DF_gen:", DF_gen["tournament"].unique().tolist())
-    for t in sorted(DF_gen["tournament"].unique()):
-        st.write(f"--- Sample rows for tournament: {t} ---")
-        sample_cols = DF_gen.columns.tolist()[:12]  # limit column display
-        st.dataframe(DF_gen[DF_gen["tournament"] == t][sample_cols].head(5))
+# with st.expander("Debug: data overview (per-tournament samples)"):
+#     st.write("Tournaments present in DF_gen:", DF_gen["tournament"].unique().tolist())
+#     for t in sorted(DF_gen["tournament"].unique()):
+#         st.write(f"--- Sample rows for tournament: {t} ---")
+#         sample_cols = DF_gen.columns.tolist()[:12]  # limit column display
+#         st.dataframe(DF_gen[DF_gen["tournament"] == t][sample_cols].head(5))
 
-# Example: show unique batters (what you did)
-if "bat" in DF_gen.columns:
-    st.write("Unique batters in loaded DF_gen (first 50):", list(DF_gen["bat"].unique()[:50]))
-else:
-    # try common column names that represent batter/player
-    player_cols = [c for c in DF_gen.columns if c.lower() in ("player","batter","batsman","bat")]
-    if player_cols:
-        col = player_cols[0]
-        st.write(f"Unique players detected in column '{col}' (first 50):", list(DF_gen[col].unique()[:50]))
-    else:
-        st.write("No obvious batter/player column found in DF_gen. Columns: ", DF_gen.columns.tolist())
+# # Example: show unique batters (what you did)
+# if "bat" in DF_gen.columns:
+#     st.write("Unique batters in loaded DF_gen (first 50):", list(DF_gen["bat"].unique()[:50]))
+# else:
+#     # try common column names that represent batter/player
+#     player_cols = [c for c in DF_gen.columns if c.lower() in ("player","batter","batsman","bat")]
+#     if player_cols:
+#         col = player_cols[0]
+#         st.write(f"Unique players detected in column '{col}' (first 50):", list(DF_gen[col].unique()[:50]))
+#     else:
+#         st.write("No obvious batter/player column found in DF_gen. Columns: ", DF_gen.columns.tolist())
 
 # import os
 # import glob
