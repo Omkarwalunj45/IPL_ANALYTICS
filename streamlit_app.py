@@ -108,7 +108,7 @@ def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', run
     if runs_col is None:
         runs_col = None # will use 0
 
-    wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+    wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
     # Pre-process dismissal column to handle NA safely (add this)
     dismissal_series = df_in.get(dismissal_col, pd.Series(dtype='object')).fillna('').astype(str).str.lower()
     for _, row in df_in.iterrows():
@@ -3949,7 +3949,7 @@ elif sidebar_option == "Matchup Analysis":
         if runs_col is None:
             runs_col = None # will use 0
    
-        wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+        wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
         dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
         for _, row in df_in.iterrows():
             li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
@@ -5626,7 +5626,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     return None
             
                 # wicket types to mark (exclude run-out etc)
-                wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+                wicket_set = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
             
                 # iterate and fill grids
                 for _, r in plot_df.iterrows():
@@ -6136,7 +6136,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     #                             rv_col = None
     
     #                         dismissal_col = 'dismissal' if 'dismissal' in df_sub.columns else None
-    #                         wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+    #                         wicket_set = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
     
     #                         for _, rr in df_sub.iterrows():
     #                             li = line_map.get(rr[line_col], None)
@@ -6315,7 +6315,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     #                             rv_col = None
     
     #                         dismissal_col = 'dismissal' if 'dismissal' in df_sub.columns else None
-    #                         wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+    #                         wicket_set = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
     
     #                         for _, rr in df_sub.iterrows():
     #                             li = line_map.get(rr[line_col], None)
@@ -6660,7 +6660,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                             rv_col = None
 
                         dismissal_col = 'dismissal' if 'dismissal' in df_sub.columns else None
-                        wicket_set = {'caught', 'bowled', 'stumped', 'lbw'}
+                        wicket_set = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
 
                         for _, rr in df_sub.iterrows():
                             li = get_line_index(rr.get(line_col, None))
@@ -7473,7 +7473,7 @@ elif sidebar_option == "Strength vs Weakness":
             Compute RAA (Runs Above Average) and DAA (Dismissals Above Average) for a given group column.
             
             CHANGES MADE:
-            1. Added dismissals calculation using wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+            1. Added dismissals calculation using wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
             2. Added AVG (runs per dismissal)
             3. Added BPB (balls per boundary, where boundary = 4 or 6)
             4. Changed average calculation to WEIGHTED average based on runs scored:
@@ -7493,7 +7493,7 @@ elif sidebar_option == "Strength vs Weakness":
             working['dismissal_clean_tmp'] = working.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
         
             # CHANGE 1: Use specific wicket tokens for dismissals
-            WKT_TOKENS = {'caught', 'bowled', 'stumped', 'lbw'}
+            WKT_TOKENS = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
             
             def is_bowler_wicket_local(out_flag_val, dismissal_text):
                 try:
@@ -7673,7 +7673,7 @@ elif sidebar_option == "Strength vs Weakness":
         #     working['out_flag_tmp'] = pd.to_numeric(working.get('out', 0), errors='coerce').fillna(0).astype(int)
         #     working['dismissal_clean_tmp'] = working.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
 
-        #     WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw']
+        #     WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw','leg before wicket','hit wicket']
         #     def is_bowler_wicket_local(out_flag_val, dismissal_text):
         #         try:
         #             if int(out_flag_val) != 1:
@@ -7972,7 +7972,7 @@ elif sidebar_option == "Strength vs Weakness":
                     if runs_col is None:
                         runs_col = None  # will use 0
             
-                    wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+                    wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
                     dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
                     for _, row in df_in.iterrows():
                         li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
@@ -9150,7 +9150,7 @@ elif sidebar_option == "Strength vs Weakness":
             if runs_col is None:
                 runs_col = None # will use 0
     
-            wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw'}
+            wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
             dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
             for _, row in df_in.iterrows():
                 li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
