@@ -351,18 +351,29 @@ os.makedirs(DATASETS_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 TOURNAMENTS = {
-    "IPL": "ipl",
-    "CPL": "cpl",
-    "ILT20": "ilt20",
-    "LPL": "lpl",
-    "MLC": "mlc",
-    "SA20": "sa20",
-    "Super Smash": "super_smash",
-    "T20 Blast": "t20_blast",
-    "T20I": "t20i",
-    "BBL": "bbl",
+    "IPL": "IPL_APP_IPL",
+    "CPL": "IPL_APP_CPL",
+    "ILT20": "IPL_APP_ILT20",
+    "LPL": "IPL_APP_LPL",
+    "MLC": "IPL_APP_MLC",
+    "SA20": "IPL_APP_SA20",
+    "Super Smash": "IPL_APP_SUPER_SMASH",
+    "T20 Blast": "IPL_APP_T20_BLAST",
+    "T20I": "IPL_APP_T20I",
+    "BBL": "IPL_APP_BBL",
 }
-
+# TOURNAMENTS = {
+#     "IPL": "IPL_APP_IPL",
+#     "CPL": "IPL_APP_CPL",
+#     "ILT20": "ilt20",
+#     "LPL": "lpl",
+#     "MLC": "mlc",
+#     "SA20": "sa20",
+#     "Super Smash": "super_smash",
+#     "T20 Blast": "t20_blast",
+#     "T20I": "t20i",
+#     "BBL": "bbl",
+# }
 # ────────────────────────────────────────────────
 # HELPERS
 # ────────────────────────────────────────────────
