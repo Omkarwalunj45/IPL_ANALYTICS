@@ -6480,204 +6480,108 @@ elif sidebar_option == "Strength vs Weakness":
                 import plotly.graph_objects as go
                 import numpy as np
                 
-                def draw_caught_dismissals_wagon_interactive(df_wagon, batter_name):
-                    """
-                    Interactive wagon wheel showing caught dismissals with hover info.
-                    Only shows catches within the boundary circle.
-                    """
+                import plotly.express as px
+                import plotly.graph_objects as go
+                
+                def draw_caught_dismissals_wagon(df_wagon, batter_name):
                     # Filter caught dismissals
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
                     ].copy()
-                    
+                
                     if caught_df.empty:
                         st.info(f"No caught dismissals for {batter_name}.")
                         return
-                    
-                    # Check for required columns
+                
+                    # Extract coordinates and details for hover
                     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
                         st.warning("Missing 'wagonX' or 'wagonY' columns.")
                         return
-                    
+                
+                    # Required columns for hover (adjust if names differ)
+                    required_cols = ['wagonX', 'wagonY', 'bowler', 'bowl_style', 'line', 'length', 'shot']  # 'shot' assuming it's the column for shot played
+                    missing_cols = [col for col in required_cols if col not in caught_df.columns]
+                    if missing_cols:
+                        st.warning(f"Missing columns for hover: {missing_cols}. Hover will show available info only.")
+                
                     # Scale coordinates to normalized -1 to 1
                     center_x = 184
                     center_y = 184
                     radius = 184
-                    
                     caught_df['x_plot'] = (caught_df['wagonX'].astype(float) - center_x) / radius
-                    caught_df['y_plot'] = -(caught_df['wagonY'].astype(float) - center_y) / radius
-                    
+                    caught_df['y_plot'] = - (caught_df['wagonY'].astype(float) - center_y) / radius  # flip Y (positive down)
+                
                     # LHB flip X if needed
                     batting_style_val = df_wagon['bat_hand'].iloc[0] if 'bat_hand' in df_wagon.columns and not df_wagon.empty else 'R'
                     is_lhb = str(batting_style_val).upper().startswith('L')
                     if is_lhb:
                         caught_df['x_plot'] = -caught_df['x_plot']
-                    
-                    # FILTER: Only keep dots within the boundary circle (radius = 1)
+                
+                    # Filter only points inside the circle (using circle formula)
                     caught_df['distance'] = np.sqrt(caught_df['x_plot']**2 + caught_df['y_plot']**2)
-                    caught_df = caught_df[caught_df['distance'] <= 1.0].copy()
-                    
+                    caught_df = caught_df[caught_df['distance'] <= 1]  # radius 1 in normalized space
                     if caught_df.empty:
-                        st.info(f"No caught dismissals within the boundary for {batter_name}.")
+                        st.info(f"No caught dismissals inside the field for {batter_name}.")
                         return
-                    
-                    # Prepare hover text with available info
-                    hover_texts = []
-                    for _, row in caught_df.iterrows():
-                        parts = []
-                        
-                        if 'bowl' in caught_df.columns:
-                            parts.append(f"<b>Bowler:</b> {row['bowl']}")
-                        
-                        if 'bowl_style' in caught_df.columns:
-                            parts.append(f"<b>Bowler Style:</b> {row['bowl_style']}")
-                        
-                        if 'bowl_kind' in caught_df.columns:
-                            parts.append(f"<b>Bowler Kind:</b> {row['bowl_kind']}")
-                        
-                        if 'line' in caught_df.columns:
-                            parts.append(f"<b>Line:</b> {row['line']}")
-                        
-                        if 'length' in caught_df.columns:
-                            parts.append(f"<b>Length:</b> {row['length']}")
-                        
-                        if 'shot' in caught_df.columns:
-                            parts.append(f"<b>Shot:</b> {row['shot']}")
-                        
-                        if 'score' in caught_df.columns or 'runs' in caught_df.columns:
-                            runs = row.get('score', row.get('runs', '-'))
-                            parts.append(f"<b>Runs:</b> {runs}")
-                        
-                        # Add dismissal info
-                        if 'dismissal' in caught_df.columns:
-                            parts.append(f"<b>Dismissal:</b> {row['dismissal']}")
-                        
-                        hover_texts.append("<br>".join(parts))
-                    
-                    # Create Plotly figure
+                
+                    # Create interactive Plotly figure
                     fig = go.Figure()
-                    
-                    # Outer boundary circle (dark green)
-                    theta_boundary = np.linspace(0, 2*np.pi, 100)
-                    fig.add_trace(go.Scatter(
-                        x=np.cos(theta_boundary),
-                        y=np.sin(theta_boundary),
-                        mode='lines',
-                        line=dict(color='black', width=3),
-                        fill='toself',
-                        fillcolor='rgba(34, 139, 34, 0.3)',  # #228B22 with transparency
-                        hoverinfo='skip',
-                        showlegend=False
-                    ))
-                    
-                    # Inner circle (lighter green)
-                    theta_inner = np.linspace(0, 2*np.pi, 100)
-                    fig.add_trace(go.Scatter(
-                        x=0.5 * np.cos(theta_inner),
-                        y=0.5 * np.sin(theta_inner),
-                        mode='lines',
-                        line=dict(color='white', width=1),
-                        fill='toself',
-                        fillcolor='rgba(102, 187, 106, 0.4)',  # #66bb6a
-                        hoverinfo='skip',
-                        showlegend=False
-                    ))
-                    
-                    # Pitch rectangle
-                    pitch_x = [-0.04, 0.04, 0.04, -0.04, -0.04]
-                    pitch_y = [-0.08, -0.08, 0.08, 0.08, -0.08]
-                    fig.add_trace(go.Scatter(
-                        x=pitch_x,
-                        y=pitch_y,
-                        mode='lines',
-                        fill='toself',
-                        fillcolor='tan',
-                        line=dict(color='tan', width=1),
-                        hoverinfo='skip',
-                        showlegend=False
-                    ))
-                    
-                    # Radial lines
+                
+                    # Outer field: dark green circle
+                    fig.add_shape(type="circle", xref="x", yref="y",
+                                  x0=-1, y0=-1, x1=1, y1=1,
+                                  fillcolor="#228B22", line_color="black", opacity=1, layer="below")
+                
+                    # Inner circle: lighter green
+                    fig.add_shape(type="circle", xref="x", yref="y",
+                                  x0=-0.5, y0=-0.5, x1=0.5, y1=0.5,
+                                  fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
+                
+                    # Pitch rectangle: tan
+                    fig.add_shape(type="rect", x0=-0.04, y0=-0.08, x1=0.04, y1=0.08,
+                                  fillcolor="tan", line_color=None, opacity=1, layer="above")
+                
+                    # Radial lines (white, alpha 0.25)
                     angles = np.linspace(0, 2*np.pi, 9)[:-1]
                     for angle in angles:
-                        fig.add_trace(go.Scatter(
-                            x=[0, np.cos(angle)],
-                            y=[0, np.sin(angle)],
-                            mode='lines',
-                            line=dict(color='rgba(255, 255, 255, 0.25)', width=1),
-                            hoverinfo='skip',
-                            showlegend=False
-                        ))
-                    
-                    # Plot caught dismissal dots with hover info
+                        x_end = np.cos(angle)
+                        y_end = np.sin(angle)
+                        fig.add_trace(go.Scatter(x=[0, x_end], y=[0, y_end],
+                                                 mode='lines', line=dict(color='white', width=1, dash='solid'),
+                                                 opacity=0.25, showlegend=False))
+                
+                    # Plot red dots with hover data
+                    hover_template = (
+                        "<b>Bowler:</b> %{customdata[0]}<br>"
+                        "<b>Bowler Style:</b> %{customdata[1]}<br>"
+                        "<b>Line:</b> %{customdata[2]}<br>"
+                        "<b>Length:</b> %{customdata[3]}<br>"
+                        "<b>Shot Played:</b> %{customdata[4]}<extra></extra>"
+                    )
+                
                     fig.add_trace(go.Scatter(
                         x=caught_df['x_plot'],
                         y=caught_df['y_plot'],
                         mode='markers',
-                        marker=dict(
-                            size=12,
-                            color='red',
-                            opacity=0.9,
-                            line=dict(color='black', width=1.5)
-                        ),
-                        text=hover_texts,
-                        hovertemplate='%{text}<extra></extra>',
-                        name='Caught Dismissals',
-                        showlegend=True
+                        marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
+                        customdata=caught_df[['bowler', 'bowl_style', 'line', 'length', 'shot']].values,  # Hover data
+                        hovertemplate=hover_template,
+                        name='Caught Dismissal Locations'
                     ))
-                    
+                
                     # Layout
                     fig.update_layout(
-                        title=dict(
-                            text=f"{batter_name} - Caught Dismissals (Hover for details)",
-                            font=dict(size=16, color='black')
-                        ),
-                        width=700,
-                        height=700,
-                        xaxis=dict(
-                            range=[-1.2, 1.2],
-                            showgrid=False,
-                            zeroline=False,
-                            showticklabels=False,
-                            scaleanchor='y',
-                            scaleratio=1
-                        ),
-                        yaxis=dict(
-                            range=[-1.2, 1.2],
-                            showgrid=False,
-                            zeroline=False,
-                            showticklabels=False
-                        ),
-                        plot_bgcolor='white',
-                        hovermode='closest',
+                        xaxis=dict(range=[-1.2, 1.2], showgrid=False, zeroline=False, visible=False),
+                        yaxis=dict(range=[-1.2, 1.2], showgrid=False, zeroline=False, visible=False),
                         showlegend=True,
-                        legend=dict(
-                            x=0.02,
-                            y=0.98,
-                            bgcolor='rgba(255, 255, 255, 0.8)',
-                            bordercolor='black',
-                            borderwidth=1
-                        )
+                        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                        width=800,
+                        height=800,
+                        margin=dict(l=0, r=0, t=0, b=0)
                     )
-                    
+                
+                    # Display in Streamlit
                     st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Optional: Show summary table
-                    st.markdown(f"**Total caught dismissals within boundary:** {len(caught_df)}")
-                    
-                    # Show detailed table with dismissal info
-                    if not caught_df.empty:
-                        display_cols = []
-                        for col in ['bowl', 'bowl_style', 'bowl_kind', 'line', 'length', 'shot', 'score', 'dismissal']:
-                            if col in caught_df.columns:
-                                display_cols.append(col)
-                        
-                        if display_cols:
-                            with st.expander("📊 View Dismissal Details Table"):
-                                st.dataframe(
-                                    caught_df[display_cols].reset_index(drop=True),
-                                    use_container_width=True
-                                )
                 # ---------- Caught Dismissals Wagon — exact same field style + red dots ----------
                 # def draw_caught_dismissals_wagon(df_wagon, batter_name):
                 #     # Filter caught dismissals
@@ -6810,7 +6714,7 @@ elif sidebar_option == "Strength vs Weakness":
                         draw_wagon_if_available(df_use, player_selected)
             
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
-                        draw_caught_dismissals_wagon_interactive(df_use, player_selected)
+                        draw_caught_dismissals_wagons(df_use, player_selected)
             
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
 
