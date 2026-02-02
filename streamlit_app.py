@@ -6556,7 +6556,7 @@ elif sidebar_option == "Strength vs Weakness":
                         "<b>Bowler Style:</b> %{customdata[1]}<br>"
                         "<b>Line:</b> %{customdata[2]}<br>"
                         "<b>Length:</b> %{customdata[3]}<br>"
-                        "<b>Shot Played:</b> %{customdata[4]}<extra></extra>"
+                        "<b>Shot Played:</b> %{customdata[4]}<br>"
                         "<b>Control:</b> %{customdata[5]}<extra></extra>"
                     )
                 
