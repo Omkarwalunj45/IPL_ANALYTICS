@@ -4339,7 +4339,7 @@ elif sidebar_option == "Matchup Analysis":
                 st.info("Year/season column not detected in dataset.")
             else:
                 tdf = matchup_df.copy()
-                st.write(tdf.dismissal.unique())
+                # st.write(tdf.dismissal.unique())
                 seasons = sorted(tdf[year_col].dropna().unique().tolist())
                 all_seasons = []
                 for s in seasons:
