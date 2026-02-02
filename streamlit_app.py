@@ -5958,6 +5958,34 @@ elif sidebar_option == "Strength vs Weakness":
         # coerce runs col
         bdf[runs_col] = pd.to_numeric(bdf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
         pf[runs_col] = pd.to_numeric(pf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
+                if 'top7_flag' not in bdf.columns:
+            bdf = bdf.copy()
+            if 'p_bat' in bdf.columns and pd.api.types.is_numeric_dtype(bdf['p_bat']):
+                bdf['top7_flag'] = (pd.to_numeric(bdf['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
+            else:
+                # derive by first appearance (best effort)
+                order_col = 'ball_id' if 'ball_id' in bdf.columns else ('ball' if 'ball' in bdf.columns else None)
+                if order_col is None:
+                    bdf = bdf.reset_index().rename(columns={'index': '_order_idx'})
+                    order_col = '_order_idx'
+                if all(c in bdf.columns for c in ['p_match', 'inns', COL_BAT]):
+                    tmp = bdf.dropna(subset=[COL_BAT, 'p_match', 'inns']).copy()
+                    first_app = tmp.groupby(['p_match', 'inns', COL_BAT], as_index=False)[order_col].min().rename(columns={order_col: 'first_ball'})
+                    top7_records = []
+                    for (m, inn), grp in first_app.groupby(['p_match', 'inns']):
+                        top7 = grp.sort_values('first_ball').head(7)[COL_BAT].tolist()
+                        for b in top7:
+                            top7_records.append((m, inn, b))
+                    if top7_records:
+                        top7_df = pd.DataFrame(top7_records, columns=['p_match', 'inns', COL_BAT])
+                        top7_df['top7_flag'] = 1
+                        bdf = bdf.merge(top7_df, how='left', on=['p_match', 'inns', COL_BAT])
+                        bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
+                    else:
+                        bdf['top7_flag'] = 0
+                else:
+                    bdf['top7_flag'] = 0
+            bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
         bk_df = bdf.copy()
         def compute_RAA_DAA_for_group_column(group_col):
             out = {}
