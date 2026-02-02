@@ -330,7 +330,6 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
 st.title('IPL Performance Analysis Portal')
-
 import os
 import glob
 import re
@@ -362,28 +361,24 @@ TOURNAMENTS = {
     "T20I": "IPL_APP_T20I",
     "BBL": "IPL_APP_BBL",
 }
-# TOURNAMENTS = {
-#     "IPL": "IPL_APP_IPL",
-#     "CPL": "IPL_APP_CPL",
-#     "ILT20": "ilt20",
-#     "LPL": "lpl",
-#     "MLC": "mlc",
-#     "SA20": "sa20",
-#     "Super Smash": "super_smash",
-#     "T20 Blast": "t20_blast",
-#     "T20I": "t20i",
-#     "BBL": "bbl",
-# }
+
 # ────────────────────────────────────────────────
 # HELPERS
 # ────────────────────────────────────────────────
 
-def _hash_args(tournaments, years, usecols):
-    # create a deterministic cache key
+def _hash_args(tournaments, years, usecols, file_signatures):
+    """Create a deterministic cache key that includes file signatures to avoid stale cache."""
     tpart = "|".join(sorted(tournaments)) if tournaments else "none"
     key = tpart + "|" + f"{min(years)}-{max(years)}"
     if usecols:
         key += "|" + ",".join(sorted(usecols))
+    # include file signatures (path, mtime, size) for cache-busting when files change
+    if file_signatures:
+        sig_parts = []
+        for s in file_signatures:
+            # s is a tuple like (tournament, path, mtime, size)
+            sig_parts.append(f"{s[0]}::{s[1]}::{s[2]}::{s[3]}")
+        key += "|" + "|".join(sig_parts)
     return hashlib.md5(key.encode()).hexdigest()
 
 
@@ -394,6 +389,9 @@ def _strict_file_for_tournament(token: str):
     - Prefer parquet > csv > excel.
     - If multiple candidates remain, pick the most recently-modified one.
     """
+    if not token:
+        return None
+
     token = token.lower()
     files = glob.glob(os.path.join(DATASETS_DIR, "*"))
     files = [f for f in files if os.path.isfile(f)]
@@ -401,13 +399,14 @@ def _strict_file_for_tournament(token: str):
     # token boundary regex: token must be preceded/followed by non-alnum or start/end
     pattern = re.compile(r'(^|[^a-z0-9])' + re.escape(token) + r'([^a-z0-9]|$)', flags=re.IGNORECASE)
 
-    valid = []
+    strict_matches = []
     for f in files:
         name = os.path.basename(f).lower()
         if pattern.search(name):
-            valid.append(f)
+            strict_matches.append(f)
 
-    # Fallback: if no strict matches, also allow substring matches (but keep them as fallback)
+    valid = strict_matches or []
+    # fallback: if no strict matches, allow substring matches (lower priority)
     if not valid:
         for f in files:
             name = os.path.basename(f).lower()
@@ -417,11 +416,12 @@ def _strict_file_for_tournament(token: str):
     if not valid:
         return None
 
-    # Prefer parquet > csv > excel, and among same ext prefer most recent
+    # Prefer parquet > csv > excel, and among same ext prefer most recent (mtime)
     def sort_key(fpath):
         ext = os.path.splitext(fpath)[1].lower()
         priority = 0 if ext == ".parquet" else 1 if ext == ".csv" else 2
-        mtime = -os.path.getmtime(fpath)  # negative so more recent sorts first
+        # Use negative mtime so newest is first
+        mtime = -os.path.getmtime(fpath)
         return (priority, mtime)
 
     valid.sort(key=sort_key)
@@ -471,24 +471,27 @@ def _extract_years(series):
 # ────────────────────────────────────────────────
 
 @st.cache_data(ttl=24 * 3600)
-def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None):
+def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, file_signatures=None):
     """
     Load data for the given tournaments and years.
     - If selected_tournaments is empty -> return empty DataFrame.
     - Filters by years using detected year/date columns per file.
+    This function is cached keyed on (selected_tournaments, selected_years, usecols, file_signatures)
+    so that changes to the actual data files break the cache.
     """
     if not selected_tournaments:
         return pd.DataFrame()
 
-    # make inputs deterministic for cache key
-    cache_key = _hash_args(tuple(selected_tournaments), selected_years, usecols)
+    # make inputs deterministic for cache key (file_signatures already passed by caller)
+    cache_key = _hash_args(tuple(selected_tournaments), selected_years, usecols, file_signatures)
     cache_path = os.path.join(CACHE_DIR, f"merged_{cache_key}.parquet")
 
+    # If a file-based cache exists for this exact signature, return it
     if os.path.exists(cache_path):
         try:
             return pd.read_parquet(cache_path)
         except Exception:
-            # ignore and continue to rebuild
+            # ignore and rebuild
             pass
 
     frames = []
@@ -498,8 +501,7 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None):
         path = _strict_file_for_tournament(token)
 
         if path is None:
-            # don't st.warn inside cached function (streamlit warnings inside cached functions can be flaky)
-            # instead return a sentinel by continuing and let caller show warnings
+            # caller will warn; skip this tournament
             continue
 
         ext = os.path.splitext(path)[1].lower()
@@ -510,25 +512,23 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None):
             elif ext == ".csv":
                 df = pd.read_csv(path, usecols=usecols, low_memory=False)
             else:
-                # try excel; read_excel can fail if file is not excel — catch below
                 df = pd.read_excel(path, usecols=usecols)
         except Exception:
-            # skip bad file
+            # skip unreadable file
             continue
 
         if df is None or df.empty:
             continue
 
-        # Detect and filter by year (if possible)
+        # detect year column and filter by selected years if possible
         year_col = _detect_year_column(df)
         if year_col:
             yrs = _extract_years(df[year_col])
             if yrs is not None:
-                # only keep rows whose extracted year is in selected_years
                 mask = yrs.isin(selected_years).fillna(False)
                 df = df.loc[mask]
 
-        # Add tournament column (explicit)
+        # explicitly set tournament label (friendly name e.g., "IPL")
         df["tournament"] = t
 
         if df.empty:
@@ -541,11 +541,11 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None):
 
     merged = pd.concat(frames, ignore_index=True, sort=False)
 
-    # As an extra safety: if the merged frame lacks a 'tournament' column (shouldn't happen), set it
+    # Ensure tournament column exists
     if "tournament" not in merged.columns:
         merged["tournament"] = np.nan
 
-    # Cache to parquet if possible
+    # Try to persist to parquet cache
     try:
         merged.to_parquet(cache_path, index=False)
     except Exception:
@@ -560,7 +560,6 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None):
 
 st.sidebar.header("Select Years")
 
-# keep year range in session state but default without changing tournaments
 if "year_range" not in st.session_state:
     st.session_state.year_range = (2021, 2026)
 
@@ -577,7 +576,6 @@ selected_years = list(range(years[0], years[1] + 1))
 
 st.sidebar.header("Select Tournaments")
 
-# NO default tournament selected — user has to choose explicitly
 if "selected_tournaments" not in st.session_state:
     st.session_state.selected_tournaments = []
 
@@ -596,36 +594,394 @@ st.session_state.selected_tournaments = selected_tournaments
 
 usecols = None
 
-# If user hasn't selected any tournaments, prompt them and don't try to load any data.
+# 1) If nothing selected — show message and stop execution (prevent downstream KeyError)
 if not selected_tournaments:
     st.info("Please choose tournament(s) from the sidebar to load data.")
     st.stop()   # ⛔ HARD STOP — nothing below runs
 
-else:
-    # show explicit warnings for missing datasets outside cached function
-    missing = []
-    for t in selected_tournaments:
-        token = TOURNAMENTS.get(t, t).lower()
-        if _strict_file_for_tournament(token) is None:
-            missing.append(t)
-    if missing:
-        st.warning(f"No dataset found for: {', '.join(missing)}. Check files in {DATASETS_DIR}.")
-
-    with st.spinner("Loading data…"):
-        df = load_filtered_data_fast(selected_tournaments, selected_years, usecols)
-        df = df[df["tournament"].isin(selected_tournaments)].copy()
-
-    if df.empty:
-        st.warning("No data loaded for the chosen tournament(s) / year range.")
+# 2) Resolve file paths & build file_signatures that will be passed into the cached loader
+resolved_files = []
+missing = []
+for t in selected_tournaments:
+    token = TOURNAMENTS.get(t, t).lower()
+    path = _strict_file_for_tournament(token)
+    if path is None:
+        missing.append(t)
+        resolved_files.append((t, None, None, None))
     else:
-        st.success(
-            f"Loaded {len(df):,} rows from "
-            f"{len(df['tournament'].unique()):,} tournament(s), "
-            f"{len(selected_years)} year(s)."
-        )
+        try:
+            mtime = os.path.getmtime(path)
+            size = os.path.getsize(path)
+        except Exception:
+            mtime, size = None, None
+        resolved_files.append((t, path, mtime, size))
+
+# if any missing, warn user — but allow loading other tournaments
+if missing:
+    st.warning(f"No dataset found for: {', '.join(missing)}. Check files in {os.path.abspath(DATASETS_DIR)}.")
+
+# if all selected tournaments are missing, stop — nothing to load
+if all(r[1] is None for r in resolved_files):
+    st.error("No data files were found for any selected tournaments. Please add dataset files or change selection.")
+    st.stop()
+
+# Show debug info of resolved files (helpful to confirm which file each tournament maps to)
+with st.expander("Debug: Files resolved for each selected tournament (remove in production)"):
+    for t, p, m, s in resolved_files:
+        st.write({
+            "tournament": t,
+            "path": p,
+            "mtime": datetime.fromtimestamp(m).isoformat() if m else None,
+            "size_bytes": s
+        })
+
+file_signatures = tuple(resolved_files)
+
+# 3) Load data (the loader is cached and keyed on file_signatures so changes to files break cache)
+with st.spinner("Loading data…"):
+    df = load_filtered_data_fast(selected_tournaments, selected_years, usecols, file_signatures=file_signatures)
+
+# 4) Defensive re-filter by tournament (ensures downstream code only sees selected tournaments)
+if df is None or df.empty:
+    st.warning("No data loaded for the chosen tournament(s) / year range.")
+    st.stop()
+
+# ensure tournament column exists and filter
+if "tournament" not in df.columns:
+    st.error("Loaded data does not contain a 'tournament' column. Loader expected to add it. Aborting.")
+    st.stop()
+
+# Re-filter to selected tournaments (defensive)
+df = df[df["tournament"].isin(selected_tournaments)].copy()
+
+if df.empty:
+    st.warning("After filtering by selected tournaments and years, no rows remain.")
+    st.stop()
+
+# Inform user of successful load and summary
+st.success(
+    f"Loaded {len(df):,} rows from "
+    f"{len(df['tournament'].unique()):,} tournament(s), "
+    f"{len(selected_years)} year(s)."
+)
 
 DF_gen = df
-st.write(DF_gen.bat.unique())
+
+# Debugging: show unique tournaments & a small sample per tournament
+with st.expander("Debug: data overview (per-tournament samples)"):
+    st.write("Tournaments present in DF_gen:", DF_gen["tournament"].unique().tolist())
+    for t in sorted(DF_gen["tournament"].unique()):
+        st.write(f"--- Sample rows for tournament: {t} ---")
+        sample_cols = DF_gen.columns.tolist()[:12]  # limit column display
+        st.dataframe(DF_gen[DF_gen["tournament"] == t][sample_cols].head(5))
+
+# Example: show unique batters (what you did)
+if "bat" in DF_gen.columns:
+    st.write("Unique batters in loaded DF_gen (first 50):", list(DF_gen["bat"].unique()[:50]))
+else:
+    # try common column names that represent batter/player
+    player_cols = [c for c in DF_gen.columns if c.lower() in ("player","batter","batsman","bat")]
+    if player_cols:
+        col = player_cols[0]
+        st.write(f"Unique players detected in column '{col}' (first 50):", list(DF_gen[col].unique()[:50]))
+    else:
+        st.write("No obvious batter/player column found in DF_gen. Columns: ", DF_gen.columns.tolist())
+
+# import os
+# import glob
+# import re
+# import hashlib
+# from io import BytesIO
+# import pandas as pd
+# import numpy as np
+# import streamlit as st
+# from datetime import datetime
+
+# # ────────────────────────────────────────────────
+# # CONFIG
+# # ────────────────────────────────────────────────
+
+# DATASETS_DIR = "Datasets"
+# CACHE_DIR = ".cache_data"
+# os.makedirs(DATASETS_DIR, exist_ok=True)
+# os.makedirs(CACHE_DIR, exist_ok=True)
+
+# TOURNAMENTS = {
+#     "IPL": "IPL_APP_IPL",
+#     "CPL": "IPL_APP_CPL",
+#     "ILT20": "IPL_APP_ILT20",
+#     "LPL": "IPL_APP_LPL",
+#     "MLC": "IPL_APP_MLC",
+#     "SA20": "IPL_APP_SA20",
+#     "Super Smash": "IPL_APP_SUPER_SMASH",
+#     "T20 Blast": "IPL_APP_T20_BLAST",
+#     "T20I": "IPL_APP_T20I",
+#     "BBL": "IPL_APP_BBL",
+# }
+# # TOURNAMENTS = {
+# #     "IPL": "IPL_APP_IPL",
+# #     "CPL": "IPL_APP_CPL",
+# #     "ILT20": "ilt20",
+# #     "LPL": "lpl",
+# #     "MLC": "mlc",
+# #     "SA20": "sa20",
+# #     "Super Smash": "super_smash",
+# #     "T20 Blast": "t20_blast",
+# #     "T20I": "t20i",
+# #     "BBL": "bbl",
+# # }
+# # ────────────────────────────────────────────────
+# # HELPERS
+# # ────────────────────────────────────────────────
+
+# def _hash_args(tournaments, years, usecols):
+#     # create a deterministic cache key
+#     tpart = "|".join(sorted(tournaments)) if tournaments else "none"
+#     key = tpart + "|" + f"{min(years)}-{max(years)}"
+#     if usecols:
+#         key += "|" + ",".join(sorted(usecols))
+#     return hashlib.md5(key.encode()).hexdigest()
+
+
+# def _strict_file_for_tournament(token: str):
+#     """
+#     STRICT resolver:
+#     - Match token as a separate segment in filename (not arbitrary substring).
+#     - Prefer parquet > csv > excel.
+#     - If multiple candidates remain, pick the most recently-modified one.
+#     """
+#     token = token.lower()
+#     files = glob.glob(os.path.join(DATASETS_DIR, "*"))
+#     files = [f for f in files if os.path.isfile(f)]
+
+#     # token boundary regex: token must be preceded/followed by non-alnum or start/end
+#     pattern = re.compile(r'(^|[^a-z0-9])' + re.escape(token) + r'([^a-z0-9]|$)', flags=re.IGNORECASE)
+
+#     valid = []
+#     for f in files:
+#         name = os.path.basename(f).lower()
+#         if pattern.search(name):
+#             valid.append(f)
+
+#     # Fallback: if no strict matches, also allow substring matches (but keep them as fallback)
+#     if not valid:
+#         for f in files:
+#             name = os.path.basename(f).lower()
+#             if token in name:
+#                 valid.append(f)
+
+#     if not valid:
+#         return None
+
+#     # Prefer parquet > csv > excel, and among same ext prefer most recent
+#     def sort_key(fpath):
+#         ext = os.path.splitext(fpath)[1].lower()
+#         priority = 0 if ext == ".parquet" else 1 if ext == ".csv" else 2
+#         mtime = -os.path.getmtime(fpath)  # negative so more recent sorts first
+#         return (priority, mtime)
+
+#     valid.sort(key=sort_key)
+#     return valid[0]
+
+
+# def _detect_year_column(df):
+#     # Priority: explicit year/season columns
+#     for c in df.columns:
+#         lc = c.lower()
+#         if lc == "year" or lc == "season" or lc.endswith("_year"):
+#             return c
+
+#     # next: any column that contains 'year'
+#     for c in df.columns:
+#         if "year" in c.lower():
+#             return c
+
+#     # next: obvious date columns
+#     for c in df.columns:
+#         if "date" in c.lower() or "match_date" in c.lower() or "start" in c.lower():
+#             return c
+
+#     return None
+
+
+# def _extract_years(series):
+#     # numeric
+#     if pd.api.types.is_numeric_dtype(series):
+#         return series.astype("Int64")
+
+#     # datetime-like parsing
+#     dt = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
+#     if dt.notna().any():
+#         return dt.dt.year.astype("Int64")
+
+#     # strict 4-digit regex (captures 19xx/20xx)
+#     s = series.astype(str).str.extract(r"\b((?:19|20)\d{2})\b")[0]
+#     if s.notna().any():
+#         return s.astype("Int64")
+
+#     return None
+
+
+# # ────────────────────────────────────────────────
+# # FAST LOADER
+# # ────────────────────────────────────────────────
+
+# @st.cache_data(ttl=24 * 3600)
+# def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None):
+#     """
+#     Load data for the given tournaments and years.
+#     - If selected_tournaments is empty -> return empty DataFrame.
+#     - Filters by years using detected year/date columns per file.
+#     """
+#     if not selected_tournaments:
+#         return pd.DataFrame()
+
+#     # make inputs deterministic for cache key
+#     cache_key = _hash_args(tuple(selected_tournaments), selected_years, usecols)
+#     cache_path = os.path.join(CACHE_DIR, f"merged_{cache_key}.parquet")
+
+#     if os.path.exists(cache_path):
+#         try:
+#             return pd.read_parquet(cache_path)
+#         except Exception:
+#             # ignore and continue to rebuild
+#             pass
+
+#     frames = []
+
+#     for t in selected_tournaments:
+#         token = TOURNAMENTS.get(t, t).lower()
+#         path = _strict_file_for_tournament(token)
+
+#         if path is None:
+#             # don't st.warn inside cached function (streamlit warnings inside cached functions can be flaky)
+#             # instead return a sentinel by continuing and let caller show warnings
+#             continue
+
+#         ext = os.path.splitext(path)[1].lower()
+
+#         try:
+#             if ext == ".parquet":
+#                 df = pd.read_parquet(path, columns=usecols)
+#             elif ext == ".csv":
+#                 df = pd.read_csv(path, usecols=usecols, low_memory=False)
+#             else:
+#                 # try excel; read_excel can fail if file is not excel — catch below
+#                 df = pd.read_excel(path, usecols=usecols)
+#         except Exception:
+#             # skip bad file
+#             continue
+
+#         if df is None or df.empty:
+#             continue
+
+#         # Detect and filter by year (if possible)
+#         year_col = _detect_year_column(df)
+#         if year_col:
+#             yrs = _extract_years(df[year_col])
+#             if yrs is not None:
+#                 # only keep rows whose extracted year is in selected_years
+#                 mask = yrs.isin(selected_years).fillna(False)
+#                 df = df.loc[mask]
+
+#         # Add tournament column (explicit)
+#         df["tournament"] = t
+
+#         if df.empty:
+#             continue
+
+#         frames.append(df)
+
+#     if not frames:
+#         return pd.DataFrame()
+
+#     merged = pd.concat(frames, ignore_index=True, sort=False)
+
+#     # As an extra safety: if the merged frame lacks a 'tournament' column (shouldn't happen), set it
+#     if "tournament" not in merged.columns:
+#         merged["tournament"] = np.nan
+
+#     # Cache to parquet if possible
+#     try:
+#         merged.to_parquet(cache_path, index=False)
+#     except Exception:
+#         pass
+
+#     return merged
+
+
+# # ────────────────────────────────────────────────
+# # SIDEBAR CONTROLS
+# # ────────────────────────────────────────────────
+
+# st.sidebar.header("Select Years")
+
+# # keep year range in session state but default without changing tournaments
+# if "year_range" not in st.session_state:
+#     st.session_state.year_range = (2021, 2026)
+
+# years = st.sidebar.slider(
+#     "Select year range",
+#     2021, 2026,
+#     st.session_state.year_range,
+#     step=1,
+#     key="year_slider_key"
+# )
+
+# st.session_state.year_range = years
+# selected_years = list(range(years[0], years[1] + 1))
+
+# st.sidebar.header("Select Tournaments")
+
+# # NO default tournament selected — user has to choose explicitly
+# if "selected_tournaments" not in st.session_state:
+#     st.session_state.selected_tournaments = []
+
+# selected_tournaments = st.sidebar.multiselect(
+#     "Choose tournaments to load (select one or more)",
+#     options=list(TOURNAMENTS.keys()),
+#     default=st.session_state.selected_tournaments,
+#     key="tournament_select_key"
+# )
+
+# st.session_state.selected_tournaments = selected_tournaments
+
+# # ────────────────────────────────────────────────
+# # LOAD DATA
+# # ────────────────────────────────────────────────
+
+# usecols = None
+
+# # If user hasn't selected any tournaments, prompt them and don't try to load any data.
+# if not selected_tournaments:
+#     st.info("Please choose tournament(s) from the sidebar to load data.")
+#     st.stop()   # ⛔ HARD STOP — nothing below runs
+
+# else:
+#     # show explicit warnings for missing datasets outside cached function
+#     missing = []
+#     for t in selected_tournaments:
+#         token = TOURNAMENTS.get(t, t).lower()
+#         if _strict_file_for_tournament(token) is None:
+#             missing.append(t)
+#     if missing:
+#         st.warning(f"No dataset found for: {', '.join(missing)}. Check files in {DATASETS_DIR}.")
+
+#     with st.spinner("Loading data…"):
+#         df = load_filtered_data_fast(selected_tournaments, selected_years, usecols)
+#         df = df[df["tournament"].isin(selected_tournaments)].copy()
+
+#     if df.empty:
+#         st.warning("No data loaded for the chosen tournament(s) / year range.")
+#     else:
+#         st.success(
+#             f"Loaded {len(df):,} rows from "
+#             f"{len(df['tournament'].unique()):,} tournament(s), "
+#             f"{len(selected_years)} year(s)."
+#         )
+
+# DF_gen = df
+# st.write(DF_gen.bat.unique())
 
 
 # import os
