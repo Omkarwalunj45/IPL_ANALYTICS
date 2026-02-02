@@ -1047,6 +1047,7 @@ def round_up_floats(df: pd.DataFrame, decimals: int = 2) -> pd.DataFrame:
 def bpd(balls, dismissals):
     return balls / dismissals if dismissals > 0 else np.nan
 
+
 def bpb(balls, boundaries):
     return balls / boundaries if boundaries > 0 else np.nan
 
@@ -4805,7 +4806,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     '% of Runs': '% of Runs'
                 })
                 # Replace NaN BallsPerDismissal with '-' for display
-                prod_show['Balls per Dismissal'] = prod_show['Balls per Dismissal'].apply(lambda x: '-' if pd.isna(x) else (round(x,2) if not isinstance(x,str) else x))
+                prod_show['Balls per Dismissal'] = prod_show['Balls per Dismissal'].apply(lambda x: '-' if pd.isna(x) else (round(x, 2) if not isinstance(x, str) else x)).astype(str)  # Convert entire column to string
                 prod_show['SR (%)'] = prod_show['SR (%)'].apply(lambda x: '-' if pd.isna(x) else round(x,2))
                 prod_show['% of Runs'] = prod_show['% of Runs'].round(2)
                 prod_show = prod_show.sort_values('% of Runs', ascending=False).reset_index(drop=True)
@@ -6977,7 +6978,7 @@ elif sidebar_option == "Strength vs Weakness":
                     '% of Runs': '% of Runs'
                 })
                 # Replace NaN BallsPerDismissal with '-' for display
-                prod_show['Balls per Dismissal'] = prod_show['Balls per Dismissal'].apply(lambda x: '-' if pd.isna(x) else (round(x,2) if not isinstance(x,str) else x))
+                prod_show['Balls per Dismissal'] = prod_show['Balls per Dismissal'].apply(lambda x: '-' if pd.isna(x) else (round(x, 2) if not isinstance(x, str) else x)).astype(str)  # Convert entire column to string
                 prod_show['SR (%)'] = prod_show['SR (%)'].apply(lambda x: '-' if pd.isna(x) else round(x,2))
                 prod_show['% of Runs'] = prod_show['% of Runs'].round(2)
                 prod_show = prod_show.sort_values('% of Runs', ascending=False).reset_index(drop=True)
