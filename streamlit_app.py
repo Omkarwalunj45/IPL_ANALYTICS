@@ -5986,7 +5986,6 @@ elif sidebar_option == "Strength vs Weakness":
                 else:
                     bdf['top7_flag'] = 0
             bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
-        bk_df = bdf.copy()
         def compute_RAA_DAA_for_group_column(group_col):
             out = {}
             if group_col not in bdf.columns:
@@ -6094,6 +6093,27 @@ elif sidebar_option == "Strength vs Weakness":
         # -------------------- attach RAA/DAA to bk_df and bs_df --------------------
         def _fmt(x):
             return f"{x:.2f}" if (not pd.isna(x)) else '-'
+
+        if COL_PHASE in pf.columns:
+            pf[COL_PHASE] = pf[COL_PHASE].astype(str).str.lower().fillna('unknown')
+            kinds = sorted(pf[COL_PHASE].dropna().unique().tolist())
+        else:
+            kinds = []
+
+        rows = []
+        if kinds:
+            for k in kinds:
+                g = pf[pf[COL_PHASE] == k]
+                m = compute_batting_metrics(g)
+                m['PHASE'] = k
+                rows.append(m)
+        else:
+            m = compute_batting_metrics(pf)
+            m['PHASE'] = 'unknown'
+            rows.append(m)
+        bk_df = pd.DataFrame(rows).set_index('PHASE')
+        bk_df.index.name = 'Phase'
+
         if bk_df is not None and not bk_df.empty:
             if COL_PHASE in bdf.columns:
                 bk_raadaa = compute_RAA_DAA_for_group_column(COL_PHASE)
