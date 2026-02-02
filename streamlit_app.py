@@ -621,19 +621,15 @@ st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
 st.sidebar.header("Select Tournaments")
 all_tournaments = list(TOURNAMENTS.keys())
 
-# Fix: Use session_state to maintain tournament selection
-if 'selected_tournaments' not in st.session_state:
-    st.session_state.selected_tournaments = ["IPL"]
+# Initialize session state only once
+if 'tournament_selector' not in st.session_state:
+    st.session_state.tournament_selector = ["IPL"]
 
 selected_tournaments = st.sidebar.multiselect(
     "Choose tournaments to load", 
-    options=all_tournaments, 
-    default=st.session_state.selected_tournaments,
-    key='tournament_selector'
+    options=all_tournaments,
+    key='tournament_selector'  # This automatically uses st.session_state.tournament_selector
 )
-
-# Update session state
-st.session_state.selected_tournaments = selected_tournaments
 
 # Load data
 usecols = None  # <-- set to a short list if you only need specific columns
