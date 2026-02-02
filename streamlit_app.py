@@ -6347,7 +6347,7 @@ elif sidebar_option == "Strength vs Weakness":
 
             return out
 
-        -------------------- attach RAA/DAA to bk_df and bs_df --------------------
+        # -------------------- attach RAA/DAA to bk_df and bs_df --------------------
         def _fmt(x):
             return f"{x:.2f}" if (not pd.isna(x)) else '-'
 
