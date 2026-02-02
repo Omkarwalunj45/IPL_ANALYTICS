@@ -585,7 +585,7 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
 # --------------------
 # USAGE in app (replace your old load code with this)
 # --------------------
-Sidebar controls (you already have these; keep them)
+# Sidebar controls (you already have these; keep them)
 st.sidebar.header("Select Years")
 years = st.sidebar.slider("Select year range", min_value=2021, max_value=2026, value=(2021, 2026), step=1)
 selected_years = list(range(years[0], years[1] + 1))
