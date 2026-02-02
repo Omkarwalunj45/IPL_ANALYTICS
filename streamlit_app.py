@@ -5958,7 +5958,7 @@ elif sidebar_option == "Strength vs Weakness":
         # coerce runs col
         bdf[runs_col] = pd.to_numeric(bdf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
         pf[runs_col] = pd.to_numeric(pf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
-                if 'top7_flag' not in bdf.columns:
+        if 'top7_flag' not in bdf.columns:
             bdf = bdf.copy()
             if 'p_bat' in bdf.columns and pd.api.types.is_numeric_dtype(bdf['p_bat']):
                 bdf['top7_flag'] = (pd.to_numeric(bdf['p_bat'], errors='coerce').fillna(9999) <= 7).astype(int)
