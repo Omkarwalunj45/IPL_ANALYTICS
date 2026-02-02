@@ -5958,6 +5958,7 @@ elif sidebar_option == "Strength vs Weakness":
         # coerce runs col
         bdf[runs_col] = pd.to_numeric(bdf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
         pf[runs_col] = pd.to_numeric(pf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
+        bk_df = bdf.copy()
         def compute_RAA_DAA_for_group_column(group_col):
             out = {}
             if group_col not in bdf.columns:
