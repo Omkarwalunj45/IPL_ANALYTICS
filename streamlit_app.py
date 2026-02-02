@@ -614,6 +614,7 @@ else:
         )
 
 DF_gen = df
+st.write(DF_gen.bat.unique())
 
 
 # import os
