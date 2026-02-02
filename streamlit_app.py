@@ -6352,7 +6352,48 @@ elif sidebar_option == "Strength vs Weakness":
         def _fmt(x):
             return f"{x:.2f}" if (not pd.isna(x)) else '-'
 
+                # Ensure PHASE column exists (derive from 'over' if missing)
+        if 'PHASE' not in pf.columns:
+            if 'over' in pf.columns:
+                pf['PHASE'] = pf['over'].apply(assign_phase)
+            else:
+                pf['PHASE'] = 'Unknown'
 
+        if 'PHASE' in pf.columns:
+            phases = sorted([p for p in pf['PHASE'].dropna().unique() if str(p).strip() != ''])
+            phase_rows = []
+            if phases:
+                for p in phases:
+                    g = pf[pf['PHASE'] == p]
+                    m = compute_batting_metrics(g)
+                    m['PHASE'] = p
+                    phase_rows.append(m)
+                phase_df = pd.DataFrame(phase_rows).set_index('PHASE')
+                phase_df.index.name = 'Phase'
+            else:
+                phase_df = pd.DataFrame(columns=['PHASE']).set_index('PHASE')
+                phase_df.index.name = 'Phase'
+        else:
+            phase_df = None
+
+        # attach to phase_df
+        if phase_df is not None:
+            if 'PHASE' in bdf.columns:
+                phase_raadaa = compute_RAA_DAA_for_group_column('PHASE')
+                new_RAA = []
+                new_DAA = []
+                for idx in phase_df.index:
+                    key = str(idx).lower()
+                    val = phase_raadaa.get(key, {})
+                    new_RAA.append(_fmt(val.get('RAA', np.nan)))
+                    new_DAA.append(_fmt(val.get('DAA', np.nan)))
+                phase_df['RAA'] = new_RAA
+                phase_df['DAA'] = new_DAA
+            else:
+                phase_df['RAA'] = '-'
+                phase_df['DAA'] = '-'
+            st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by Phase </div>", unsafe_allow_html=True)
+            st.dataframe(phase_df, use_container_width=True)
 
         # attach to bk_df
         if bk_df is not None and not bk_df.empty:
