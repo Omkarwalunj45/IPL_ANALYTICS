@@ -587,7 +587,8 @@ usecols = None
 # If user hasn't selected any tournaments, prompt them and don't try to load any data.
 if not selected_tournaments:
     st.info("Please choose tournament(s) from the sidebar to load data.")
-    df = pd.DataFrame()
+    st.stop()   # ⛔ HARD STOP — nothing below runs
+
 else:
     # show explicit warnings for missing datasets outside cached function
     missing = []
@@ -600,6 +601,7 @@ else:
 
     with st.spinner("Loading data…"):
         df = load_filtered_data_fast(selected_tournaments, selected_years, usecols)
+        df = df[df["tournament"].isin(selected_tournaments)].copy()
 
     if df.empty:
         st.warning("No data loaded for the chosen tournament(s) / year range.")
