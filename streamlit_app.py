@@ -345,16 +345,14 @@ import pandas as pd
 import numpy as np
 import streamlit as st
 from datetime import datetime
-
 # directory where dataset files live
 DATASETS_DIR = "Datasets"
 os.makedirs(DATASETS_DIR, exist_ok=True)
-
 # small user-friendly mapping you can keep (we'll attempt to resolve to real files)
 # keep keys that you use in UI (you can expand). If you already had TOURNAMENTS,
 # keep the same keys when calling the loader.
 TOURNAMENTS = {
-    "IPL": "ipl",             # will match filenames containing 'ipl'
+    "IPL": "ipl", # will match filenames containing 'ipl'
     "CPL": "cpl",
     "ILT20": "ilt20",
     "LPL": "lpl",
@@ -363,17 +361,15 @@ TOURNAMENTS = {
     "Super Smash": "super_smash",
     "T20 Blast": "t20_blast",
     "T20I": "t20i",
+    "BBL": "bbl",  # Added BBL - assuming filenames containing 'bbl'
 }
-
 CACHE_DIR = "./.cache_data"
 os.makedirs(CACHE_DIR, exist_ok=True)
-
 def _hash_args(selected_tournaments, selected_years, usecols):
     key = "|".join(sorted(selected_tournaments)) + "|" + f"{min(selected_years)}-{max(selected_years)}"
     if usecols:
         key += "|" + ",".join(sorted(usecols))
     return hashlib.md5(key.encode()).hexdigest()
-
 def _find_best_file_for_tournament(tournament_key):
     """
     Try to resolve a tournament key to an actual file path under DATASETS_DIR.
@@ -404,8 +400,8 @@ def _find_best_file_for_tournament(tournament_key):
         # prefer recently updated files slightly
         try:
             mtime = os.path.getmtime(p)
-            age_score = int((datetime.now().timestamp() - mtime) // (24*3600))  # days old
-            score += max(0, 2 - min(age_score, 2))  # prefer newer files
+            age_score = int((datetime.now().timestamp() - mtime) // (24*3600)) # days old
+            score += max(0, 2 - min(age_score, 2)) # prefer newer files
         except Exception:
             pass
         if score > 0:
@@ -414,12 +410,11 @@ def _find_best_file_for_tournament(tournament_key):
         return None
     scored.sort(reverse=True, key=lambda x: (x[0], os.path.getmtime(x[1])))
     return scored[0][1]
-
 def _detect_year_column(df):
     """Return column name that likely holds year info, or None."""
     if df is None or df.shape[1] == 0:
         return None
-    col_candidates = [c for c in df.columns if 'year' in c.lower() or 'season' in c.lower() or 'date' in c.lower()]
+    col_candidates = [c for c in df.columns if 'year' in c.lower() or 'season' in c.lower()]
     if not col_candidates:
         return None
     # prefer exact 'year' or 'season'
@@ -428,7 +423,6 @@ def _detect_year_column(df):
             if pref == c.lower():
                 return c
     return col_candidates[0]
-
 def _extract_years_series(series):
     """Try to coerce a pandas Series to integer year values; returns integer Series or None."""
     try:
@@ -446,7 +440,6 @@ def _extract_years_series(series):
     except Exception:
         pass
     return None
-
 @st.cache_data(ttl=24*3600, show_spinner="Loading selected data (may take a moment for large leagues)…")
 def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, csv_chunksize=250_000):
     """
@@ -465,7 +458,6 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
     """
     if not selected_tournaments:
         return pd.DataFrame()
-
     cache_hash = _hash_args(selected_tournaments, selected_years, usecols=usecols)
     cache_path = os.path.join(CACHE_DIR, f"merged_{cache_hash}.parquet")
     # return cached if exists
@@ -476,10 +468,8 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
         except Exception:
             # try to rebuild cache if reading fails
             pass
-
     parts = []
     first_columns = None
-
     for t in selected_tournaments:
         # Try direct mapping first (if user provided exact path in TOURNAMENTS earlier)
         mapped = TOURNAMENTS.get(t, None)
@@ -494,16 +484,13 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
                 found = _find_best_file_for_tournament(mapped)
                 if found:
                     source_candidate = found
-
         # if not found by mapping, try fuzzy search by tournament name itself
         if source_candidate is None:
             source_candidate = _find_best_file_for_tournament(t)
-
         if source_candidate is None:
             # warn but continue; maybe user selected a tournament that isn't present locally
             st.warning(f"No dataset file found for tournament '{t}' in '{DATASETS_DIR}'. Skipping.")
             continue
-
         ext = os.path.splitext(source_candidate)[1].lower()
         try:
             if ext == ".parquet":
@@ -516,7 +503,6 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
                         df_temp = df_temp[yrs.isin(selected_years).fillna(False).values]
                 if df_temp is None or df_temp.shape[0] == 0:
                     continue
-
             elif ext == ".csv":
                 # chunked read with on-the-fly year filtering
                 collected = []
@@ -532,7 +518,6 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
                 df_temp = pd.concat(collected, ignore_index=True) if collected else pd.DataFrame(columns=usecols or [])
                 if df_temp.shape[0] == 0:
                     continue
-
             elif ext in (".xlsx", ".xls"):
                 # read excel (slow) but convert to parquet for future runs
                 df_temp = pd.read_excel(source_candidate, usecols=usecols)
@@ -549,7 +534,6 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
                     pass
                 if df_temp.shape[0] == 0:
                     continue
-
             else:
                 # unknown extension: attempt read_parquet first, else csv
                 try:
@@ -569,10 +553,8 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
                     df_temp = pd.concat(collected, ignore_index=True) if collected else pd.DataFrame(columns=usecols or [])
                     if df_temp.shape[0] == 0:
                         continue
-
             # add tournament tag
             df_temp['tournament'] = t
-
             # align columns to first seen frame for consistent concat (keeps memory lower)
             if first_columns is None:
                 first_columns = df_temp.columns.tolist()
@@ -581,32 +563,25 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
                 common = [c for c in first_columns if c in df_temp.columns]
                 others = [c for c in df_temp.columns if c not in common]
                 df_temp = df_temp[common + others]
-
             parts.append(df_temp)
         except Exception as exc:
             st.warning(f"Failed to read {source_candidate} for '{t}': {str(exc)[:200]}")
             continue
-
     if not parts:
         return pd.DataFrame()
-
     merged = pd.concat(parts, ignore_index=True, sort=False)
-
     # final year filter as safeguard (in case some files lacked year-column detection earlier)
     year_col = _detect_year_column(merged)
     if year_col:
         yrs = _extract_years_series(merged[year_col])
         if yrs is not None:
             merged = merged[yrs.isin(selected_years).fillna(False).values]
-
     # save cache for this exact selection (fast next time)
     try:
         merged.to_parquet(cache_path, index=False)
     except Exception:
         pass
-
     return merged
-
 # --------------------
 # USAGE in app (replace your old load code with this)
 # --------------------
@@ -615,22 +590,20 @@ st.sidebar.header("Select Years")
 years = st.sidebar.slider("Select year range", min_value=2021, max_value=2026, value=(2021, 2026), step=1)
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
-
 st.sidebar.header("Select Tournaments")
 all_tournaments = list(TOURNAMENTS.keys())
 selected_tournaments = st.sidebar.multiselect("Choose tournaments to load", options=all_tournaments, default=["IPL"])
-
 # call loader (optional: set usecols to speed up drastically if you only need a handful of columns)
 # e.g. usecols = ['p_match','inns','bat','bowler','batruns','length','line','year','bat_hand','wagonZone','score','dismissal']
-usecols = None  # <-- set to a short list if you only need specific columns
+usecols = None # <-- set to a short list if you only need specific columns
 with st.spinner("Loading data (fast path) — this should be quick if parquet exists..."):
     df = load_filtered_data_fast(selected_tournaments, selected_years, usecols=usecols)
-
 if df is None or df.empty:
     st.warning("No data loaded. Check selected tournaments, the Datasets folder, or the year range.")
 else:
     st.success(f"Loaded {len(df):,} rows from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s).")
     st.sidebar.write("Data loaded successfully!")
+DF_gen = df
 # =========================
 # End loader
 # =========================
