@@ -4297,7 +4297,7 @@ elif sidebar_option == "Matchup Analysis":
         def cumulator(temp_df):
             if temp_df.empty:
                 return pd.DataFrame()
-            runs_col = safe_get_col(temp_df, ['batruns', 'batsman_runs', 'score', 'runs'])
+            runs_col = safe_get_col(temp_df, ['batruns', 'batsman_runs', 'score', 'runs','dismissal'])
             if runs_col is None:
                 return pd.DataFrame()
             balls = len(temp_df)
