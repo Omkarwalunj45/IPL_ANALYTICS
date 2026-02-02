@@ -608,12 +608,16 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
 
 
 st.sidebar.header("Select Years")
+if "year_slider" not in st.session_state:
+    st.session_state.year_slider = (2021, 2026)
+
 years = st.sidebar.slider(
-    "Select year range", 
-    min_value=2021, 
-    max_value=2026, 
-    value=(2021, 2026), 
-    step=1
+    "Select year range",
+    min_value=2021,
+    max_value=2026,
+    value=st.session_state.year_slider,
+    step=1,
+    key="year_slider_state"  # Forces persistence
 )
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
@@ -621,19 +625,22 @@ st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
 st.sidebar.header("Select Tournaments")
 all_tournaments = list(TOURNAMENTS.keys())
 
-# Initialize session state only once
-if 'tournament_selector' not in st.session_state:
-    st.session_state.tournament_selector = ["IPL"]
+# Explicit session_state persistence for tournament selection
+if "selected_tournaments" not in st.session_state:
+    st.session_state.selected_tournaments = ["IPL"]
 
 selected_tournaments = st.sidebar.multiselect(
-    "Choose tournaments to load", 
+    "Choose tournaments to load",
     options=all_tournaments,
-    key='tournament_selector'  # This automatically uses st.session_state.tournament_selector
+    default=st.session_state.selected_tournaments,
+    key="tournament_multiselect"  # Key ensures Streamlit tracks it
 )
 
-# Load data
-usecols = None  # <-- set to a short list if you only need specific columns
+# Update session_state on change (Streamlit does this automatically with key, but explicit for safety)
+st.session_state.selected_tournaments = selected_tournaments
 
+# call loader
+usecols = None
 with st.spinner("Loading data (fast path) — this should be quick if parquet exists..."):
     df = load_filtered_data_fast(selected_tournaments, selected_years, usecols=usecols)
 
