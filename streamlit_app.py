@@ -586,23 +586,58 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
 # USAGE in app (replace your old load code with this)
 # --------------------
 # Sidebar controls (you already have these; keep them)
+# st.sidebar.header("Select Years")
+# years = st.sidebar.slider("Select year range", min_value=2021, max_value=2026, value=(2021, 2026), step=1)
+# selected_years = list(range(years[0], years[1] + 1))
+# st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
+# st.sidebar.header("Select Tournaments")
+# all_tournaments = list(TOURNAMENTS.keys())
+# selected_tournaments = st.sidebar.multiselect("Choose tournaments to load", options=all_tournaments, default=["IPL"])
+# # call loader (optional: set usecols to speed up drastically if you only need a handful of columns)
+# # e.g. usecols = ['p_match','inns','bat','bowler','batruns','length','line','year','bat_hand','wagonZone','score','dismissal']
+# usecols = None # <-- set to a short list if you only need specific columns
+# with st.spinner("Loading data (fast path) — this should be quick if parquet exists..."):
+#     df = load_filtered_data_fast(selected_tournaments, selected_years, usecols=usecols)
+# if df is None or df.empty:
+#     st.warning("No data loaded. Check selected tournaments, the Datasets folder, or the year range.")
+# else:
+#     st.success(f"Loaded {len(df):,} rows from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s).")
+#     st.sidebar.write("Data loaded successfully!")
+# DF_gen = df
+
+
 st.sidebar.header("Select Years")
-years = st.sidebar.slider("Select year range", min_value=2021, max_value=2026, value=(2021, 2026), step=1)
+years = st.sidebar.slider(
+    "Select year range",
+    min_value=2021,
+    max_value=2026,
+    value=(2021, 2026),
+    step=1,
+    key="year_slider"  # Added key for state persistence
+)
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
+
 st.sidebar.header("Select Tournaments")
 all_tournaments = list(TOURNAMENTS.keys())
-selected_tournaments = st.sidebar.multiselect("Choose tournaments to load", options=all_tournaments, default=["IPL"])
-# call loader (optional: set usecols to speed up drastically if you only need a handful of columns)
-# e.g. usecols = ['p_match','inns','bat','bowler','batruns','length','line','year','bat_hand','wagonZone','score','dismissal']
-usecols = None # <-- set to a short list if you only need specific columns
+selected_tournaments = st.sidebar.multiselect(
+    "Choose tournaments to load",
+    options=all_tournaments,
+    default=["IPL"],
+    key="tournament_select"  # Critical key to persist selection across reruns
+)
+
+# call loader
+usecols = None  # set to a short list if you only need specific columns
 with st.spinner("Loading data (fast path) — this should be quick if parquet exists..."):
     df = load_filtered_data_fast(selected_tournaments, selected_years, usecols=usecols)
+
 if df is None or df.empty:
     st.warning("No data loaded. Check selected tournaments, the Datasets folder, or the year range.")
 else:
     st.success(f"Loaded {len(df):,} rows from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s).")
     st.sidebar.write("Data loaded successfully!")
+
 DF_gen = df
 # =========================
 # End loader
