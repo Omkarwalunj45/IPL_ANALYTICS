@@ -822,37 +822,67 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
 # --------------------
 # USAGE in app
 # --------------------
+# ────────────────────────────────────────────────
+# Sidebar Controls with Full Persistence
+# ────────────────────────────────────────────────
+
 st.sidebar.header("Select Years")
+
+# Initialize year slider state if not present
+if "year_range" not in st.session_state:
+    st.session_state.year_range = (2021, 2026)
+
 years = st.sidebar.slider(
     "Select year range",
     min_value=2021,
     max_value=2026,
-    value=(2021, 2026),
+    value=st.session_state.year_range,
     step=1,
-    key="year_slider"
+    key="year_slider_key"  # Unique key binds widget to state
 )
+
+# Always sync slider change back to session state
+st.session_state.year_range = years
 selected_years = list(range(years[0], years[1] + 1))
 st.sidebar.write(f"Selected years: {', '.join(map(str, selected_years))}")
 
 st.sidebar.header("Select Tournaments")
 all_tournaments = list(TOURNAMENTS.keys())
+
+# Initialize tournament selection state if not present
+if "selected_tournaments" not in st.session_state:
+    st.session_state.selected_tournaments = ["IPL"]
+
 selected_tournaments = st.sidebar.multiselect(
     "Choose tournaments to load",
     options=all_tournaments,
-    default=["IPL"],
-    key="tournament_select"  # This key ensures persistence
+    default=st.session_state.selected_tournaments,
+    key="tournament_select_key"  # Critical key for persistence
 )
 
-# call loader
-usecols = None
-with st.spinner("Loading data (fast path) — this should be quick if parquet exists..."):
-    df = load_filtered_data_fast(selected_tournaments, selected_years, usecols=usecols)
+# Force sync selected value back to session state (handles edge cases)
+st.session_state.selected_tournaments = selected_tournaments
 
-if df is None or df.empty:
-    st.warning("No data loaded. Check selected tournaments, the Datasets folder, or the year range.")
+# Debug (optional - remove later)
+# st.sidebar.write("Current session tournaments:", st.session_state.selected_tournaments)
+
+# ────────────────────────────────────────────────
+# Load data only when needed
+# ────────────────────────────────────────────────
+usecols = None  # change to specific columns if you want speedup
+
+if selected_tournaments:  # only load if at least one tournament selected
+    with st.spinner("Loading data (fast path) — this should be quick if parquet exists..."):
+        df = load_filtered_data_fast(selected_tournaments, selected_years, usecols=usecols)
+    
+    if df is None or df.empty:
+        st.warning("No data loaded. Check selected tournaments, the Datasets folder, or the year range.")
+    else:
+        st.success(f"Loaded {len(df):,} rows from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s).")
+        st.sidebar.success("Data loaded successfully!")
 else:
-    st.success(f"Loaded {len(df):,} rows from {len(selected_tournaments)} tournament(s) and {len(selected_years)} year(s).")
-    st.sidebar.write("Data loaded successfully!")
+    st.info("Please select at least one tournament to load data.")
+    df = pd.DataFrame()
 
 DF_gen = df
 # =========================
