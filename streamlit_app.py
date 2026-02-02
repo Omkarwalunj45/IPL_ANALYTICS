@@ -6049,7 +6049,7 @@ elif sidebar_option == "Strength vs Weakness":
                         else:
                             bdf['top7_flag'] = 0
                     bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
-                def compute_RAA_DAA_for_group_column(group_col):
+        def compute_RAA_DAA_for_group_column(group_col):
                     out = {}
                     if group_col not in bdf.columns:
                         return out
@@ -6169,10 +6169,10 @@ elif sidebar_option == "Strength vs Weakness":
                     out['overall'] = {'RAA': overall_raa, 'DAA': overall_daa}
                     return out
                
-                def _fmt(x):
+        def _fmt(x):
                     return f"{x:.2f}" if (not pd.isna(x)) else '-'
                 # attach to bk_df
-                if bk_df is not None and not bk_df.empty:
+        if bk_df is not None and not bk_df.empty:
                     if COL_BOWL_KIND in bdf.columns:
                         bk_raadaa = compute_RAA_DAA_for_group_column(COL_BOWL_KIND)
                         new_RAA = []
@@ -6187,10 +6187,10 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         bk_df['RAA'] = '-'
                         bk_df['DAA'] = '-'
-                st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by bowling type </div>", unsafe_allow_html=True)
-                st.dataframe(bk_df, use_container_width=True)
+        st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by bowling type </div>", unsafe_allow_html=True)
+        st.dataframe(bk_df, use_container_width=True)
                 # attach to bs_df
-                if bs_df is not None:
+        if bs_df is not None:
                     if COL_BOWL_STYLE in bdf.columns:
                         bs_raadaa = compute_RAA_DAA_for_group_column(COL_BOWL_STYLE)
                         new_RAA = []
@@ -6202,11 +6202,11 @@ elif sidebar_option == "Strength vs Weakness":
                             new_DAA.append(_fmt(val.get('DAA', np.nan)))
                         bs_df['RAA'] = new_RAA
                         bs_df['DAA'] = new_DAA
-                    else:
+        else:
                         bs_df['RAA'] = '-'
                         bs_df['DAA'] = '-'
-                    st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by bowling style </div>", unsafe_allow_html=True)
-                    st.dataframe(bs_df, use_container_width=True)
+        st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by bowling style </div>", unsafe_allow_html=True)
+        st.dataframe(bs_df, use_container_width=True)
         # if 'top7_flag' not in bdf.columns:
             # bdf = bdf.copy()
         #     if 'p_bat' in bdf.columns and pd.api.types.is_numeric_dtype(bdf['p_bat']):
