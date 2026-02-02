@@ -4199,7 +4199,7 @@ elif sidebar_option == "Matchup Analysis":
     if dismissal_col is None :
         st.error("Dataframe must contain dismissal column.")
         st.stop()
-    st.write(bdf.dismissal.unique())
+    # st.write(bdf.dismissal.unique())
     # Build unique player lists (filter out nulls and '0')
     unique_batters = sorted([x for x in pd.unique(bdf[batter_col].dropna()) if str(x).strip() not in ("", "0")])
     unique_bowlers = sorted([x for x in pd.unique(bdf[bowler_col].dropna()) if str(x).strip() not in ("", "0")])
@@ -4216,13 +4216,14 @@ elif sidebar_option == "Matchup Analysis":
     chosen_phase = st.selectbox("Phase", options=phase_opts, index=0) # Default Overall
     # Raw matchup rows for download/sanity
     matchup_df = bdf[(bdf[batter_col] == batter_name) & (bdf[bowler_col] == bowler_name)].copy()
+    st.write(matchup_df.dismissal.unique())
     if chosen_phase != 'Overall':
         matchup_df = matchup_df[matchup_df['PHASE'] == chosen_phase].copy()
     if matchup_df.empty:
         st.warning("No data available for the selected matchup.")
     else:
         # Normalize numeric fields defensively
-        for col in ['batsman_runs', 'batruns', 'score', 'bowlruns', 'total_runs','dismissal']:
+        for col in ['batsman_runs', 'batruns', 'score', 'bowlruns', 'total_runs']:
             if col in matchup_df.columns:
                 try:
                     matchup_df[col] = pd.to_numeric(matchup_df[col], errors='coerce')
@@ -4253,7 +4254,7 @@ elif sidebar_option == "Matchup Analysis":
             for col in df.columns:
                 col_lower = str(col).lower()
                 # Check if column name contains 'innings', 'runs', or 'balls'
-                if any(keyword in col_lower for keyword in ['innings', 'inning', 'runs', 'balls', 'wickets', 'wkts', 'dismissal', 'matches', 'fours', 'sixes', 'dots', 'matches']):
+                if any(keyword in col_lower for keyword in ['innings', 'inning', 'runs', 'balls', 'wickets', 'wkts', 'matches', 'fours', 'sixes', 'dots', 'matches']):
                     df[col] = df[col].fillna(0).astype(int)
           
             # Round all other numeric columns to 2 decimals
@@ -4303,7 +4304,7 @@ elif sidebar_option == "Matchup Analysis":
         def cumulator(temp_df):
             if temp_df.empty:
                 return pd.DataFrame()
-            runs_col = safe_get_col(temp_df, ['batruns', 'batsman_runs', 'score', 'runs','dismissal'])
+            runs_col = safe_get_col(temp_df, ['batruns', 'batsman_runs', 'score', 'runs'])
             if runs_col is None:
                 return pd.DataFrame()
             balls = len(temp_df)
@@ -4312,8 +4313,8 @@ elif sidebar_option == "Matchup Analysis":
             sixes = int((temp_df[runs_col] == 6).sum())
             # Define the dismissal types that count as wickets
             wkt_types = {"caught", "bowled", "stumped", "lbw"}
-            # st.write(temp_df.columns)
-            # st.write(temp_df.dismissal.unique())
+            st.write(temp_df.columns)
+            st.write(temp_df.dismissal.unique())
             # Calculate wickets
             wkts = temp_df['dismissal'].isin(wkt_types).sum() if 'dismissal' in temp_df.columns else 0
             
