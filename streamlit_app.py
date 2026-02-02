@@ -4225,7 +4225,7 @@ elif sidebar_option == "Matchup Analysis":
                     pass
         # Download raw matchup CSV
         csv = matchup_df.to_csv(index=False)
-        st.write(matchup_df.columns)
+        # st.write(matchup_df.columns)
         st.download_button(
             label="Download raw matchup rows (CSV)",
             data=csv,
@@ -4248,7 +4248,7 @@ elif sidebar_option == "Matchup Analysis":
             for col in df.columns:
                 col_lower = str(col).lower()
                 # Check if column name contains 'innings', 'runs', or 'balls'
-                if any(keyword in col_lower for keyword in ['innings', 'inning', 'runs', 'balls', 'wickets', 'wkts', 'dismissals', 'matches', 'fours', 'sixes', 'dots', 'matches']):
+                if any(keyword in col_lower for keyword in ['innings', 'inning', 'runs', 'balls', 'wickets', 'wkts', 'dismissal', 'matches', 'fours', 'sixes', 'dots', 'matches']):
                     df[col] = df[col].fillna(0).astype(int)
           
             # Round all other numeric columns to 2 decimals
