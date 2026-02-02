@@ -4217,7 +4217,7 @@ elif sidebar_option == "Matchup Analysis":
         st.warning("No data available for the selected matchup.")
     else:
         # Normalize numeric fields defensively
-        for col in ['batsman_runs', 'batruns', 'score', 'bowlruns', 'total_runs']:
+        for col in ['batsman_runs', 'batruns', 'score', 'bowlruns', 'total_runs','dismissal']:
             if col in matchup_df.columns:
                 try:
                     matchup_df[col] = pd.to_numeric(matchup_df[col], errors='coerce')
@@ -4304,7 +4304,13 @@ elif sidebar_option == "Matchup Analysis":
             runs = int(temp_df[runs_col].sum())
             fours = int((temp_df[runs_col] == 4).sum())
             sixes = int((temp_df[runs_col] == 6).sum())
-            wkts = int(temp_df['is_wkt'].sum()) if 'is_wkt' in temp_df.columns else 0
+            # Define the dismissal types that count as wickets
+            wkt_types = {"caught", "bowled", "stumped", "lbw"}
+            
+            # Calculate wickets
+            wkts = temp_df['dismissal'].isin(wkt_types).sum() if 'dismissal' in temp_df.columns else 0
+            
+            # print(f"Total wickets: {wkts}")
             avg = runs / wkts if wkts > 0 else np.inf
             sr = (runs / balls * 100) if balls > 0 else 0.0
             summary = pd.DataFrame({
