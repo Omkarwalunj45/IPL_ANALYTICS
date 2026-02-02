@@ -6499,7 +6499,7 @@ elif sidebar_option == "Strength vs Weakness":
                         return
                 
                     # Required columns for hover (adjust if names differ)
-                    required_cols = ['wagonX', 'wagonY', 'bowler', 'bowl_style', 'line', 'length', 'shot']  # 'shot' assuming it's the column for shot played
+                    required_cols = ['wagonX', 'wagonY', 'bowler', 'bowl_style', 'line', 'length', 'shot','control']  # 'shot' assuming it's the column for shot played
                     missing_cols = [col for col in required_cols if col not in caught_df.columns]
                     if missing_cols:
                         st.warning(f"Missing columns for hover: {missing_cols}. Hover will show available info only.")
@@ -6557,6 +6557,7 @@ elif sidebar_option == "Strength vs Weakness":
                         "<b>Line:</b> %{customdata[2]}<br>"
                         "<b>Length:</b> %{customdata[3]}<br>"
                         "<b>Shot Played:</b> %{customdata[4]}<extra></extra>"
+                        "<b>Control:</b> %{customdata[5]}<extra></extra>"
                     )
                 
                     fig.add_trace(go.Scatter(
