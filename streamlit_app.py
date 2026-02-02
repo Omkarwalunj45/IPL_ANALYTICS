@@ -4192,9 +4192,14 @@ elif sidebar_option == "Matchup Analysis":
     year_col = safe_get_col(bdf, ['season', 'year'], default=None)
     inning_col = safe_get_col(bdf, ['inns', 'inning'], default=None)
     venue_col = safe_get_col(bdf, ['ground', 'venue', 'stadium', 'ground_name'], default=None)
+    dismissal_col = safe_get_col(bdf, ['dismissal', 'Dismissal'], default=None)
     if batter_col is None or bowler_col is None:
         st.error("Dataframe must contain batter and bowler columns (e.g. 'bat' and 'bowl').")
         st.stop()
+    if dismissal_col is None :
+        st.error("Dataframe must contain dismissal column.")
+        st.stop()
+    st.write(bdf.dismissal.unique())
     # Build unique player lists (filter out nulls and '0')
     unique_batters = sorted([x for x in pd.unique(bdf[batter_col].dropna()) if str(x).strip() not in ("", "0")])
     unique_bowlers = sorted([x for x in pd.unique(bdf[bowler_col].dropna()) if str(x).strip() not in ("", "0")])
