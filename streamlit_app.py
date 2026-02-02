@@ -4308,7 +4308,7 @@ elif sidebar_option == "Matchup Analysis":
             # Define the dismissal types that count as wickets
             wkt_types = {"caught", "bowled", "stumped", "lbw"}
             # st.write(temp_df.columns)
-            st.write(temp_df.dismissal.unique())
+            # st.write(temp_df.dismissal.unique())
             # Calculate wickets
             wkts = temp_df['dismissal'].isin(wkt_types).sum() if 'dismissal' in temp_df.columns else 0
             
@@ -4333,6 +4333,7 @@ elif sidebar_option == "Matchup Analysis":
                 st.info("Year/season column not detected in dataset.")
             else:
                 tdf = matchup_df.copy()
+                st.write(tdf.dismissal.unique())
                 seasons = sorted(tdf[year_col].dropna().unique().tolist())
                 all_seasons = []
                 for s in seasons:
