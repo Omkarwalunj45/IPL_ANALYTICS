@@ -6666,31 +6666,31 @@ elif sidebar_option == "Strength vs Weakness":
                 #     finally:
                 #         plt.close(fig)
             
-                # # ---------- When user selects a kind ----------
-                # if chosen_kind and chosen_kind != '-- none --':
-                #     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
-                #         if col not in df.columns:
-                #             return df.iloc[0:0]
-                #         mask = df[col].astype(str).str.lower().str.contains(str(kind).lower(), na=False)
-                #         if not mask.any():
-                #             norm_kind = _norm_key(kind)
-                #             mask = df[col].apply(lambda x: _norm_key(x) == norm_kind)
-                #         return df[mask].copy()
+                # ---------- When user selects a kind ----------
+                if chosen_kind and chosen_kind != '-- none --':
+                    def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
+                        if col not in df.columns:
+                            return df.iloc[0:0]
+                        mask = df[col].astype(str).str.lower().str.contains(str(kind).lower(), na=False)
+                        if not mask.any():
+                            norm_kind = _norm_key(kind)
+                            mask = df[col].apply(lambda x: _norm_key(x) == norm_kind)
+                        return df[mask].copy()
             
-                #     sel_pf = filter_by_kind(pf)
-                #     sel_bdf = filter_by_kind(bdf)
+                    sel_pf = filter_by_kind(pf)
+                    sel_bdf = filter_by_kind(bdf)
             
-                #     df_use = sel_pf if not sel_pf.empty else sel_bdf
-                #     if df_use.empty:
-                #         st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
-                #     else:
-                #         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
-                #         draw_wagon_if_available(df_use, player_selected)
+                    df_use = sel_pf if not sel_pf.empty else sel_bdf
+                    if df_use.empty:
+                        st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
+                    else:
+                        st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
+                        draw_wagon_if_available(df_use, player_selected)
             
-                #         st.markdown(f"#### {player_selected}'s Caught Dismissals")
-                #         draw_caught_dismissals_wagon(df_use, player_selected)
+                        st.markdown(f"#### {player_selected}'s Caught Dismissals")
+                        draw_caught_dismissals_wagon(df_use, player_selected)
             
-                #         display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
+                        display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
             
                 # # ---------- When user selects a style ----------
                 if chosen_style and chosen_style != '-- none --':
@@ -6714,7 +6714,7 @@ elif sidebar_option == "Strength vs Weakness":
                         draw_wagon_if_available(df_use, player_selected)
             
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
-                        draw_caught_dismissals_wagons(df_use, player_selected)
+                        draw_caught_dismissals_wagon(df_use, player_selected)
             
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
 
