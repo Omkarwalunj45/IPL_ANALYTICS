@@ -4225,6 +4225,7 @@ elif sidebar_option == "Matchup Analysis":
                     pass
         # Download raw matchup CSV
         csv = matchup_df.to_csv(index=False)
+        st.write(matchup_df.columns)
         st.download_button(
             label="Download raw matchup rows (CSV)",
             data=csv,
