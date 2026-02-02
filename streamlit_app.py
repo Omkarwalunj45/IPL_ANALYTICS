@@ -9,6 +9,7 @@ from io import BytesIO
 from PIL import Image
 st.set_page_config(layout="wide")
 
+
 line_map = {
     'WIDE_OUTSIDE_OFFSTUMP': 0,
     'OUTSIDE_OFFSTUMP': 1,
