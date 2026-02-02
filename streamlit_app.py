@@ -4216,7 +4216,7 @@ elif sidebar_option == "Matchup Analysis":
     chosen_phase = st.selectbox("Phase", options=phase_opts, index=0) # Default Overall
     # Raw matchup rows for download/sanity
     matchup_df = bdf[(bdf[batter_col] == batter_name) & (bdf[bowler_col] == bowler_name)].copy()
-    st.write(matchup_df.dismissal.unique())
+    # st.write(matchup_df.dismissal.unique())
     if chosen_phase != 'Overall':
         matchup_df = matchup_df[matchup_df['PHASE'] == chosen_phase].copy()
     if matchup_df.empty:
@@ -4313,8 +4313,8 @@ elif sidebar_option == "Matchup Analysis":
             sixes = int((temp_df[runs_col] == 6).sum())
             # Define the dismissal types that count as wickets
             wkt_types = {"caught", "bowled", "stumped", "lbw"}
-            st.write(temp_df.columns)
-            st.write(temp_df.dismissal.unique())
+            # st.write(temp_df.columns)
+            # st.write(temp_df.dismissal.unique())
             # Calculate wickets
             wkts = temp_df['dismissal'].isin(wkt_types).sum() if 'dismissal' in temp_df.columns else 0
             
