@@ -2150,13 +2150,127 @@ def get_sector_angle_requested(zone, batting_style):
     return math.radians(angle_deg)
 
 
-def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
-                                                wagon_zone_col='wagonZone',
-                                                run_col='score',
-                                                bat_hand_col='bat_hand'):
+# def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
+#                                                 wagon_zone_col='wagonZone',
+#                                                 run_col='score',
+#                                                 bat_hand_col='bat_hand'):
+#     """
+#     Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
+#     No other logic changed.
+#     """
+#     fig, ax = plt.subplots(figsize=(10, 10))
+#     ax.set_aspect('equal')
+#     ax.axis('off')
+
+#     # Field base
+#     ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
+#     ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
+#     ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
+#     ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
+
+#     # pitch rectangle approx
+#     pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
+#     ax.add_patch(pitch_rect)
+
+#     # radial sector lines (8)
+#     angles = np.linspace(0, 2*np.pi, 9)[:-1]
+#     for angle in angles:
+#         x = math.cos(angle)
+#         y = math.sin(angle)
+#         ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
+
+#     # prepare data (runs, fours, sixes by sector)
+#     tmp = final_df_local.copy()
+#     if wagon_zone_col in tmp.columns:
+#         tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
+#     else:
+#         tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
+
+#     # raw aggregates keyed by the raw sector id (1..8)
+#     runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
+#     fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
+#     sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
+#     total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
+
+#     # Title
+#     title_text = f"{batsman_name}'s Scoring Zones"
+#     plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
+
+#     # Determine batter handedness (first non-null sample in the filtered rows)
+#     batting_style_val = None
+#     if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
+#         batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
+#     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+
+#     # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
+#     for zone in range(1, 9):
+#         angle_mid = get_sector_angle_requested(zone, batting_style_val)
+#         x = 0.60 * math.cos(angle_mid)
+#         y = 0.60 * math.sin(angle_mid)
+
+#         # data_zone: use raw sector index (1..8) directly; we only changed the display angle mapping
+#         # BUT to keep labels and data aligned visually for LHB we need to pick the data zone that corresponds
+#         # to the displayed sector name. With BASE_ANGLES_LHB we've already swapped sector angles, so the display
+#         # location uses the mirrored mapping. To ensure the numeric data (runs/fours/sixes) goes into the
+#         # correct display sector we should still pull from the *raw* zone that the batter's wagon data used.
+#         # The approach below keeps behaviour identical to prior logic: show data for the raw zone index.
+#         data_zone = zone
+
+#         runs = int(runs_by_zone.get(data_zone, 0))
+#         pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
+#         pct_str = f"{pct:.2f}%"
+
+#         # main labels
+#         ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
+#         ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
+
+#         # fours & sixes below
+#         fours = int(fours_by_zone.get(data_zone, 0))
+#         sixes = int(sixes_by_zone.get(data_zone, 0))
+#         ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
+
+#         # sector name slightly farther out:
+#         # For LHB we display the mirrored sector name so label and data match visually.
+#         display_sector_idx = zone if not is_lhb else (9 - zone)
+#         sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+#         sx = 0.80 * math.cos(angle_mid)
+#         sy = 0.80 * math.sin(angle_mid)
+#         ax.text(sx, sy, sector_name_to_show, ha='center', va='center', color='white', fontsize=8)
+
+#     ax.set_xlim(-1.2, 1.2)
+#     ax.set_ylim(-1.2, 1.2)
+#     plt.tight_layout(pad=0)
+#     # if is_lhb:
+#     #     ax.invert_xaxis()
+
+#     return fig
+
+import math
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.patches import Circle, Rectangle
+import streamlit as st
+import plotly.graph_objects as go
+from matplotlib.figure import Figure as MplFigure
+import inspect
+
+# -------------------------
+# 1) Updated draw_cricket_field_with_run_totals_requested
+# -------------------------
+def draw_cricket_field_with_run_totals_requested(
+    final_df_local,
+    batsman_name,
+    wagon_zone_col='wagonZone',
+    run_col='score',
+    bat_hand_col='bat_hand',
+    normalize_to_rhb=True,   # NEW flag: True => show everything in RHB frame (legacy), False => show true handedness
+):
     """
-    Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
-    No other logic changed.
+    Draw wagon wheel / scoring zones.
+    - normalize_to_rhb=True: place sectors in RHB reference frame (analytics default).
+    - normalize_to_rhb=False: place sectors in batter's natural handedness (LHB shows left-right mirror visually).
+    Returns: matplotlib.figure.Figure
     """
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_aspect('equal')
@@ -2187,34 +2301,40 @@ def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
         tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
 
     # raw aggregates keyed by the raw sector id (1..8)
+    # ensure run_col present, coerce to numeric default 0
+    if run_col in tmp.columns:
+        tmp[run_col] = pd.to_numeric(tmp[run_col], errors='coerce').fillna(0)
+    else:
+        tmp[run_col] = 0
+
     runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
-    fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
-    sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
-    total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
+    # count fours / sixes robustly (if run_col is per-ball run)
+    fours_by_zone = tmp[tmp[run_col] == 4].groupby('wagon_zone_int')[run_col].count().to_dict()
+    sixes_by_zone = tmp[tmp[run_col] == 6].groupby('wagon_zone_int')[run_col].count().to_dict()
+    total_runs_in_wagon = sum(float(v) for v in runs_by_zone.values())
 
     # Title
     title_text = f"{batsman_name}'s Scoring Zones"
     plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
 
-    # Determine batter handedness (first non-null sample in the filtered rows)
+    # Determine batter handedness (first non-null sample)
     batting_style_val = None
     if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
         batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
 
-    # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
+    # Choose display_hand for angle computation:
+    # If normalize_to_rhb is True, force 'R' (everyone shown in RHB frame).
+    # If False, use batter's handedness so LHB will get L angles.
+    display_hand = 'R' if normalize_to_rhb else (batting_style_val if isinstance(batting_style_val, str) else 'R')
+
+    # Place % runs and runs in each sector using sector centers (angles chosen from get_sector_angle_requested)
     for zone in range(1, 9):
-        angle_mid = get_sector_angle_requested(zone, batting_style_val)
+        angle_mid = get_sector_angle_requested(zone, display_hand)   # IMPORTANT: pass display_hand explicitly
         x = 0.60 * math.cos(angle_mid)
         y = 0.60 * math.sin(angle_mid)
 
-        # data_zone: use raw sector index (1..8) directly; we only changed the display angle mapping
-        # BUT to keep labels and data aligned visually for LHB we need to pick the data zone that corresponds
-        # to the displayed sector name. With BASE_ANGLES_LHB we've already swapped sector angles, so the display
-        # location uses the mirrored mapping. To ensure the numeric data (runs/fours/sixes) goes into the
-        # correct display sector we should still pull from the *raw* zone that the batter's wagon data used.
-        # The approach below keeps behaviour identical to prior logic: show data for the raw zone index.
-        data_zone = zone
+        data_zone = zone  # use raw zone index for numeric data (keeps aggregation logic stable)
 
         runs = int(runs_by_zone.get(data_zone, 0))
         pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
@@ -2230,9 +2350,8 @@ def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
         ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
 
         # sector name slightly farther out:
-        # For LHB we display the mirrored sector name so label and data match visually.
-        display_sector_idx = zone if not is_lhb else (9 - zone)
-        sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+        # We display sector name for the display_hand (angles already place text in correct location).
+        sector_name_to_show = SECTOR_NAMES_RHB.get(zone, f"Sector {zone}")  # keep canonical names
         sx = 0.80 * math.cos(angle_mid)
         sy = 0.80 * math.sin(angle_mid)
         ax.text(sx, sy, sector_name_to_show, ha='center', va='center', color='white', fontsize=8)
@@ -2240,9 +2359,10 @@ def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
     ax.set_xlim(-1.2, 1.2)
     ax.set_ylim(-1.2, 1.2)
     plt.tight_layout(pad=0)
-    # if is_lhb:
-    #     ax.invert_xaxis()
 
+    # IMPORTANT: do NOT invert axes here. Axis inversion is a different strategy.
+    # If normalize_to_rhb==False and you want an axis-inversion-based mirror, you can invert externally.
+    # But for consistency we avoid double-handling. We return the figure as drawn for display_hand used.
     return fig
 # -----------------------
 # Utility helpers
@@ -8440,79 +8560,112 @@ elif sidebar_option == "Strength vs Weakness":
                         plt.close(fig)
             
                 # ---------- Wagon chart (existing - runs) ----------
-                def draw_wagon_if_available(df_wagon, batter_name):
-                    if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
-                        try:
-                            fig_w = draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
-                            safe_fn = globals().get('safe_st_pyplot', None)
-                            if callable(safe_fn):
-                                safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                            else:
-                                st.pyplot(fig_w)
-                        except Exception as e:
-                            st.error(f"Wagon drawing function exists but raised: {e}")
-                    else:
-                        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                # def draw_wagon_if_available(df_wagon, batter_name):
+                #     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
+                #         try:
+                #             fig_w = draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
+                #             safe_fn = globals().get('safe_st_pyplot', None)
+                #             if callable(safe_fn):
+                #                 safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                #             else:
+                #                 st.pyplot(fig_w)
+                #         except Exception as e:
+                #             st.error(f"Wagon drawing function exists but raised: {e}")
+                #     else:
+                #         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
 
 
                 # Required imports (place near top of your module)
-                import streamlit as st
-                import pandas as pd
-                import numpy as np
-                import matplotlib.pyplot as plt
-                import matplotlib
-                import plotly.graph_objects as go
-                from matplotlib.figure import Figure as MplFigure
-                
-                # -------------------------
-                # draw_wagon_if_available
-                # -------------------------
-                def draw_wagon_if_available(df_wagon, batter_name):
+                def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
+                    """
+                    Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
+                    - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
+                                        False => request true handedness visualization (LHB will appear mirrored).
+                    This wrapper tries to call the function with the new parameter if available (backwards compatible).
+                    """
                     import matplotlib.pyplot as plt
                     import streamlit as st
+                    import inspect
                 
-                    # Detect LHB
-                    is_lhb = False
-                    if 'bat_hand' in df_wagon.columns and not df_wagon.empty:
+                    # Defensive check
+                    if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+                        st.warning("No wagon data available to draw.")
+                        return
+                
+                    # Decide handedness (for UI messages / debugging)
+                    batting_style_val = None
+                    if 'bat_hand' in df_wagon.columns:
                         try:
-                            is_lhb = str(df_wagon['bat_hand'].dropna().iloc[0]).upper().startswith('L')
-                        except:
-                            pass
+                            batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                        except Exception:
+                            batting_style_val = None
+                    is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
                 
-                    if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(draw_cricket_field_with_run_totals_requested):
-                        try:
-                            # 1️⃣ Let the function draw the wagon (matplotlib)
-                            draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
+                    # Check function signature
+                    draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
+                    if draw_fn is None or not callable(draw_fn):
+                        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                        return
                 
-                            # 2️⃣ Grab current figure + axes
-                            fig = plt.gcf()
-                            axes = fig.get_axes()
+                    try:
+                        sig = inspect.signature(draw_fn)
+                        if 'normalize_to_rhb' in sig.parameters:
+                            # call with the explicit flag (preferred)
+                            fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
+                        else:
+                            # older signature: call without flag (maintain legacy behaviour)
+                            fig = draw_fn(df_wagon, batter_name)
                 
-                            # 3️⃣ MIRROR HERE (THIS IS THE FIX)
-                            if is_lhb:
-                                for ax in axes:
-                                    ax.invert_xaxis()   # ✅ TRUE mirror image
-                
-                            # 4️⃣ Display safely
+                        # If the function returned a Matplotlib fig — display it
+                        if isinstance(fig, MplFigure):
                             safe_fn = globals().get('safe_st_pyplot', None)
                             if callable(safe_fn):
-                                safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                try:
+                                    safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                except Exception:
+                                    st.pyplot(fig)
                             else:
                                 st.pyplot(fig)
+                            return
                 
-                        except Exception as e:
-                            st.error(f"Wagon drawing function failed: {e}")
-                    else:
-                        st.warning("Wagon chart function not found.")
-
+                        # If function returned None, it may have drawn to current fig; capture that
+                        if fig is None:
+                            mpl_fig = plt.gcf()
+                            # If figure has axes and content, display it
+                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
+                                safe_fn = globals().get('safe_st_pyplot', None)
+                                if callable(safe_fn):
+                                    try:
+                                        safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                    except Exception:
+                                        st.pyplot(mpl_fig)
+                                else:
+                                    st.pyplot(mpl_fig)
+                                return
+                
+                        # If function returned a Plotly figure (rare), display it
+                        if isinstance(fig, go.Figure):
+                            try:
+                                fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                            except Exception:
+                                pass
+                            st.plotly_chart(fig, use_container_width=True)
+                            return
+                
+                        # Unknown return — just state it
+                        st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+                    except Exception as e:
+                        st.error(f"Wagon drawing function raised: {e}")
                 
                 
                 # -------------------------
-                # draw_caught_dismissals_wagon (Plotly)
+                # 3) Updated draw_caught_dismissals_wagon (Plotly)
                 # -------------------------
-                def draw_caught_dismissals_wagon(df_wagon, batter_name):
+                def draw_caught_dismissals_wagon(df_wagon, batter_name, normalize_to_rhb=True):
                     """
-                    Plotly wagon chart for caught dismissals. Mirrors vertically (left-right) when batter is LHB.
+                    Plotly wagon chart for caught dismissals.
+                    - normalize_to_rhb=True: show points in RHB frame (no flipping)
+                    - normalize_to_rhb=False: show true handedness; if batter is LHB, flip x coordinates to mirror
                     """
                     # Defensive checks
                     if not isinstance(df_wagon, pd.DataFrame):
@@ -8540,7 +8693,7 @@ elif sidebar_option == "Strength vs Weakness":
                         st.info("No valid wagon coordinates for caught dismissals.")
                         return
                 
-                    # Normalize coords to [-1,1] (match your earlier scaling)
+                    # Normalize coords to [-1,1] (match your scaling)
                     center_x = 184.0
                     center_y = 184.0
                     radius = 184.0
@@ -8561,8 +8714,16 @@ elif sidebar_option == "Strength vs Weakness":
                         except Exception:
                             is_lhb = False
                 
+                    # Apply display rule:
+                    # - If normalize_to_rhb True => do NOT flip (everyone in RHB frame)
+                    # - If normalize_to_rhb False and batter is LHB => flip x for true mirror
+                    x_vals = caught_df['x_plot'].values
+                    y_vals = caught_df['y_plot'].values
+                    if (not normalize_to_rhb) and is_lhb:
+                        x_vals = -x_vals
+                
                     # Filter to inside circle
-                    caught_df['distance'] = np.sqrt(caught_df['x_plot']**2 + caught_df['y_plot']**2)
+                    caught_df['distance'] = np.sqrt(x_vals**2 + y_vals**2)
                     caught_df = caught_df[caught_df['distance'] <= 1].copy()
                     if caught_df.empty:
                         st.info(f"No caught dismissals inside the field for {batter_name}.")
@@ -8576,48 +8737,41 @@ elif sidebar_option == "Strength vs Weakness":
                     for _, row in caught_df.iterrows():
                         customdata.append([("" if pd.isna(row.get(c, "")) else str(row.get(c, ""))) for c in customdata_cols])
                 
-                    # Transform x values for plotting according to LHB
-                    x_vals = caught_df['x_plot'].values
-                    y_vals = caught_df['y_plot'].values
-                    if is_lhb:
-                        x_vals = -x_vals
-                
                     # Build the figure
                     fig = go.Figure()
                 
-                    # Circles (outer + inner) using add_shape but ensuring flipped coordinates if LHB
+                    # Circles and pitch: if normalize_to_rhb True, use canonical RHB shapes; if False and LHB, flip x coords for shapes
                     def add_circle_shape(fig_obj, x0_raw, y0, x1_raw, y1, **kwargs):
-                        if is_lhb:
+                        if (not normalize_to_rhb) and is_lhb:
                             tx0 = -x1_raw
                             tx1 = -x0_raw
                         else:
                             tx0 = x0_raw
                             tx1 = x1_raw
-                        # ensure ordering
                         x0_, x1_ = min(tx0, tx1), max(tx0, tx1)
                         fig_obj.add_shape(type="circle", xref="x", yref="y", x0=x0_, y0=y0, x1=x1_, y1=y1, **kwargs)
                 
                     add_circle_shape(fig, -1, -1, 1, 1, fillcolor="#228B22", line_color="black", opacity=1, layer="below")
                     add_circle_shape(fig, -0.5, -0.5, 0.5, 0.5, fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
                 
-                    # Pitch rectangle (tan) - mirrored if LHB
+                    # Pitch rectangle (tan)
                     pitch_x0, pitch_x1 = (-0.04, 0.04)
-                    if is_lhb:
+                    if (not normalize_to_rhb) and is_lhb:
                         pitch_x0, pitch_x1 = (-pitch_x1, -pitch_x0)
                     fig.add_shape(type="rect", x0=pitch_x0, y0=-0.08, x1=pitch_x1, y1=0.08,
                                   fillcolor="tan", line_color=None, opacity=1, layer="above")
                 
-                    # Radial lines (mirror endpoints)
+                    # Radial lines (mirror endpoints if LHB & not normalised)
                     angles = np.linspace(0, 2*np.pi, 9)[:-1]
                     for angle in angles:
                         x_end = np.cos(angle)
                         y_end = np.sin(angle)
-                        if is_lhb:
+                        if (not normalize_to_rhb) and is_lhb:
                             x_end = -x_end
                         fig.add_trace(go.Scatter(x=[0, x_end], y=[0, y_end],
                                                  mode='lines', line=dict(color='white', width=1), opacity=0.25, showlegend=False))
                 
-                    # Plot dismissal points
+                    # Plot dismissal points (use x_vals,y_vals filtered earlier)
                     fig.add_trace(go.Scatter(
                         x=x_vals,
                         y=y_vals,
@@ -8649,6 +8803,199 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     # Finally display the plotly figure
                     st.plotly_chart(fig, use_container_width=True)
+                # import streamlit as st
+                # import pandas as pd
+                # import numpy as np
+                # import matplotlib.pyplot as plt
+                # import matplotlib
+                # import plotly.graph_objects as go
+                # from matplotlib.figure import Figure as MplFigure
+                
+                # # -------------------------
+                # # draw_wagon_if_available
+                # # -------------------------
+                # def draw_wagon_if_available(df_wagon, batter_name):
+                #     import matplotlib.pyplot as plt
+                #     import streamlit as st
+                
+                #     # Detect LHB
+                #     is_lhb = False
+                #     if 'bat_hand' in df_wagon.columns and not df_wagon.empty:
+                #         try:
+                #             is_lhb = str(df_wagon['bat_hand'].dropna().iloc[0]).upper().startswith('L')
+                #         except:
+                #             pass
+                
+                #     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(draw_cricket_field_with_run_totals_requested):
+                #         try:
+                #             # 1️⃣ Let the function draw the wagon (matplotlib)
+                #             draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
+                
+                #             # 2️⃣ Grab current figure + axes
+                #             fig = plt.gcf()
+                #             axes = fig.get_axes()
+                
+                #             # 3️⃣ MIRROR HERE (THIS IS THE FIX)
+                #             if is_lhb:
+                #                 for ax in axes:
+                #                     ax.invert_xaxis()   # ✅ TRUE mirror image
+                
+                #             # 4️⃣ Display safely
+                #             safe_fn = globals().get('safe_st_pyplot', None)
+                #             if callable(safe_fn):
+                #                 safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                #             else:
+                #                 st.pyplot(fig)
+                
+                #         except Exception as e:
+                #             st.error(f"Wagon drawing function failed: {e}")
+                #     else:
+                #         st.warning("Wagon chart function not found.")
+
+                
+                
+                # # -------------------------
+                # # draw_caught_dismissals_wagon (Plotly)
+                # # -------------------------
+                # def draw_caught_dismissals_wagon(df_wagon, batter_name):
+                #     """
+                #     Plotly wagon chart for caught dismissals. Mirrors vertically (left-right) when batter is LHB.
+                #     """
+                #     # Defensive checks
+                #     if not isinstance(df_wagon, pd.DataFrame):
+                #         st.warning("draw_caught_dismissals_wagon expects a DataFrame")
+                #         return
+                
+                #     if 'dismissal' not in df_wagon.columns:
+                #         st.warning("No 'dismissal' column present — cannot filter caught dismissals.")
+                #         return
+                
+                #     caught_df = df_wagon[df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)].copy()
+                #     if caught_df.empty:
+                #         st.info(f"No caught dismissals for {batter_name}.")
+                #         return
+                
+                #     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                #         st.warning("Missing 'wagonX' or 'wagonY' columns.")
+                #         return
+                
+                #     # Numeric conversion and drop invalid
+                #     caught_df['wagonX'] = pd.to_numeric(caught_df['wagonX'], errors='coerce')
+                #     caught_df['wagonY'] = pd.to_numeric(caught_df['wagonY'], errors='coerce')
+                #     caught_df = caught_df.dropna(subset=['wagonX', 'wagonY']).copy()
+                #     if caught_df.empty:
+                #         st.info("No valid wagon coordinates for caught dismissals.")
+                #         return
+                
+                #     # Normalize coords to [-1,1] (match your earlier scaling)
+                #     center_x = 184.0
+                #     center_y = 184.0
+                #     radius = 184.0
+                #     caught_df['x_plot'] = (caught_df['wagonX'].astype(float) - center_x) / radius
+                #     caught_df['y_plot'] = - (caught_df['wagonY'].astype(float) - center_y) / radius  # flip Y so positive is up
+                
+                #     # Detect LHB if any
+                #     batting_style_val = None
+                #     if 'bat_hand' in df_wagon.columns and not df_wagon.empty:
+                #         try:
+                #             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                #         except Exception:
+                #             batting_style_val = None
+                #     is_lhb = False
+                #     if batting_style_val is not None:
+                #         try:
+                #             is_lhb = str(batting_style_val).strip().upper().startswith('L')
+                #         except Exception:
+                #             is_lhb = False
+                
+                #     # Filter to inside circle
+                #     caught_df['distance'] = np.sqrt(caught_df['x_plot']**2 + caught_df['y_plot']**2)
+                #     caught_df = caught_df[caught_df['distance'] <= 1].copy()
+                #     if caught_df.empty:
+                #         st.info(f"No caught dismissals inside the field for {batter_name}.")
+                #         return
+                
+                #     # Choose hover columns
+                #     hover_candidates = ['bowler', 'bowl_style', 'line', 'length', 'shot', 'dismissal']
+                #     customdata_cols = [c for c in hover_candidates if c in caught_df.columns]
+                #     # Build customdata rows
+                #     customdata = []
+                #     for _, row in caught_df.iterrows():
+                #         customdata.append([("" if pd.isna(row.get(c, "")) else str(row.get(c, ""))) for c in customdata_cols])
+                
+                #     # Transform x values for plotting according to LHB
+                #     x_vals = caught_df['x_plot'].values
+                #     y_vals = caught_df['y_plot'].values
+                #     if is_lhb:
+                #         x_vals = -x_vals
+                
+                #     # Build the figure
+                #     fig = go.Figure()
+                
+                #     # Circles (outer + inner) using add_shape but ensuring flipped coordinates if LHB
+                #     def add_circle_shape(fig_obj, x0_raw, y0, x1_raw, y1, **kwargs):
+                #         if is_lhb:
+                #             tx0 = -x1_raw
+                #             tx1 = -x0_raw
+                #         else:
+                #             tx0 = x0_raw
+                #             tx1 = x1_raw
+                #         # ensure ordering
+                #         x0_, x1_ = min(tx0, tx1), max(tx0, tx1)
+                #         fig_obj.add_shape(type="circle", xref="x", yref="y", x0=x0_, y0=y0, x1=x1_, y1=y1, **kwargs)
+                
+                #     add_circle_shape(fig, -1, -1, 1, 1, fillcolor="#228B22", line_color="black", opacity=1, layer="below")
+                #     add_circle_shape(fig, -0.5, -0.5, 0.5, 0.5, fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
+                
+                #     # Pitch rectangle (tan) - mirrored if LHB
+                #     pitch_x0, pitch_x1 = (-0.04, 0.04)
+                #     if is_lhb:
+                #         pitch_x0, pitch_x1 = (-pitch_x1, -pitch_x0)
+                #     fig.add_shape(type="rect", x0=pitch_x0, y0=-0.08, x1=pitch_x1, y1=0.08,
+                #                   fillcolor="tan", line_color=None, opacity=1, layer="above")
+                
+                #     # Radial lines (mirror endpoints)
+                #     angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                #     for angle in angles:
+                #         x_end = np.cos(angle)
+                #         y_end = np.sin(angle)
+                #         if is_lhb:
+                #             x_end = -x_end
+                #         fig.add_trace(go.Scatter(x=[0, x_end], y=[0, y_end],
+                #                                  mode='lines', line=dict(color='white', width=1), opacity=0.25, showlegend=False))
+                
+                #     # Plot dismissal points
+                #     fig.add_trace(go.Scatter(
+                #         x=x_vals,
+                #         y=y_vals,
+                #         mode='markers',
+                #         marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
+                #         customdata=customdata,
+                #         hovertemplate=(
+                #             "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
+                #             "<extra></extra>"
+                #         ),
+                #         name='Caught Dismissal Locations'
+                #     ))
+                
+                #     # Layout & equal aspect scaling so mirror is obvious
+                #     axis_range = 1.2
+                #     fig.update_layout(
+                #         xaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
+                #         yaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
+                #         showlegend=True,
+                #         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                #         width=800,
+                #         height=800,
+                #         margin=dict(l=0, r=0, t=0, b=0)
+                #     )
+                #     try:
+                #         fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                #     except Exception:
+                #         pass
+                
+                #     # Finally display the plotly figure
+                #     st.plotly_chart(fig, use_container_width=True)
 
 
                 
