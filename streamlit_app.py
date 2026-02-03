@@ -8463,7 +8463,15 @@ elif sidebar_option == "Strength vs Weakness":
                 import plotly.graph_objects as go
 
                 def draw_caught_dismissals_wagon(df_wagon, batter_name):
-                    # Filter caught dismissals
+                    import numpy as np
+                    import plotly.graph_objects as go
+                    import streamlit as st
+                
+                    # Filter caught dismissals (defensive)
+                    if 'dismissal' not in df_wagon.columns:
+                        st.warning("No 'dismissal' column present — cannot filter caught dismissals.")
+                        return
+                
                     caught_df = df_wagon[
                         df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
                     ].copy()
@@ -8472,119 +8480,156 @@ elif sidebar_option == "Strength vs Weakness":
                         st.info(f"No caught dismissals for {batter_name}.")
                         return
                 
-                    # Extract coordinates and details for hover
+                    # Ensure wagon coords exist
                     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
                         st.warning("Missing 'wagonX' or 'wagonY' columns.")
                         return
                 
-                    # Required columns for hover (adjust if names differ)
-                    required_cols = ['wagonX', 'wagonY', 'bowler', 'bowl_style', 'line', 'length', 'shot']  # 'shot' assuming it's the column for shot played
-                    missing_cols = [col for col in required_cols if col not in caught_df.columns]
-                    if missing_cols:
-                        st.warning(f"Missing columns for hover: {missing_cols}. Hover will show available info only.")
+                    # Convert coordinates to numeric, drop rows that can't be converted
+                    caught_df['wagonX'] = pd.to_numeric(caught_df['wagonX'], errors='coerce')
+                    caught_df['wagonY'] = pd.to_numeric(caught_df['wagonY'], errors='coerce')
+                    caught_df = caught_df.dropna(subset=['wagonX', 'wagonY']).copy()
+                    if caught_df.empty:
+                        st.info("No valid wagon coordinates for caught dismissals.")
+                        return
                 
-                    # Scale coordinates to normalized -1 to 1
-                    center_x = 184
-                    center_y = 184
-                    radius = 184
+                    # Compute normalized coordinates in [-1, 1] space (centered)
+                    # NOTE: keep these params in sync with how you originally scaled wagon coordinates
+                    center_x = 184.0
+                    center_y = 184.0
+                    radius = 184.0
+                
                     caught_df['x_plot'] = (caught_df['wagonX'].astype(float) - center_x) / radius
-                    caught_df['y_plot'] = - (caught_df['wagonY'].astype(float) - center_y) / radius  # flip Y (positive down)
+                    caught_df['y_plot'] = - (caught_df['wagonY'].astype(float) - center_y) / radius  # flip Y so positive is up
                 
-                    # LHB flip X if needed
-
+                    # Detect LHB from df_wagon context (defensive)
+                    batting_style_val = None
+                    if 'bat_hand' in df_wagon.columns and not df_wagon.empty:
+                        try:
+                            batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                        except Exception:
+                            batting_style_val = None
+                    is_lhb = False
+                    if batting_style_val is not None:
+                        try:
+                            is_lhb = str(batting_style_val).strip().upper().startswith('L')
+                        except Exception:
+                            is_lhb = False
                 
-                    # Filter only points inside the circle (using circle formula)
+                    # Filter only points inside the circle (radius = 1 after normalization)
                     caught_df['distance'] = np.sqrt(caught_df['x_plot']**2 + caught_df['y_plot']**2)
-                    caught_df = caught_df[caught_df['distance'] <= 1]  # radius 1 in normalized space
+                    caught_df = caught_df[caught_df['distance'] <= 1].copy()
                     if caught_df.empty:
                         st.info(f"No caught dismissals inside the field for {batter_name}.")
                         return
-                    # ---------- LHB DETECTION ----------
-                    st.write(df_wagon.columns)
-                    st.write(df_wagon.bat_hand.unique())
-                    batting_style_val = (
-                        df_wagon['bat_hand'].iloc[0]
-                        if 'bat_hand' in df_wagon.columns and not df_wagon.empty
-                        else 'RHB'
-                    )
-                    is_lhb = str(batting_style_val).upper().startswith('L')
-
-                    # Create interactive Plotly figure
+                
+                    # Prepare hover columns robustly
+                    hover_cols = []
+                    hover_candidates = ['bowler', 'bowl_style', 'line', 'length', 'shot', 'dismissal']
+                    for c in hover_candidates:
+                        if c in caught_df.columns:
+                            hover_cols.append(c)
+                    if not hover_cols:
+                        # fallback to whatever columns exist (limit to a few)
+                        hover_cols = list(caught_df.columns[:5])
+                
+                    # Helper: transform an x coordinate if LHB (vertical mirror)
+                    def transform_x(x):
+                        return -x if is_lhb else x
+                
+                    # Start building figure
                     fig = go.Figure()
                 
-                    # Outer field: dark green circle
-                    fig.add_shape(type="circle", xref="x", yref="y",
-                                  x0=-1, y0=-1, x1=1, y1=1,
-                                  fillcolor="#228B22", line_color="black", opacity=1, layer="below")
+                    # Outer field: dark green circle (symmetric, doesn't need flip)
+                    # But to keep logic unified, compute shape coordinates then enforce x0<x1
+                    def add_circle(fig_obj, x0_raw, y0, x1_raw, y1, **shape_kwargs):
+                        tx0 = transform_x(x0_raw)
+                        tx1 = transform_x(x1_raw)
+                        # ensure ordering
+                        x0, x1 = (min(tx0, tx1), max(tx0, tx1))
+                        fig_obj.add_shape(type="circle", xref="x", yref="y",
+                                          x0=x0, y0=y0, x1=x1, y1=y1, **shape_kwargs)
                 
-                    # Inner circle: lighter green
-                    fig.add_shape(type="circle", xref="x", yref="y",
-                                  x0=-0.5, y0=-0.5, x1=0.5, y1=0.5,
-                                  fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
+                    add_circle(fig,
+                               x0_raw=-1, y0=-1, x1_raw=1, y1=1,
+                               fillcolor="#228B22", line_color="black", opacity=1, layer="below")
                 
-                    # Pitch rectangle: tan
-                    # Pitch rectangle (tan) — mirror for LHB
-                    if not is_lhb:
-                        fig.add_shape(type="rect",
-                                      x0=-0.04, y0=-0.08, x1=0.04, y1=0.08,
-                                      fillcolor="tan", line_color=None, opacity=1, layer="above")
-                    else:
-                        fig.add_shape(type="rect",
-                                      x0=0.04, y0=-0.08, x1=-0.04, y1=0.08,
-                                      fillcolor="tan", line_color=None, opacity=1, layer="above")
-
+                    # Inner circle
+                    add_circle(fig,
+                               x0_raw=-0.5, y0=-0.5, x1_raw=0.5, y1=0.5,
+                               fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
                 
-                    # Radial lines (white, alpha 0.25)
-                    # Radial lines
-                    angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                    # Pitch rectangle (tan) - mirrored horizontally if LHB
+                    pitch_x0_raw, pitch_x1_raw = -0.04, 0.04
+                    tx0 = transform_x(pitch_x0_raw)
+                    tx1 = transform_x(pitch_x1_raw)
+                    pitch_x0, pitch_x1 = (min(tx0, tx1), max(tx0, tx1))
+                    fig.add_shape(type="rect", x0=pitch_x0, y0=-0.08, x1=pitch_x1, y1=0.08,
+                                  fillcolor="tan", line_color=None, opacity=1, layer="above")
+                
+                    # Radial lines (mirror the endpoints)
+                    angles = np.linspace(0, 2 * np.pi, 9)[:-1]
                     for angle in angles:
                         x_end = np.cos(angle)
                         y_end = np.sin(angle)
-                    
-                        if is_lhb:
-                            x_end = -x_end
-                    
-                        fig.add_trace(go.Scatter(
-                            x=[0, x_end],
-                            y=[0, y_end],
-                            mode='lines',
-                            line=dict(color='white', width=1),
-                            opacity=0.25,
-                            showlegend=False
-                        ))
-
+                        tx_end = transform_x(x_end)
+                        fig.add_trace(go.Scatter(x=[0, tx_end], y=[0, y_end],
+                                                 mode='lines',
+                                                 line=dict(color='white', width=1),
+                                                 opacity=0.25,
+                                                 showlegend=False))
                 
-                    # Plot red dots with hover data
+                    # Prepare marker coordinates (apply mirror to the x values only at plotting time)
+                    x_vals = caught_df['x_plot'].values
+                    y_vals = caught_df['y_plot'].values
+                    if is_lhb:
+                        x_vals = -x_vals
+                
+                    # Build hover customdata array in a stable order
+                    # Ensure we provide columns in the same order as hover template
+                    customdata_cols = []
+                    for colname in ['bowler', 'bowl_style', 'line', 'length', 'shot', 'dismissal']:
+                        if colname in caught_df.columns:
+                            customdata_cols.append(colname)
+                        else:
+                            customdata_cols.append(None)  # placeholder to keep index positions stable
+                
+                    # Create 2D array for customdata, replace None with empty strings
+                    customdata = []
+                    for _, row in caught_df.iterrows():
+                        row_vals = []
+                        for col in customdata_cols:
+                            if col and col in caught_df.columns:
+                                v = row[col]
+                                row_vals.append("" if pd.isna(v) else str(v))
+                            else:
+                                row_vals.append("")
+                        customdata.append(row_vals)
+                
                     hover_template = (
                         "<b>Bowler:</b> %{customdata[0]}<br>"
                         "<b>Bowler Style:</b> %{customdata[1]}<br>"
                         "<b>Line:</b> %{customdata[2]}<br>"
                         "<b>Length:</b> %{customdata[3]}<br>"
-                        "<b>Shot Played:</b> %{customdata[4]}<extra></extra>"
+                        "<b>Shot Played:</b> %{customdata[4]}<br>"
+                        "<b>Dismissal:</b> %{customdata[5]}<extra></extra>"
                     )
                 
-                    # Apply mirror transform for LHB (vertical axis through pitch)
-                    x_vals = caught_df['x_plot'].values
-                    y_vals = caught_df['y_plot'].values
-                    
-                    if is_lhb:
-                        x_vals = -x_vals  # vertical mirror
-                    
                     fig.add_trace(go.Scatter(
                         x=x_vals,
                         y=y_vals,
                         mode='markers',
                         marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
-                        customdata=caught_df[['bowler', 'bowl_style', 'line', 'length', 'shot']].values,
+                        customdata=customdata,
                         hovertemplate=hover_template,
                         name='Caught Dismissal Locations'
                     ))
-
                 
-                    # Layout
+                    # Layout: fix axis ranges and force equal aspect ratio so mirror is visible
+                    axis_range = 1.2
                     fig.update_layout(
-                        xaxis=dict(range=[-1.2, 1.2], showgrid=False, zeroline=False, visible=False),
-                        yaxis=dict(range=[-1.2, 1.2], showgrid=False, zeroline=False, visible=False),
+                        xaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False, constrain='domain'),
+                        yaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
                         showlegend=True,
                         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
                         width=800,
@@ -8592,8 +8637,12 @@ elif sidebar_option == "Strength vs Weakness":
                         margin=dict(l=0, r=0, t=0, b=0)
                     )
                 
+                    # Force equal scaling of x and y (important so mirror looks correct)
+                    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                
                     # Display in Streamlit
                     st.plotly_chart(fig, use_container_width=True)
+
 
                 
                 # def draw_caught_dismissals_wagon(df_wagon, batter_name):
