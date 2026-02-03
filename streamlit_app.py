@@ -8454,38 +8454,212 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
 
+
+                # Required imports (place near top of your module)
                 import streamlit as st
                 import pandas as pd
-                import plotly.graph_objects as go
                 import numpy as np
-                
-                import plotly.express as px
+                import matplotlib.pyplot as plt
+                import matplotlib
                 import plotly.graph_objects as go
-
-                def draw_caught_dismissals_wagon(df_wagon, batter_name):
-                    import numpy as np
-                    import plotly.graph_objects as go
-                    import streamlit as st
+                from matplotlib.figure import Figure as MplFigure
                 
-                    # Filter caught dismissals (defensive)
+                # -------------------------
+                # draw_wagon_if_available
+                # -------------------------
+                def draw_wagon_if_available(df_wagon, batter_name):
+                    """
+                    If a function draw_cricket_field_with_run_totals_requested exists, call it and display its figure.
+                    If that function returns a Matplotlib or Plotly figure, mirror it for LHB by transforming axes/traces/shapes.
+                    If it returns None but draws on the current Matplotlib figure, capture plt.gcf() and mirror that.
+                    If draw_cricket_field_with_run_totals_requested doesn't exist, warn the user.
+                    """
+                    # Determine LHB from df_wagon (defensive)
+                    batting_style_val = None
+                    if isinstance(df_wagon, pd.DataFrame) and 'bat_hand' in df_wagon.columns and not df_wagon.empty:
+                        try:
+                            batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                        except Exception:
+                            batting_style_val = None
+                    is_lhb = False
+                    if batting_style_val is not None:
+                        try:
+                            is_lhb = str(batting_style_val).strip().upper().startswith('L')
+                        except Exception:
+                            is_lhb = False
+                
+                    # If the external drawer exists, call it
+                    if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
+                        try:
+                            # Call it and capture return value (may be fig or None)
+                            fig_w = globals()['draw_cricket_field_with_run_totals_requested'](df_wagon, batter_name)
+                
+                            # If the function returned None, maybe it drew onto current matplotlib figure
+                            if fig_w is None:
+                                # Capture current Matplotlib figure
+                                fig_w = plt.gcf()
+                                # If still empty/no axes, we assume function didn't draw a matplotlib fig
+                                if not isinstance(fig_w, MplFigure) or len(fig_w.axes) == 0:
+                                    fig_w = None
+                
+                            # If it's a Matplotlib figure -> mirror by inverting x-axis on all axes
+                            if isinstance(fig_w, MplFigure):
+                                if is_lhb:
+                                    try:
+                                        for ax in fig_w.axes:
+                                            # invert x-axis to mirror vertically through the pitch center
+                                            # we use get_xlim then set reversed limits to mirror visually
+                                            try:
+                                                x0, x1 = ax.get_xlim()
+                                                ax.set_xlim(-x1, -x0)
+                                            except Exception:
+                                                # final fallback: invert axis direction
+                                                try:
+                                                    ax.invert_xaxis()
+                                                except Exception:
+                                                    pass
+                                    except Exception:
+                                        st.warning("Mirroring Matplotlib figure failed; showing unmirrored figure.")
+                                # Display Matplotlib figure using safe function if available
+                                safe_fn = globals().get('safe_st_pyplot', None)
+                                if callable(safe_fn):
+                                    # safe_fn may accept (fig, ...) or (ax.figure,...). We try to pass fig first.
+                                    try:
+                                        safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                    except Exception:
+                                        try:
+                                            # fallback to st.pyplot
+                                            st.pyplot(fig_w)
+                                        except Exception as e:
+                                            st.error(f"Failed to display Matplotlib figure: {e}")
+                                else:
+                                    try:
+                                        st.pyplot(fig_w)
+                                    except Exception as e:
+                                        st.error(f"Failed to display Matplotlib figure: {e}")
+                                return
+                
+                            # If it's a Plotly figure -> mirror by negating x coordinates and flipping shape x0/x1
+                            if isinstance(fig_w, go.Figure):
+                                if is_lhb:
+                                    try:
+                                        # Flip x-data for each trace that has x coordinates
+                                        for t in fig_w.data:
+                                            if hasattr(t, 'x') and t.x is not None:
+                                                try:
+                                                    new_x = [(-1 * xv) if xv is not None else None for xv in t.x]
+                                                    t.x = new_x
+                                                except Exception:
+                                                    # Some traces have numpy arrays, handle that
+                                                    try:
+                                                        arr = np.array(t.x, dtype=float)
+                                                        t.x = (-arr).tolist()
+                                                    except Exception:
+                                                        pass
+                                        # Flip shapes in layout
+                                        shapes = fig_w.layout.shapes
+                                        if shapes is not None:
+                                            new_shapes = []
+                                            for s in shapes:
+                                                sdict = dict(s)
+                                                # If shape has x0/x1, flip them
+                                                if 'x0' in sdict and 'x1' in sdict:
+                                                    try:
+                                                        old_x0 = float(sdict['x0'])
+                                                        old_x1 = float(sdict['x1'])
+                                                        sdict['x0'] = -old_x1
+                                                        sdict['x1'] = -old_x0
+                                                    except Exception:
+                                                        pass
+                                                new_shapes.append(sdict)
+                                            fig_w.layout.shapes = new_shapes
+                                        # Flip any xaxis range if present
+                                        try:
+                                            if hasattr(fig_w.layout, 'xaxis') and fig_w.layout.xaxis is not None:
+                                                xr = fig_w.layout.xaxis.range
+                                                if xr is not None and len(xr) == 2:
+                                                    fig_w.layout.xaxis.range = [-float(xr[1]), -float(xr[0])]
+                                        except Exception:
+                                            pass
+                                        # enforce equal aspect ratio for clarity
+                                        try:
+                                            fig_w.update_yaxes(scaleanchor="x", scaleratio=1)
+                                        except Exception:
+                                            pass
+                                    except Exception as e:
+                                        st.warning(f"Mirroring Plotly figure failed: {e}")
+                                # Display Plotly figure
+                                try:
+                                    st.plotly_chart(fig_w, use_container_width=True)
+                                except Exception as e:
+                                    st.error(f"Failed to display Plotly figure: {e}")
+                                return
+                
+                            # If fig_w is None here, the external function did not return a figure we could capture
+                            # Let’s try to show the current matplotlib figure if present
+                            try:
+                                cur_fig = plt.gcf()
+                                if isinstance(cur_fig, MplFigure) and len(cur_fig.axes) > 0:
+                                    if is_lhb:
+                                        try:
+                                            for ax in cur_fig.axes:
+                                                x0, x1 = ax.get_xlim()
+                                                ax.set_xlim(-x1, -x0)
+                                        except Exception:
+                                            try:
+                                                for ax in cur_fig.axes:
+                                                    ax.invert_xaxis()
+                                            except Exception:
+                                                pass
+                                    safe_fn = globals().get('safe_st_pyplot', None)
+                                    if callable(safe_fn):
+                                        try:
+                                            safe_fn(cur_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                        except Exception:
+                                            st.pyplot(cur_fig)
+                                    else:
+                                        st.pyplot(cur_fig)
+                                    return
+                            except Exception:
+                                pass
+                
+                            # If we got here, external function ran but we couldn't obtain or display its figure; show message
+                            st.warning("The wagon drawing function executed but returned no displayable figure. It may draw directly to a canvas that couldn't be captured.")
+                            return
+                
+                        except Exception as e:
+                            st.error(f"Wagon drawing function exists but raised: {e}")
+                            return
+                    else:
+                        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                
+                
+                # -------------------------
+                # draw_caught_dismissals_wagon (Plotly)
+                # -------------------------
+                def draw_caught_dismissals_wagon(df_wagon, batter_name):
+                    """
+                    Plotly wagon chart for caught dismissals. Mirrors vertically (left-right) when batter is LHB.
+                    """
+                    # Defensive checks
+                    if not isinstance(df_wagon, pd.DataFrame):
+                        st.warning("draw_caught_dismissals_wagon expects a DataFrame")
+                        return
+                
                     if 'dismissal' not in df_wagon.columns:
                         st.warning("No 'dismissal' column present — cannot filter caught dismissals.")
                         return
                 
-                    caught_df = df_wagon[
-                        df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
-                    ].copy()
-                
+                    caught_df = df_wagon[df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)].copy()
                     if caught_df.empty:
                         st.info(f"No caught dismissals for {batter_name}.")
                         return
                 
-                    # Ensure wagon coords exist
                     if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
                         st.warning("Missing 'wagonX' or 'wagonY' columns.")
                         return
                 
-                    # Convert coordinates to numeric, drop rows that can't be converted
+                    # Numeric conversion and drop invalid
                     caught_df['wagonX'] = pd.to_numeric(caught_df['wagonX'], errors='coerce')
                     caught_df['wagonY'] = pd.to_numeric(caught_df['wagonY'], errors='coerce')
                     caught_df = caught_df.dropna(subset=['wagonX', 'wagonY']).copy()
@@ -8493,16 +8667,14 @@ elif sidebar_option == "Strength vs Weakness":
                         st.info("No valid wagon coordinates for caught dismissals.")
                         return
                 
-                    # Compute normalized coordinates in [-1, 1] space (centered)
-                    # NOTE: keep these params in sync with how you originally scaled wagon coordinates
+                    # Normalize coords to [-1,1] (match your earlier scaling)
                     center_x = 184.0
                     center_y = 184.0
                     radius = 184.0
-                
                     caught_df['x_plot'] = (caught_df['wagonX'].astype(float) - center_x) / radius
                     caught_df['y_plot'] = - (caught_df['wagonY'].astype(float) - center_y) / radius  # flip Y so positive is up
                 
-                    # Detect LHB from df_wagon context (defensive)
+                    # Detect LHB if any
                     batting_style_val = None
                     if 'bat_hand' in df_wagon.columns and not df_wagon.empty:
                         try:
@@ -8516,119 +8688,80 @@ elif sidebar_option == "Strength vs Weakness":
                         except Exception:
                             is_lhb = False
                 
-                    # Filter only points inside the circle (radius = 1 after normalization)
+                    # Filter to inside circle
                     caught_df['distance'] = np.sqrt(caught_df['x_plot']**2 + caught_df['y_plot']**2)
                     caught_df = caught_df[caught_df['distance'] <= 1].copy()
                     if caught_df.empty:
                         st.info(f"No caught dismissals inside the field for {batter_name}.")
                         return
                 
-                    # Prepare hover columns robustly
-                    hover_cols = []
+                    # Choose hover columns
                     hover_candidates = ['bowler', 'bowl_style', 'line', 'length', 'shot', 'dismissal']
-                    for c in hover_candidates:
-                        if c in caught_df.columns:
-                            hover_cols.append(c)
-                    if not hover_cols:
-                        # fallback to whatever columns exist (limit to a few)
-                        hover_cols = list(caught_df.columns[:5])
+                    customdata_cols = [c for c in hover_candidates if c in caught_df.columns]
+                    # Build customdata rows
+                    customdata = []
+                    for _, row in caught_df.iterrows():
+                        customdata.append([("" if pd.isna(row.get(c, "")) else str(row.get(c, ""))) for c in customdata_cols])
                 
-                    # Helper: transform an x coordinate if LHB (vertical mirror)
-                    def transform_x(x):
-                        return -x if is_lhb else x
-                
-                    # Start building figure
-                    fig = go.Figure()
-                
-                    # Outer field: dark green circle (symmetric, doesn't need flip)
-                    # But to keep logic unified, compute shape coordinates then enforce x0<x1
-                    def add_circle(fig_obj, x0_raw, y0, x1_raw, y1, **shape_kwargs):
-                        tx0 = transform_x(x0_raw)
-                        tx1 = transform_x(x1_raw)
-                        # ensure ordering
-                        x0, x1 = (min(tx0, tx1), max(tx0, tx1))
-                        fig_obj.add_shape(type="circle", xref="x", yref="y",
-                                          x0=x0, y0=y0, x1=x1, y1=y1, **shape_kwargs)
-                
-                    add_circle(fig,
-                               x0_raw=-1, y0=-1, x1_raw=1, y1=1,
-                               fillcolor="#228B22", line_color="black", opacity=1, layer="below")
-                
-                    # Inner circle
-                    add_circle(fig,
-                               x0_raw=-0.5, y0=-0.5, x1_raw=0.5, y1=0.5,
-                               fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
-                
-                    # Pitch rectangle (tan) - mirrored horizontally if LHB
-                    pitch_x0_raw, pitch_x1_raw = -0.04, 0.04
-                    tx0 = transform_x(pitch_x0_raw)
-                    tx1 = transform_x(pitch_x1_raw)
-                    pitch_x0, pitch_x1 = (min(tx0, tx1), max(tx0, tx1))
-                    fig.add_shape(type="rect", x0=pitch_x0, y0=-0.08, x1=pitch_x1, y1=0.08,
-                                  fillcolor="tan", line_color=None, opacity=1, layer="above")
-                
-                    # Radial lines (mirror the endpoints)
-                    angles = np.linspace(0, 2 * np.pi, 9)[:-1]
-                    for angle in angles:
-                        x_end = np.cos(angle)
-                        y_end = np.sin(angle)
-                        tx_end = transform_x(x_end)
-                        fig.add_trace(go.Scatter(x=[0, tx_end], y=[0, y_end],
-                                                 mode='lines',
-                                                 line=dict(color='white', width=1),
-                                                 opacity=0.25,
-                                                 showlegend=False))
-                
-                    # Prepare marker coordinates (apply mirror to the x values only at plotting time)
+                    # Transform x values for plotting according to LHB
                     x_vals = caught_df['x_plot'].values
                     y_vals = caught_df['y_plot'].values
                     if is_lhb:
                         x_vals = -x_vals
                 
-                    # Build hover customdata array in a stable order
-                    # Ensure we provide columns in the same order as hover template
-                    customdata_cols = []
-                    for colname in ['bowler', 'bowl_style', 'line', 'length', 'shot', 'dismissal']:
-                        if colname in caught_df.columns:
-                            customdata_cols.append(colname)
+                    # Build the figure
+                    fig = go.Figure()
+                
+                    # Circles (outer + inner) using add_shape but ensuring flipped coordinates if LHB
+                    def add_circle_shape(fig_obj, x0_raw, y0, x1_raw, y1, **kwargs):
+                        if is_lhb:
+                            tx0 = -x1_raw
+                            tx1 = -x0_raw
                         else:
-                            customdata_cols.append(None)  # placeholder to keep index positions stable
+                            tx0 = x0_raw
+                            tx1 = x1_raw
+                        # ensure ordering
+                        x0_, x1_ = min(tx0, tx1), max(tx0, tx1)
+                        fig_obj.add_shape(type="circle", xref="x", yref="y", x0=x0_, y0=y0, x1=x1_, y1=y1, **kwargs)
                 
-                    # Create 2D array for customdata, replace None with empty strings
-                    customdata = []
-                    for _, row in caught_df.iterrows():
-                        row_vals = []
-                        for col in customdata_cols:
-                            if col and col in caught_df.columns:
-                                v = row[col]
-                                row_vals.append("" if pd.isna(v) else str(v))
-                            else:
-                                row_vals.append("")
-                        customdata.append(row_vals)
+                    add_circle_shape(fig, -1, -1, 1, 1, fillcolor="#228B22", line_color="black", opacity=1, layer="below")
+                    add_circle_shape(fig, -0.5, -0.5, 0.5, 0.5, fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
                 
-                    hover_template = (
-                        "<b>Bowler:</b> %{customdata[0]}<br>"
-                        "<b>Bowler Style:</b> %{customdata[1]}<br>"
-                        "<b>Line:</b> %{customdata[2]}<br>"
-                        "<b>Length:</b> %{customdata[3]}<br>"
-                        "<b>Shot Played:</b> %{customdata[4]}<br>"
-                        "<b>Dismissal:</b> %{customdata[5]}<extra></extra>"
-                    )
+                    # Pitch rectangle (tan) - mirrored if LHB
+                    pitch_x0, pitch_x1 = (-0.04, 0.04)
+                    if is_lhb:
+                        pitch_x0, pitch_x1 = (-pitch_x1, -pitch_x0)
+                    fig.add_shape(type="rect", x0=pitch_x0, y0=-0.08, x1=pitch_x1, y1=0.08,
+                                  fillcolor="tan", line_color=None, opacity=1, layer="above")
                 
+                    # Radial lines (mirror endpoints)
+                    angles = np.linspace(0, 2*np.pi, 9)[:-1]
+                    for angle in angles:
+                        x_end = np.cos(angle)
+                        y_end = np.sin(angle)
+                        if is_lhb:
+                            x_end = -x_end
+                        fig.add_trace(go.Scatter(x=[0, x_end], y=[0, y_end],
+                                                 mode='lines', line=dict(color='white', width=1), opacity=0.25, showlegend=False))
+                
+                    # Plot dismissal points
                     fig.add_trace(go.Scatter(
                         x=x_vals,
                         y=y_vals,
                         mode='markers',
                         marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
                         customdata=customdata,
-                        hovertemplate=hover_template,
+                        hovertemplate=(
+                            "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
+                            "<extra></extra>"
+                        ),
                         name='Caught Dismissal Locations'
                     ))
                 
-                    # Layout: fix axis ranges and force equal aspect ratio so mirror is visible
+                    # Layout & equal aspect scaling so mirror is obvious
                     axis_range = 1.2
                     fig.update_layout(
-                        xaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False, constrain='domain'),
+                        xaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
                         yaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
                         showlegend=True,
                         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
@@ -8636,11 +8769,12 @@ elif sidebar_option == "Strength vs Weakness":
                         height=800,
                         margin=dict(l=0, r=0, t=0, b=0)
                     )
+                    try:
+                        fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                    except Exception:
+                        pass
                 
-                    # Force equal scaling of x and y (important so mirror looks correct)
-                    fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                
-                    # Display in Streamlit
+                    # Finally display the plotly figure
                     st.plotly_chart(fig, use_container_width=True)
 
 
