@@ -2240,8 +2240,8 @@ def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
     ax.set_xlim(-1.2, 1.2)
     ax.set_ylim(-1.2, 1.2)
     plt.tight_layout(pad=0)
-    if is_lhb:
-        ax.invert_xaxis()
+    # if is_lhb:
+    #     ax.invert_xaxis()
 
     return fig
 # -----------------------
