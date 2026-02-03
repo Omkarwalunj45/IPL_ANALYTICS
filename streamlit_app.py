@@ -10134,6 +10134,70 @@ elif sidebar_option == "Strength vs Weakness":
                 marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
                 customdata=customdata,
                 hovertemplate=(
+                    "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
+                    "<extra></extra>"
+                ),
+                name='Caught Dismissal Locations'
+            ))
+        
+            # Layout & equal aspect scaling so mirror is obvious
+            axis_range = 1.2
+            fig.update_layout(
+                xaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
+                yaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
+                showlegend=True,
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                width=800,
+                height=800,
+                margin=dict(l=0, r=0, t=0, b=0)
+            )
+            try:
+                fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            except Exception:
+                pass
+        
+            # Finally display the plotly figure
+            st.plotly_chart(fig, use_container_width=True)
+        
+            # Circles and pitch: if normalize_to_rhb True, use canonical RHB shapes; if False and LHB, flip x coords for shapes
+            def add_circle_shape(fig_obj, x0_raw, y0, x1_raw, y1, **kwargs):
+                if (not normalize_to_rhb) and is_lhb:
+                    tx0 = -x1_raw
+                    tx1 = -x0_raw
+                else:
+                    tx0 = x0_raw
+                    tx1 = x1_raw
+                x0_, x1_ = min(tx0, tx1), max(tx0, tx1)
+                fig_obj.add_shape(type="circle", xref="x", yref="y", x0=x0_, y0=y0, x1=x1_, y1=y1, **kwargs)
+        
+            add_circle_shape(fig, -1, -1, 1, 1, fillcolor="#228B22", line_color="black", opacity=1, layer="below")
+            add_circle_shape(fig, -0.5, -0.5, 0.5, 0.5, fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
+        
+            # Pitch rectangle (tan)
+            pitch_x0, pitch_x1 = (-0.04, 0.04)
+            if (not normalize_to_rhb) and is_lhb:
+                pitch_x0, pitch_x1 = (-pitch_x1, -pitch_x0)
+            fig.add_shape(type="rect", x0=pitch_x0, y0=-0.08, x1=pitch_x1, y1=0.08,
+                          fillcolor="tan", line_color=None, opacity=1, layer="above")
+        
+            # Radial lines (mirror endpoints if LHB & not normalised)
+            angles = np.linspace(0, 2*np.pi, 9)[:-1]
+            for angle in angles:
+                x_end = np.cos(angle)
+                y_end = np.sin(angle)
+                if (not normalize_to_rhb) and is_lhb:
+                    x_end = -x_end
+                fig.add_trace(go.Scatter(x=[0, x_end], y=[0, y_end],
+                                         mode='lines', line=dict(color='white', width=1), opacity=0.25, showlegend=False))
+        
+            # Plot dismissal points (use x_vals,y_vals filtered earlier)
+            fig.add_trace(go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode='markers',
+                marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
+                customdata=customdata,
+                hovertemplate=(
                     "<br>".join([f"<b>{col}:</b> %{customdata[{i}]}" for i, col in enumerate(customdata_cols)]) +
                     "<extra></extra>"
                 ),
