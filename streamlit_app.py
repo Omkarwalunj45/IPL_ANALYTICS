@@ -9853,6 +9853,237 @@ elif sidebar_option == "Strength vs Weakness":
         
     else:
         st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Bowling — {player_selected}</div>", unsafe_allow_html=True)
+        # ============================================================================
+# BOWLER ANALYSIS - INTERACTIVE CAUGHT DISMISSALS WAGON WHEEL (COMPLETE)
+# ============================================================================
+
+        def draw_bowler_caught_dismissals_wagon_interactive(df_wagon, bowler_name):
+            """
+            Interactive wagon wheel showing caught dismissals FOR A BOWLER with hover info.
+            Only shows catches within the boundary circle.
+            Completely independent - uses 'bowl' column instead of 'bat'.
+            """
+            import plotly.graph_objects as go
+            import numpy as np
+            import pandas as pd
+            import streamlit as st
+            
+            # Filter caught dismissals FOR THIS BOWLER
+            if 'bowl' not in df_wagon.columns:
+                st.warning("No 'bowl' column found - cannot filter by bowler.")
+                return
+            
+            # Filter for this specific bowler's deliveries that resulted in caught dismissals
+            caught_df = df_wagon[
+                (df_wagon['bowl'] == bowler_name) &
+                (df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False))
+            ].copy()
+            
+            if caught_df.empty:
+                st.info(f"No caught dismissals for bowler {bowler_name}.")
+                return
+            
+            # Check for required columns
+            if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                st.warning("Missing 'wagonX' or 'wagonY' columns.")
+                return
+            
+            # Scale coordinates to normalized -1 to 1
+            center_x = 184
+            center_y = 184
+            radius = 184
+            
+            caught_df['wagonX'] = pd.to_numeric(caught_df['wagonX'], errors='coerce')
+            caught_df['wagonY'] = pd.to_numeric(caught_df['wagonY'], errors='coerce')
+            caught_df = caught_df.dropna(subset=['wagonX', 'wagonY'])
+            
+            if caught_df.empty:
+                st.info(f"No valid coordinates for caught dismissals.")
+                return
+            
+            caught_df['x_plot'] = (caught_df['wagonX'].astype(float) - center_x) / radius
+            caught_df['y_plot'] = -(caught_df['wagonY'].astype(float) - center_y) / radius
+            
+            # Detect batter handedness (to flip or not)
+            batting_style_val = caught_df['bat_hand'].iloc[0] if 'bat_hand' in caught_df.columns and not caught_df.empty else 'R'
+            is_lhb = str(batting_style_val).upper().startswith('L')
+            if is_lhb:
+                caught_df['x_plot'] = -caught_df['x_plot']
+            
+            # FILTER: Only keep dots within the boundary circle (radius = 1)
+            caught_df['distance'] = np.sqrt(caught_df['x_plot']**2 + caught_df['y_plot']**2)
+            caught_df = caught_df[caught_df['distance'] <= 1.0].copy()
+            
+            if caught_df.empty:
+                st.info(f"No caught dismissals within the boundary for bowler {bowler_name}.")
+                return
+            
+            # Prepare hover text with available info (BOWLER-SPECIFIC COLUMNS)
+            hover_texts = []
+            for _, row in caught_df.iterrows():
+                parts = []
+                
+                # Show BATTER name (who got out)
+                if 'bat' in caught_df.columns:
+                    parts.append(f"<b>Batter:</b> {row['bat']}")
+                
+                # Show bowler (should be same as bowler_name)
+                if 'bowl' in caught_df.columns:
+                    parts.append(f"<b>Bowler:</b> {row['bowl']}")
+                
+                if 'bowl_style' in caught_df.columns:
+                    parts.append(f"<b>Bowler Style:</b> {row['bowl_style']}")
+                
+                if 'bowl_kind' in caught_df.columns:
+                    parts.append(f"<b>Bowler Kind:</b> {row['bowl_kind']}")
+                
+                if 'line' in caught_df.columns:
+                    parts.append(f"<b>Line:</b> {row['line']}")
+                
+                if 'length' in caught_df.columns:
+                    parts.append(f"<b>Length:</b> {row['length']}")
+                
+                if 'shot' in caught_df.columns:
+                    parts.append(f"<b>Shot:</b> {row['shot']}")
+                
+                if 'score' in caught_df.columns or 'runs' in caught_df.columns:
+                    runs = row.get('score', row.get('runs', '-'))
+                    parts.append(f"<b>Runs:</b> {runs}")
+                
+                # Add dismissal info
+                if 'dismissal' in caught_df.columns:
+                    parts.append(f"<b>Dismissal:</b> {row['dismissal']}")
+                
+                hover_texts.append("<br>".join(parts))
+            
+            # Create Plotly figure
+            fig = go.Figure()
+            
+            # Outer boundary circle (dark green)
+            theta_boundary = np.linspace(0, 2*np.pi, 100)
+            fig.add_trace(go.Scatter(
+                x=np.cos(theta_boundary),
+                y=np.sin(theta_boundary),
+                mode='lines',
+                line=dict(color='black', width=3),
+                fill='toself',
+                fillcolor='rgba(34, 139, 34, 0.3)',  # #228B22 with transparency
+                hoverinfo='skip',
+                showlegend=False
+            ))
+            
+            # Inner circle (lighter green)
+            theta_inner = np.linspace(0, 2*np.pi, 100)
+            fig.add_trace(go.Scatter(
+                x=0.5 * np.cos(theta_inner),
+                y=0.5 * np.sin(theta_inner),
+                mode='lines',
+                line=dict(color='white', width=1),
+                fill='toself',
+                fillcolor='rgba(102, 187, 106, 0.4)',  # #66bb6a
+                hoverinfo='skip',
+                showlegend=False
+            ))
+            
+            # Pitch rectangle
+            pitch_x = [-0.04, 0.04, 0.04, -0.04, -0.04]
+            pitch_y = [-0.08, -0.08, 0.08, 0.08, -0.08]
+            fig.add_trace(go.Scatter(
+                x=pitch_x,
+                y=pitch_y,
+                mode='lines',
+                fill='toself',
+                fillcolor='tan',
+                line=dict(color='tan', width=1),
+                hoverinfo='skip',
+                showlegend=False
+            ))
+            
+            # Radial lines
+            angles = np.linspace(0, 2*np.pi, 9)[:-1]
+            for angle in angles:
+                fig.add_trace(go.Scatter(
+                    x=[0, np.cos(angle)],
+                    y=[0, np.sin(angle)],
+                    mode='lines',
+                    line=dict(color='rgba(255, 255, 255, 0.25)', width=1),
+                    hoverinfo='skip',
+                    showlegend=False
+                ))
+            
+            # Plot caught dismissal dots with hover info
+            fig.add_trace(go.Scatter(
+                x=caught_df['x_plot'],
+                y=caught_df['y_plot'],
+                mode='markers',
+                marker=dict(
+                    size=12,
+                    color='red',
+                    opacity=0.9,
+                    line=dict(color='black', width=1.5)
+                ),
+                text=hover_texts,
+                hovertemplate='%{text}<extra></extra>',
+                name='Caught Dismissals',
+                showlegend=True
+            ))
+            
+            # Layout
+            fig.update_layout(
+                title=dict(
+                    text=f"{bowler_name} - Caught Dismissals (Hover for details)",
+                    font=dict(size=16, color='black')
+                ),
+                width=700,
+                height=700,
+                xaxis=dict(
+                    range=[-1.2, 1.2],
+                    showgrid=False,
+                    zeroline=False,
+                    showticklabels=False,
+                    scaleanchor='y',
+                    scaleratio=1
+                ),
+                yaxis=dict(
+                    range=[-1.2, 1.2],
+                    showgrid=False,
+                    zeroline=False,
+                    showticklabels=False
+                ),
+                plot_bgcolor='white',
+                hovermode='closest',
+                showlegend=True,
+                legend=dict(
+                    x=0.02,
+                    y=0.98,
+                    bgcolor='rgba(255, 255, 255, 0.8)',
+                    bordercolor='black',
+                    borderwidth=1
+                )
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Optional: Show summary table
+            st.markdown(f"**Total caught dismissals within boundary:** {len(caught_df)}")
+            
+            # Show detailed table with dismissal info
+            if not caught_df.empty:
+                display_cols = []
+                for col in ['bat', 'bowl', 'bowl_style', 'bowl_kind', 'line', 'length', 'shot', 'score', 'dismissal']:
+                    if col in caught_df.columns:
+                        display_cols.append(col)
+                
+                if display_cols:
+                    with st.expander("📊 View Dismissal Details Table"):
+                        st.dataframe(
+                            caught_df[display_cols].reset_index(drop=True),
+                            use_container_width=True
+                        )
+
+
+
+        
         def draw_bowler_wagon_if_available(df_wagon, bowler_name, normalize_to_rhb=True):
             """
             Wrapper for drawing bowler wagon wheel (runs conceded by zone).
@@ -10731,7 +10962,7 @@ elif sidebar_option == "Strength vs Weakness":
 # EXECUTION CODE - Place this where you select batter hand in bowler analysis
 # ============================================================================
 
-# When user selects a batter hand (already in your code):
+        # When user selects a batter hand (already in your code):
         if chosen_hand and chosen_hand != '-- none --':
             def filter_by_hand(df, col='bat_hand', hand=chosen_hand):
                 if col not in df.columns:
@@ -10751,16 +10982,16 @@ elif sidebar_option == "Strength vs Weakness":
             else:
                 st.markdown(f"### Detailed view — Batter Hand: {chosen_hand}")
                 
-                # BOWLER WAGON WHEEL (runs conceded by zone)
-                draw_bowler_wagon_if_available(df_use, player_selected)
+                # Regular wagon wheel (if you have it)
+                # draw_wagon_if_available(df_use, player_selected)
                 
-                # BOWLER CAUGHT DISMISSALS WAGON
+                # BOWLER CAUGHT DISMISSALS INTERACTIVE WAGON
                 st.markdown(f"#### {player_selected}'s Caught Dismissals")
-                draw_bowler_caught_dismissals_wagon(df_use, player_selected)
+                draw_bowler_caught_dismissals_wagon_interactive(df_use, player_selected)
                 
-                # PITCH MAPS
+                # Pitch maps
                 display_pitchmaps_from_df(df_use, f"vs Batter Hand: {chosen_hand}")
-        # ---------- When user selects a batter hand ----------
+                # ---------- When user selects a batter hand ----------
 
 
 
