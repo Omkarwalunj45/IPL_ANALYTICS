@@ -8468,170 +8468,43 @@ elif sidebar_option == "Strength vs Weakness":
                 # draw_wagon_if_available
                 # -------------------------
                 def draw_wagon_if_available(df_wagon, batter_name):
-                    """
-                    If a function draw_cricket_field_with_run_totals_requested exists, call it and display its figure.
-                    If that function returns a Matplotlib or Plotly figure, mirror it for LHB by transforming axes/traces/shapes.
-                    If it returns None but draws on the current Matplotlib figure, capture plt.gcf() and mirror that.
-                    If draw_cricket_field_with_run_totals_requested doesn't exist, warn the user.
-                    """
-                    # Determine LHB from df_wagon (defensive)
-                    batting_style_val = None
-                    if isinstance(df_wagon, pd.DataFrame) and 'bat_hand' in df_wagon.columns and not df_wagon.empty:
-                        try:
-                            batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
-                        except Exception:
-                            batting_style_val = None
+                    import matplotlib.pyplot as plt
+                    import streamlit as st
+                
+                    # Detect LHB
                     is_lhb = False
-                    if batting_style_val is not None:
+                    if 'bat_hand' in df_wagon.columns and not df_wagon.empty:
                         try:
-                            is_lhb = str(batting_style_val).strip().upper().startswith('L')
-                        except Exception:
-                            is_lhb = False
+                            is_lhb = str(df_wagon['bat_hand'].dropna().iloc[0]).upper().startswith('L')
+                        except:
+                            pass
                 
-                    # If the external drawer exists, call it
-                    if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
+                    if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(draw_cricket_field_with_run_totals_requested):
                         try:
-                            # Call it and capture return value (may be fig or None)
-                            fig_w = globals()['draw_cricket_field_with_run_totals_requested'](df_wagon, batter_name)
+                            # 1️⃣ Let the function draw the wagon (matplotlib)
+                            draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
                 
-                            # If the function returned None, maybe it drew onto current matplotlib figure
-                            if fig_w is None:
-                                # Capture current Matplotlib figure
-                                fig_w = plt.gcf()
-                                # If still empty/no axes, we assume function didn't draw a matplotlib fig
-                                if not isinstance(fig_w, MplFigure) or len(fig_w.axes) == 0:
-                                    fig_w = None
+                            # 2️⃣ Grab current figure + axes
+                            fig = plt.gcf()
+                            axes = fig.get_axes()
                 
-                            # If it's a Matplotlib figure -> mirror by inverting x-axis on all axes
-                            if isinstance(fig_w, MplFigure):
-                                if is_lhb:
-                                    try:
-                                        for ax in fig_w.axes:
-                                            # invert x-axis to mirror vertically through the pitch center
-                                            # we use get_xlim then set reversed limits to mirror visually
-                                            try:
-                                                x0, x1 = ax.get_xlim()
-                                                ax.set_xlim(-x1, -x0)
-                                            except Exception:
-                                                # final fallback: invert axis direction
-                                                try:
-                                                    ax.invert_xaxis()
-                                                except Exception:
-                                                    pass
-                                    except Exception:
-                                        st.warning("Mirroring Matplotlib figure failed; showing unmirrored figure.")
-                                # Display Matplotlib figure using safe function if available
-                                safe_fn = globals().get('safe_st_pyplot', None)
-                                if callable(safe_fn):
-                                    # safe_fn may accept (fig, ...) or (ax.figure,...). We try to pass fig first.
-                                    try:
-                                        safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                                    except Exception:
-                                        try:
-                                            # fallback to st.pyplot
-                                            st.pyplot(fig_w)
-                                        except Exception as e:
-                                            st.error(f"Failed to display Matplotlib figure: {e}")
-                                else:
-                                    try:
-                                        st.pyplot(fig_w)
-                                    except Exception as e:
-                                        st.error(f"Failed to display Matplotlib figure: {e}")
-                                return
+                            # 3️⃣ MIRROR HERE (THIS IS THE FIX)
+                            if is_lhb:
+                                for ax in axes:
+                                    ax.invert_xaxis()   # ✅ TRUE mirror image
                 
-                            # If it's a Plotly figure -> mirror by negating x coordinates and flipping shape x0/x1
-                            if isinstance(fig_w, go.Figure):
-                                if is_lhb:
-                                    try:
-                                        # Flip x-data for each trace that has x coordinates
-                                        for t in fig_w.data:
-                                            if hasattr(t, 'x') and t.x is not None:
-                                                try:
-                                                    new_x = [(-1 * xv) if xv is not None else None for xv in t.x]
-                                                    t.x = new_x
-                                                except Exception:
-                                                    # Some traces have numpy arrays, handle that
-                                                    try:
-                                                        arr = np.array(t.x, dtype=float)
-                                                        t.x = (-arr).tolist()
-                                                    except Exception:
-                                                        pass
-                                        # Flip shapes in layout
-                                        shapes = fig_w.layout.shapes
-                                        if shapes is not None:
-                                            new_shapes = []
-                                            for s in shapes:
-                                                sdict = dict(s)
-                                                # If shape has x0/x1, flip them
-                                                if 'x0' in sdict and 'x1' in sdict:
-                                                    try:
-                                                        old_x0 = float(sdict['x0'])
-                                                        old_x1 = float(sdict['x1'])
-                                                        sdict['x0'] = -old_x1
-                                                        sdict['x1'] = -old_x0
-                                                    except Exception:
-                                                        pass
-                                                new_shapes.append(sdict)
-                                            fig_w.layout.shapes = new_shapes
-                                        # Flip any xaxis range if present
-                                        try:
-                                            if hasattr(fig_w.layout, 'xaxis') and fig_w.layout.xaxis is not None:
-                                                xr = fig_w.layout.xaxis.range
-                                                if xr is not None and len(xr) == 2:
-                                                    fig_w.layout.xaxis.range = [-float(xr[1]), -float(xr[0])]
-                                        except Exception:
-                                            pass
-                                        # enforce equal aspect ratio for clarity
-                                        try:
-                                            fig_w.update_yaxes(scaleanchor="x", scaleratio=1)
-                                        except Exception:
-                                            pass
-                                    except Exception as e:
-                                        st.warning(f"Mirroring Plotly figure failed: {e}")
-                                # Display Plotly figure
-                                try:
-                                    st.plotly_chart(fig_w, use_container_width=True)
-                                except Exception as e:
-                                    st.error(f"Failed to display Plotly figure: {e}")
-                                return
-                
-                            # If fig_w is None here, the external function did not return a figure we could capture
-                            # Let’s try to show the current matplotlib figure if present
-                            try:
-                                cur_fig = plt.gcf()
-                                if isinstance(cur_fig, MplFigure) and len(cur_fig.axes) > 0:
-                                    if is_lhb:
-                                        try:
-                                            for ax in cur_fig.axes:
-                                                x0, x1 = ax.get_xlim()
-                                                ax.set_xlim(-x1, -x0)
-                                        except Exception:
-                                            try:
-                                                for ax in cur_fig.axes:
-                                                    ax.invert_xaxis()
-                                            except Exception:
-                                                pass
-                                    safe_fn = globals().get('safe_st_pyplot', None)
-                                    if callable(safe_fn):
-                                        try:
-                                            safe_fn(cur_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                                        except Exception:
-                                            st.pyplot(cur_fig)
-                                    else:
-                                        st.pyplot(cur_fig)
-                                    return
-                            except Exception:
-                                pass
-                
-                            # If we got here, external function ran but we couldn't obtain or display its figure; show message
-                            st.warning("The wagon drawing function executed but returned no displayable figure. It may draw directly to a canvas that couldn't be captured.")
-                            return
+                            # 4️⃣ Display safely
+                            safe_fn = globals().get('safe_st_pyplot', None)
+                            if callable(safe_fn):
+                                safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                            else:
+                                st.pyplot(fig)
                 
                         except Exception as e:
-                            st.error(f"Wagon drawing function exists but raised: {e}")
-                            return
+                            st.error(f"Wagon drawing function failed: {e}")
                     else:
-                        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                        st.warning("Wagon chart function not found.")
+
                 
                 
                 # -------------------------
