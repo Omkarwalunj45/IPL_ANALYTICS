@@ -8500,6 +8500,8 @@ elif sidebar_option == "Strength vs Weakness":
                         st.info(f"No caught dismissals inside the field for {batter_name}.")
                         return
                     # ---------- LHB DETECTION ----------
+                    st.write(df_wagon.columns)
+                    st.write(df_wagon.bat_hand.unique()
                     batting_style_val = (
                         df_wagon['bat_hand'].iloc[0]
                         if 'bat_hand' in df_wagon.columns and not df_wagon.empty
