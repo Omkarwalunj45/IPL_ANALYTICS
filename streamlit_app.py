@@ -9853,6 +9853,252 @@ elif sidebar_option == "Strength vs Weakness":
         
     else:
         st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Bowling — {player_selected}</div>", unsafe_allow_html=True)
+        def draw_bowler_wagon_if_available(df_wagon, bowler_name, normalize_to_rhb=True):
+            """
+            Wrapper for drawing bowler wagon wheel (runs conceded by zone).
+            Uses the same cricket field function but filtered for bowler deliveries.
+            
+            Args:
+                df_wagon: DataFrame with bowler's deliveries
+                bowler_name: Name of the bowler
+                normalize_to_rhb: If True, show in RHB frame; if False, mirror for LHB batters
+            """
+            import matplotlib.pyplot as plt
+            import streamlit as st
+            import inspect
+            
+            # Defensive check
+            if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+                st.warning("No wagon data available to draw.")
+                return
+            
+            # Detect batter handedness (since we're showing where bowler conceded runs)
+            batting_style_val = None
+            if 'bat_hand' in df_wagon.columns:
+                try:
+                    # For bowler analysis, we care about the batter's hand
+                    batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                except Exception:
+                    batting_style_val = None
+            is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+            
+            # Check function signature
+            draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
+            if draw_fn is None or not callable(draw_fn):
+                st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                return
+            
+            try:
+                sig = inspect.signature(draw_fn)
+                if 'normalize_to_rhb' in sig.parameters:
+                    # Call with the explicit flag (preferred)
+                    # Note: For bowler, we pass bowler_name but the function will use bat/batter columns for wagon zones
+                    fig = draw_fn(df_wagon, bowler_name, normalize_to_rhb=normalize_to_rhb)
+                else:
+                    # Older signature: call without flag
+                    fig = draw_fn(df_wagon, bowler_name)
+                
+                # Display the figure
+                if isinstance(fig, plt.Figure):
+                    safe_fn = globals().get('safe_st_pyplot', None)
+                    if callable(safe_fn):
+                        try:
+                            safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                        except Exception:
+                            st.pyplot(fig)
+                    else:
+                        st.pyplot(fig)
+                    return
+                
+                # If function returned None, capture current figure
+                if fig is None:
+                    mpl_fig = plt.gcf()
+                    if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
+                        safe_fn = globals().get('safe_st_pyplot', None)
+                        if callable(safe_fn):
+                            try:
+                                safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                            except Exception:
+                                st.pyplot(mpl_fig)
+                        else:
+                            st.pyplot(mpl_fig)
+                        return
+                
+                # If Plotly figure
+                if isinstance(fig, go.Figure):
+                    try:
+                        fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                    except Exception:
+                        pass
+                    st.plotly_chart(fig, use_container_width=True)
+                    return
+                
+                st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+            except Exception as e:
+                st.error(f"Wagon drawing function raised: {e}")
+        
+        
+        def draw_bowler_caught_dismissals_wagon(df_wagon, bowler_name, normalize_to_rhb=True):
+            """
+            Plotly wagon chart for caught dismissals taken by a bowler.
+            Shows where the bowler gets caught dismissals on the field.
+            
+            Args:
+                df_wagon: DataFrame with bowler's deliveries
+                bowler_name: Name of the bowler
+                normalize_to_rhb: If True, show in RHB frame; if False, mirror for LHB batters
+            """
+            # Defensive checks
+            if not isinstance(df_wagon, pd.DataFrame):
+                st.warning("draw_bowler_caught_dismissals_wagon expects a DataFrame")
+                return
+            
+            if 'dismissal' not in df_wagon.columns:
+                st.warning("No 'dismissal' column present — cannot filter caught dismissals.")
+                return
+            
+            # Filter for caught dismissals by this bowler
+            caught_df = df_wagon[
+                df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False)
+            ].copy()
+            
+            if caught_df.empty:
+                st.info(f"No caught dismissals for {bowler_name}.")
+                return
+            
+            if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                st.warning("Missing 'wagonX' or 'wagonY' columns.")
+                return
+            
+            # Numeric conversion and drop invalid
+            caught_df['wagonX'] = pd.to_numeric(caught_df['wagonX'], errors='coerce')
+            caught_df['wagonY'] = pd.to_numeric(caught_df['wagonY'], errors='coerce')
+            caught_df = caught_df.dropna(subset=['wagonX', 'wagonY']).copy()
+            
+            if caught_df.empty:
+                st.info("No valid wagon coordinates for caught dismissals.")
+                return
+            
+            # Normalize coords to [-1,1]
+            center_x = 184.0
+            center_y = 184.0
+            radius = 184.0
+            caught_df['x_plot'] = (caught_df['wagonX'].astype(float) - center_x) / radius
+            caught_df['y_plot'] = -(caught_df['wagonY'].astype(float) - center_y) / radius  # flip Y
+            
+            # Detect batter handedness (LHB vs RHB)
+            batting_style_val = None
+            if 'bat_hand' in df_wagon.columns and not df_wagon.empty:
+                try:
+                    batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                except Exception:
+                    batting_style_val = None
+            
+            is_lhb = False
+            if batting_style_val is not None:
+                try:
+                    is_lhb = str(batting_style_val).strip().upper().startswith('L')
+                except Exception:
+                    is_lhb = False
+            
+            # Apply display rule for handedness
+            x_vals = caught_df['x_plot'].values
+            y_vals = caught_df['y_plot'].values
+            if (not normalize_to_rhb) and is_lhb:
+                x_vals = -x_vals
+            
+            # Filter to inside circle
+            caught_df['distance'] = np.sqrt(x_vals**2 + y_vals**2)
+            caught_df = caught_df[caught_df['distance'] <= 1].copy()
+            
+            if caught_df.empty:
+                st.info(f"No caught dismissals inside the field for {bowler_name}.")
+                return
+            
+            # Prepare hover data - for bowler, show batter info
+            hover_candidates = ['bat', 'bowl_kind', 'line', 'length', 'shot', 'dismissal']
+            customdata_cols = [c for c in hover_candidates if c in caught_df.columns]
+            
+            customdata = []
+            for _, row in caught_df.iterrows():
+                customdata.append([
+                    ("" if pd.isna(row.get(c, "")) else str(row.get(c, ""))) 
+                    for c in customdata_cols
+                ])
+            
+            # Build the figure
+            fig = go.Figure()
+            
+            # Add field shapes
+            def add_circle_shape(fig_obj, x0_raw, y0, x1_raw, y1, **kwargs):
+                if (not normalize_to_rhb) and is_lhb:
+                    tx0 = -x1_raw
+                    tx1 = -x0_raw
+                else:
+                    tx0 = x0_raw
+                    tx1 = x1_raw
+                x0_, x1_ = min(tx0, tx1), max(tx0, tx1)
+                fig_obj.add_shape(type="circle", xref="x", yref="y", x0=x0_, y0=y0, x1=x1_, y1=y1, **kwargs)
+            
+            # Outer boundary
+            add_circle_shape(fig, -1, -1, 1, 1, fillcolor="#228B22", line_color="black", opacity=1, layer="below")
+            # Inner circle
+            add_circle_shape(fig, -0.5, -0.5, 0.5, 0.5, fillcolor="#66bb6a", line_color="white", opacity=1, layer="below")
+            
+            # Pitch rectangle
+            pitch_x0, pitch_x1 = (-0.04, 0.04)
+            if (not normalize_to_rhb) and is_lhb:
+                pitch_x0, pitch_x1 = (-pitch_x1, -pitch_x0)
+            fig.add_shape(type="rect", x0=pitch_x0, y0=-0.08, x1=pitch_x1, y1=0.08,
+                          fillcolor="tan", line_color=None, opacity=1, layer="above")
+            
+            # Radial lines
+            angles = np.linspace(0, 2*np.pi, 9)[:-1]
+            for angle in angles:
+                x_end = np.cos(angle)
+                y_end = np.sin(angle)
+                if (not normalize_to_rhb) and is_lhb:
+                    x_end = -x_end
+                fig.add_trace(go.Scatter(
+                    x=[0, x_end], y=[0, y_end],
+                    mode='lines', line=dict(color='white', width=1), 
+                    opacity=0.25, showlegend=False
+                ))
+            
+            # Plot dismissal points
+            hovertemplate_parts = [f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]
+            
+            fig.add_trace(go.Scatter(
+                x=x_vals,
+                y=y_vals,
+                mode='markers',
+                marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
+                customdata=customdata,
+                hovertemplate="<br>".join(hovertemplate_parts) + "<extra></extra>",
+                name='Caught Dismissal Locations'
+            ))
+            
+            # Layout
+            axis_range = 1.2
+            fig.update_layout(
+                title=f"{bowler_name} - Caught Dismissals (Hover for details)",
+                xaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
+                yaxis=dict(range=[-axis_range, axis_range], showgrid=False, zeroline=False, visible=False),
+                showlegend=True,
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
+                width=800,
+                height=800,
+                margin=dict(l=0, r=0, t=40, b=0)
+            )
+            
+            try:
+                fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            except Exception:
+                pass
+            
+            # Display
+            st.plotly_chart(fig, use_container_width=True)
+
         # ----------------------------
 # Bowler-specific helpers & pipeline
         # ----------------------------
@@ -10480,43 +10726,42 @@ elif sidebar_option == "Strength vs Weakness":
             else:
                 st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
     
-        # # ---------- When user selects a batter hand ----------
-        # if chosen_hand and chosen_hand != '-- none --':
-        #     # filter pf preferentially; else bdf - use substring contains for robustness
-        #     def filter_by_hand(df, col='bat_hand', hand=chosen_hand):
-        #         if col not in df.columns:
-        #             return df.iloc[0:0]
-        #         mask = df[col].astype(str).str.lower().str.contains(str(hand).lower(), na=False)
-        #         if not mask.any():
-        #             # fallback: exact match after norm
-        #             norm_hand = _norm_key(hand)
-        #             mask = df[col].apply(lambda x: _norm_key(x) == norm_hand)
-        #         return df[mask].copy()
-    
-        #     sel_pf = filter_by_hand(pf)
-        #     sel_bdf = filter_by_hand(bdf)
-    
-        #     df_use = sel_pf if not sel_pf.empty else sel_bdf
-        #     if df_use.empty:
-        #         st.info(f"No deliveries found for batter hand '{chosen_hand}'.")
-        #     else:
-        #         st.markdown(f"### Detailed view — Batter Hand: {chosen_hand}")
-        #         draw_wagon_if_available(df_use, player_selected)
-
-        #         # ---- NEW: Bowler caught dismissal wagon (HERE) ----
-        #         st.markdown("### Caught Dismissal Locations")
-        #         draw_bowler_caught_dismissals_wagon(df_use, player_selected)
-
-        #         display_pitchmaps_from_df(df_use, f"vs Batter Hand: {chosen_hand}")
         # ---------- When user selects a batter hand ----------
-        if chosen_hand:
-            show_bowler_detail_from_all(
-                df_all=bdf,                    # FULL dataset
-                player_selected=player_selected,
-                chosen_hand=chosen_hand,       # LHB / RHB only
-                normalize_to_rhb=True,         # keep broadcast-style consistency
-                title_suffix=f"vs Batter Hand: {chosen_hand}"
-            )
+# ============================================================================
+# EXECUTION CODE - Place this where you select batter hand in bowler analysis
+# ============================================================================
+
+# When user selects a batter hand (already in your code):
+        if chosen_hand and chosen_hand != '-- none --':
+            def filter_by_hand(df, col='bat_hand', hand=chosen_hand):
+                if col not in df.columns:
+                    return df.iloc[0:0]
+                mask = df[col].astype(str).str.lower().str.contains(str(hand).lower(), na=False)
+                if not mask.any():
+                    norm_hand = _norm_key(hand)
+                    mask = df[col].apply(lambda x: _norm_key(x) == norm_hand)
+                return df[mask].copy()
+        
+            sel_pf = filter_by_hand(pf)
+            sel_bdf = filter_by_hand(bdf)
+        
+            df_use = sel_pf if not sel_pf.empty else sel_bdf
+            if df_use.empty:
+                st.info(f"No deliveries found for batter hand '{chosen_hand}'.")
+            else:
+                st.markdown(f"### Detailed view — Batter Hand: {chosen_hand}")
+                
+                # BOWLER WAGON WHEEL (runs conceded by zone)
+                draw_bowler_wagon_if_available(df_use, player_selected)
+                
+                # BOWLER CAUGHT DISMISSALS WAGON
+                st.markdown(f"#### {player_selected}'s Caught Dismissals")
+                draw_bowler_caught_dismissals_wagon(df_use, player_selected)
+                
+                # PITCH MAPS
+                display_pitchmaps_from_df(df_use, f"vs Batter Hand: {chosen_hand}")
+        # ---------- When user selects a batter hand ----------
+
 
 
 
