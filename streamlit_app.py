@@ -9938,15 +9938,104 @@ elif sidebar_option == "Strength vs Weakness":
             vals = sorted({v for v in vals if str(v).strip() != ''})
             return vals
     
-        batter_hands_present = unique_vals_union('bat_hand')  # e.g. ['LHB', 'RHB']
-    
-        # UI controls for bowling exploration
-        st.markdown("## Bowler — Batter Hand exploration")
-        st.write("Select a Batter Hand to analyze.")
-        hand_opts = ['-- none --'] + batter_hands_present
-    
-        chosen_hand = st.selectbox("Batter Hand", options=hand_opts, index=0)
-    
+        # ---- CLEAN batter hand options ----
+        raw_hands = unique_vals_union('bat_hand')
+        
+        # Normalize to only LHB / RHB
+        clean_hands = []
+        for h in raw_hands:
+            if str(h).upper().startswith('L'):
+                clean_hands.append('LHB')
+            elif str(h).upper().startswith('R'):
+                clean_hands.append('RHB')
+        
+        clean_hands = sorted(set(clean_hands))
+        chosen_hand = st.selectbox("Batter Hand", options=clean_hands)
+
+        def draw_bowler_caught_dismissals_wagon(df_in, bowler_name):
+            """
+            Plot caught dismissal locations for a bowler (wagon-style field).
+            Uses wagonX / wagonY like batter version.
+            """
+            if df_in.empty:
+                st.info("No deliveries available.")
+                return
+        
+            # Filter caught dismissals credited to the bowler
+            if 'dismissal' not in df_in.columns or 'bowl' not in df_in.columns:
+                st.warning("Required columns missing for caught dismissal plot.")
+                return
+        
+            caught_df = df_in[
+                (df_in['bowl'] == bowler_name) &
+                (df_in['dismissal'].astype(str).str.lower().str.contains('caught', na=False))
+            ].copy()
+        
+            if caught_df.empty:
+                st.info("No caught dismissals for this bowler.")
+                return
+        
+            # Require wagon coordinates
+            if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                st.warning("Missing wagonX / wagonY columns.")
+                return
+        
+            # Normalize wagon coordinates
+            center_x, center_y, radius = 184.0, 184.0, 184.0
+            caught_df['x'] = (pd.to_numeric(caught_df['wagonX'], errors='coerce') - center_x) / radius
+            caught_df['y'] = - (pd.to_numeric(caught_df['wagonY'], errors='coerce') - center_y) / radius
+            caught_df = caught_df.dropna(subset=['x', 'y'])
+        
+            if caught_df.empty:
+                st.info("No valid caught dismissal coordinates.")
+                return
+        
+            # Build plotly figure
+            fig = go.Figure()
+        
+            # Field
+            fig.add_shape(type="circle", x0=-1, y0=-1, x1=1, y1=1,
+                          fillcolor="#228B22", line_color="black")
+            fig.add_shape(type="circle", x0=-0.5, y0=-0.5, x1=0.5, y1=0.5,
+                          fillcolor="#66bb6a", line_color="white")
+        
+            # Pitch
+            fig.add_shape(type="rect", x0=-0.04, y0=-0.08, x1=0.04, y1=0.08,
+                          fillcolor="tan", line_color=None)
+        
+            # Radials
+            for a in np.linspace(0, 2*np.pi, 9)[:-1]:
+                fig.add_trace(go.Scatter(
+                    x=[0, np.cos(a)], y=[0, np.sin(a)],
+                    mode='lines', line=dict(color='white', width=1),
+                    opacity=0.25, showlegend=False
+                ))
+        
+            # Plot caught dismissal points
+            fig.add_trace(go.Scatter(
+                x=caught_df['x'],
+                y=caught_df['y'],
+                mode='markers',
+                marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
+                hovertemplate=
+                    "<b>Batter:</b> %{customdata[0]}<br>"
+                    "<b>Bowler:</b> %{customdata[1]}<br>"
+                    "<b>Shot:</b> %{customdata[2]}<br>"
+                    "<extra></extra>",
+                customdata=caught_df[['bat', 'bowl', 'shot']].fillna('').values,
+                name="Caught dismissals"
+            ))
+        
+            fig.update_layout(
+                title="Caught Dismissal Locations",
+                xaxis=dict(range=[-1.2, 1.2], visible=False),
+                yaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="x"),
+                width=700, height=700,
+                margin=dict(l=0, r=0, t=40, b=0)
+            )
+        
+            st.plotly_chart(fig, use_container_width=True)
+
         # ---------- robust map-lookup helpers ----------
         def _norm_key(s):
             if s is None:
@@ -10199,6 +10288,12 @@ elif sidebar_option == "Strength vs Weakness":
             else:
                 st.markdown(f"### Detailed view — Batter Hand: {chosen_hand}")
                 draw_wagon_if_available(df_use, player_selected)
+
+                # ---- NEW: Bowler caught dismissal wagon (HERE) ----
+                st.markdown("### Caught Dismissal Locations")
+                draw_bowler_caught_dismissals_wagon(df_use, player_selected)
+
+
                 display_pitchmaps_from_df(df_use, f"vs Batter Hand: {chosen_hand}")
 
 
