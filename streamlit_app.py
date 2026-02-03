@@ -6810,7 +6810,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
 
 # SEARCH FOR THIS LINE IN YOUR FILE:
 # st.header("Strength and Weakness Analysis")
-
+## new code starts here
 elif sidebar_option == "Strength vs Weakness":
     st.header("Strength vs Weakness Analysis")
     # strength_weakness_streamlit.py
@@ -6825,9 +6825,8 @@ elif sidebar_option == "Strength vs Weakness":
     import base64
     from PIL import Image
     import warnings
-
     warnings.filterwarnings("ignore")
-    st.set_page_config(layout="wide")
+    # NOTE: Do NOT call st.set_page_config() here — that must be the first Streamlit command in the entry file.
 
     # ---------- Display sizes (tweakable) ----------
     HEIGHT_WAGON_PX = 640
@@ -6868,23 +6867,72 @@ elif sidebar_option == "Strength vs Weakness":
                 return c
         return default
 
+    # Helper: robust detection of legal delivery
+    def is_legal_ball_from_row(row):
+        """
+        Determine whether a delivery is a legal ball.
+        Works defensively against different dataset schemas.
+        """
+        # Prefer explicit flag if present
+        if 'is_legal' in row.index:
+            try:
+                return int(row['is_legal']) == 1
+            except Exception:
+                pass
 
-    # work on a copy
+        # Wides / No-balls logic
+        wides_cols = ['wides', 'wide', 'n_wides']
+        noball_cols = ['noballs', 'no_ball', 'no-balls', 'n_noballs']
+
+        wides_val = None
+        noball_val = None
+
+        for c in wides_cols:
+            if c in row.index:
+                wides_val = row[c]
+                break
+        for c in noball_cols:
+            if c in row.index:
+                noball_val = row[c]
+                break
+
+        if wides_val is not None or noball_val is not None:
+            try:
+                w = int(wides_val) if wides_val is not None else 0
+            except Exception:
+                w = 0
+            try:
+                nb = int(noball_val) if noball_val is not None else 0
+            except Exception:
+                nb = 0
+            return (w == 0) and (nb == 0)
+
+        # extras_type fallback
+        if 'extras_type' in row.index:
+            et = str(row.get('extras_type', '')).lower()
+            if et in ['wide', 'wides', 'no ball', 'noball', 'nb', 'no-ball']:
+                return False
+
+        # If nothing else, assume legal (safer for selection of first N faced balls)
+        return True
+
+    # ---------- Work on a copy ----------
     bdf = as_dataframe(df)
 
     # ---------- Column names (explicitly mapped to your provided schema) ----------
-    COL_BAT = 'bat' # batsman column
-    COL_BOWL = 'bowl' # bowler column
-    COL_BAT_HAND = 'bat_hand' # batting handedness (LHB/RHB)
-    COL_BOWL_KIND = 'bowl_kind' # pace/spin
-    COL_BOWL_STYLE = 'bowl_style' # specific style
-    COL_RUNS = 'batruns' # batsman runs per ball
-    COL_WAGON_ZONE = 'wagonZone' # wagon zone id (1..8)
-    COL_LINE = 'line' # line (WIDE_OUTSIDE_OFFSTUMP etc.)
-    COL_LENGTH = 'length' # length (SHORT, GOOD_LENGTH, etc.)
-    COL_OUT = 'out' # out flag (0/1)
-    COL_DISMISSAL = 'dismissal' # dismissal text
+    COL_BAT = 'bat'  # batsman column
+    COL_BOWL = 'bowl'  # bowler column
+    COL_BAT_HAND = 'bat_hand'  # batting handedness (LHB/RHB)
+    COL_BOWL_KIND = 'bowl_kind'  # pace/spin
+    COL_BOWL_STYLE = 'bowl_style'  # specific style
+    COL_RUNS = 'batruns'  # batsman runs per ball
+    COL_WAGON_ZONE = 'wagonZone'  # wagon zone id (1..8)
+    COL_LINE = 'line'  # line (WIDE_OUTSIDE_OFFSTUMP etc.)
+    COL_LENGTH = 'length'  # length (SHORT, GOOD_LENGTH, etc.)
+    COL_OUT = 'out'  # out flag (0/1)
+    COL_DISMISSAL = 'dismissal'  # dismissal text
     COL_PHASE = 'PHASE'
+    COL_MATCH = 'p_match'  # match id column used for grouping
 
     # sanity checks
     if COL_BAT not in bdf.columns or COL_BOWL not in bdf.columns:
@@ -6892,30 +6940,30 @@ elif sidebar_option == "Strength vs Weakness":
         st.stop()
 
     # ---------- UI header and player selection ----------
-    # st.title("Strength & Weakness — Broadcast View")
     role = st.selectbox("Select Role", ["Batting", "Bowling"], index=0)
-
     if role == "Batting":
         players = sorted([x for x in bdf[COL_BAT].dropna().unique() if str(x).strip() not in ("", "0")])
     else:
         players = sorted([x for x in bdf[COL_BOWL].dropna().unique() if str(x).strip() not in ("", "0")])
-
     if not players:
         st.error("No players found in the chosen role column.")
         st.stop()
-
     player_selected = st.selectbox("Search for a player", players, index=0)
 
     # ---------- PHASE SELECTBOX RIGHT HERE (AFTER ROLE AND PLAYER) ----------
     phase_opts = ['Overall', 'Powerplay', 'Middle 1', 'Middle 2', 'Death']
-    chosen_phase = st.selectbox("Phase", options=phase_opts, index=0) # Default Overall
+    chosen_phase = st.selectbox("Phase", options=phase_opts, index=0)  # Default Overall
+
+    # ---------- OPTIONAL: FIRST 10 BALLS CHECKBOX (only shown for Batting role) ----------
+    first_10_balls_only = False
+    if role == "Batting":
+        first_10_balls_only = st.checkbox("First 10 balls", value=False)
 
     # ---------- Prepare player frame ----------
     if role == "Batting":
         pf = bdf[bdf[COL_BAT] == player_selected].copy()
     else:
         pf = bdf[bdf[COL_BOWL] == player_selected].copy()
-
     if pf.empty:
         st.info("No ball-by-ball rows for the selected player.")
         st.stop()
@@ -6925,7 +6973,7 @@ elif sidebar_option == "Strength vs Weakness":
         if COL_RUNS in pf.columns:
             pf[COL_RUNS] = pd.to_numeric(pf[COL_RUNS], errors='coerce').fillna(0).astype(int)
         else:
-            alt = safe_get_col(pf, ['score','runs'])
+            alt = safe_get_col(pf, ['score', 'runs'])
             if alt:
                 pf[COL_RUNS] = pd.to_numeric(pf[alt], errors='coerce').fillna(0).astype(int)
             else:
@@ -6936,7 +6984,7 @@ elif sidebar_option == "Strength vs Weakness":
         if COL_RUNS_BOWL:
             pf[COL_RUNS_BOWL] = pd.to_numeric(pf[COL_RUNS_BOWL], errors='coerce').fillna(0).astype(int)
         else:
-            pf['bowlruns'] = 0 # Placeholder
+            pf['bowlruns'] = 0  # Placeholder
             COL_RUNS_BOWL = 'bowlruns'
 
     if COL_OUT in pf.columns:
@@ -6945,46 +6993,44 @@ elif sidebar_option == "Strength vs Weakness":
         pf['out_flag'] = 0
 
     if COL_DISMISSAL in pf.columns:
-        pf['dismissal_clean'] = pf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+        pf['dismissal_clean'] = pf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
     else:
         pf['dismissal_clean'] = ''
 
     # ---------- CORRECTED WICKET LOGIC ----------
-    # Only these dismissal types count as bowler wickets:
     WICKET_TYPES = [
         'bowled',
         'caught',
         'hit wicket',
         'stumped',
-        'leg before wicket', # full name
-        'lbw' # common abbreviation
+        'leg before wicket',
+        'lbw'
     ]
 
     def is_bowler_wicket(out_flag_val, dismissal_text):
-        """
-        Return True if the delivery is credited as a bowler wicket:
-        - out_flag (truthy) AND dismissal contains one of the accepted wicket tokens.
-        """
         try:
             if int(out_flag_val) != 1:
                 return False
         except Exception:
-            # non-numeric: treat falsy
             if not out_flag_val:
                 return False
         if not dismissal_text or str(dismissal_text).strip() == '':
             return False
         dd = str(dismissal_text).lower()
-        # check any wicket token is present as substring
         for token in WICKET_TYPES:
             if token in dd:
                 return True
         return False
 
-    pf['is_wkt'] = pf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag',0), r.get('dismissal_clean','')) else 0, axis=1)
+    pf['is_wkt'] = pf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag', 0), r.get('dismissal_clean', '')) else 0, axis=1)
 
     # boundary flag (for batting, for bowling it's boundaries conceded)
-    pf['is_boundary'] = pf.get(COL_RUNS if role == "Batting" else COL_RUNS_BOWL, 0).isin([4,6]).astype(int)
+    # use get to handle missing run columns gracefully
+    runs_col = COL_RUNS if role == "Batting" else safe_get_col(pf, ['bowlruns', 'runs', 'score'], default=None)
+    if runs_col and runs_col in pf.columns:
+        pf['is_boundary'] = pf[runs_col].isin([4, 6]).astype(int)
+    else:
+        pf['is_boundary'] = 0
 
     # detect LHB for mirroring
     is_lhb = False
@@ -6998,7 +7044,7 @@ elif sidebar_option == "Strength vs Weakness":
         if pd.isna(over):
             return 'Unknown'
         try:
-            over_int = int(float(over)) # handle float or string
+            over_int = int(float(over))  # handle float or string
             if 1 <= over_int <= 6:
                 return 'Powerplay'
             elif 7 <= over_int <= 11:
@@ -7012,18 +7058,289 @@ elif sidebar_option == "Strength vs Weakness":
         except:
             return 'Unknown'
 
-    for df in [pf, bdf]:
-        if 'PHASE' not in df.columns:
-            if 'over' in df.columns:
-                df['PHASE'] = df['over'].apply(assign_phase)
+    for df_iter in [pf, bdf]:
+        if 'PHASE' not in df_iter.columns:
+            if 'over' in df_iter.columns:
+                df_iter['PHASE'] = df_iter['over'].apply(assign_phase)
             else:
-                df['PHASE'] = 'Unknown' # fallback if no over column
-        df['PHASE'] = df['PHASE'].astype(str)
+                df_iter['PHASE'] = 'Unknown'  # fallback if no over column
+        df_iter['PHASE'] = df_iter['PHASE'].astype(str)
 
     # ---------- FILTER PF AND BDF BY CHOSEN PHASE (AFFECTS ALL DOWNSTREAM) ----------
     if chosen_phase != 'Overall':
         pf = pf[pf['PHASE'] == chosen_phase].copy()
         bdf = bdf[bdf['PHASE'] == chosen_phase].copy()
+
+    # ---------- FIRST 10 LEGAL BALLS FILTER (PER MATCH, PER BATTER) ----------
+    if role == "Batting" and first_10_balls_only:
+        if COL_MATCH not in pf.columns:
+            st.error("Column 'p_match' is required for First 10 Balls filter.")
+            st.stop()
+
+        # mark legal deliveries in the player frame (pf)
+        pf = pf.copy()
+        pf['is_legal_ball'] = pf.apply(is_legal_ball_from_row, axis=1)
+
+        # prepare ordering columns to get chronological order within each match
+        ordering_cols = []
+        if 'innings' in pf.columns:
+            ordering_cols.append('innings')
+        if 'over' in pf.columns:
+            ordering_cols.append('over')
+        # common ball fields - try to use them if present
+        if 'ball' in pf.columns:
+            ordering_cols.append('ball')
+        elif 'ball_in_over' in pf.columns:
+            ordering_cols.append('ball_in_over')
+        elif 'ball_id' in pf.columns:
+            ordering_cols.append('ball_id')
+
+        # Collect indices to keep: first 10 legal deliveries per p_match where this batter is on strike
+        keep_indices = []
+        # Group by match - preserve original order where possible
+        for match_id, group in pf.groupby(COL_MATCH, sort=False):
+            if ordering_cols:
+                # stable sort to preserve earlier relative ordering where not specified by columns
+                try:
+                    group_sorted = group.sort_values(by=ordering_cols, kind='stable')
+                except Exception:
+                    group_sorted = group
+            else:
+                group_sorted = group
+
+            legal_deliveries = group_sorted[group_sorted['is_legal_ball'] == True]
+            first10 = legal_deliveries.head(10)
+            keep_indices.extend(first10.index.tolist())
+
+        # If no deliveries match the criteria, warn and stop gracefully
+        if not keep_indices:
+            st.warning("No legal deliveries found for the selected player under the applied filters.")
+            st.stop()
+
+        # Filter pf to only those first10 deliveries
+        pf = pf.loc[keep_indices].copy()
+
+        # For downstream visuals that might rely on bdf context, filter bdf to the same delivery rows (these are deliveries where the batter faced)
+        # This keeps only rows corresponding to the selected batter's first-10 legal balls per match.
+        bdf = bdf.loc[bdf.index.isin(keep_indices)].copy()
+
+    # ---------- At this point, `pf` contains the player deliveries (possibly first 10 legal balls per match),
+    # ---------- and `bdf` contains the matching deliveries (same indices) if First 10 filter was applied.
+    # Continue with your existing plotting/analysis code below using `pf` and `bdf`.
+
+# elif sidebar_option == "Strength vs Weakness":
+#     st.header("Strength vs Weakness Analysis")
+#     # strength_weakness_streamlit.py
+#     # strength_weakness_streamlit_broadcast_wkt_fix.py
+#     import streamlit as st
+#     import pandas as pd
+#     import numpy as np
+#     import math
+#     import matplotlib.pyplot as plt
+#     from matplotlib.patches import Circle, Rectangle
+#     from io import BytesIO
+#     import base64
+#     from PIL import Image
+#     import warnings
+
+#     warnings.filterwarnings("ignore")
+#     st.set_page_config(layout="wide")
+
+#     # ---------- Display sizes (tweakable) ----------
+#     HEIGHT_WAGON_PX = 640
+#     HEIGHT_PITCHMAP_PX = 880
+
+#     # ---------- HTML embed helper (renders matplotlib figure at fixed pixel height) ----------
+#     def display_figure_fixed_height_html(fig, height_px=800, bg='white', margin_px=0):
+#         buf = BytesIO()
+#         fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, dpi=200, facecolor=fig.get_facecolor())
+#         buf.seek(0)
+#         img = Image.open(buf).convert('RGBA')
+#         if bg is not None:
+#             bg_img = Image.new('RGB', img.size, bg)
+#             bg_img.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else None)
+#             img = bg_img
+#         out_buf = BytesIO()
+#         img.save(out_buf, format='PNG')
+#         b64 = base64.b64encode(out_buf.getvalue()).decode('ascii')
+#         html = (
+#             f'<img src="data:image/png;base64,{b64}" '
+#             f'style="height:{int(height_px)}px; max-width:100%; width:auto; display:block; margin:{margin_px}px auto;" />'
+#         )
+#         st.markdown(f'<div style="max-width:100%; padding:0; margin:0;">{html}</div>', unsafe_allow_html=True)
+#         plt.close(fig)
+
+#     # ---------- Small helpers ----------
+#     def as_dataframe(x):
+#         if isinstance(x, pd.Series):
+#             return x.to_frame().T.reset_index(drop=True)
+#         elif isinstance(x, pd.DataFrame):
+#             return x.copy()
+#         else:
+#             return pd.DataFrame(x)
+
+#     def safe_get_col(df_local, candidates, default=None):
+#         for c in candidates:
+#             if c in df_local.columns:
+#                 return c
+#         return default
+
+
+#     # work on a copy
+#     bdf = as_dataframe(df)
+
+#     # ---------- Column names (explicitly mapped to your provided schema) ----------
+#     COL_BAT = 'bat' # batsman column
+#     COL_BOWL = 'bowl' # bowler column
+#     COL_BAT_HAND = 'bat_hand' # batting handedness (LHB/RHB)
+#     COL_BOWL_KIND = 'bowl_kind' # pace/spin
+#     COL_BOWL_STYLE = 'bowl_style' # specific style
+#     COL_RUNS = 'batruns' # batsman runs per ball
+#     COL_WAGON_ZONE = 'wagonZone' # wagon zone id (1..8)
+#     COL_LINE = 'line' # line (WIDE_OUTSIDE_OFFSTUMP etc.)
+#     COL_LENGTH = 'length' # length (SHORT, GOOD_LENGTH, etc.)
+#     COL_OUT = 'out' # out flag (0/1)
+#     COL_DISMISSAL = 'dismissal' # dismissal text
+#     COL_PHASE = 'PHASE'
+
+#     # sanity checks
+#     if COL_BAT not in bdf.columns or COL_BOWL not in bdf.columns:
+#         st.error(f"Expected columns '{COL_BAT}' and '{COL_BOWL}' in the DataFrame.")
+#         st.stop()
+
+#     # ---------- UI header and player selection ----------
+#     # st.title("Strength & Weakness — Broadcast View")
+#     role = st.selectbox("Select Role", ["Batting", "Bowling"], index=0)
+
+#     if role == "Batting":
+#         players = sorted([x for x in bdf[COL_BAT].dropna().unique() if str(x).strip() not in ("", "0")])
+#     else:
+#         players = sorted([x for x in bdf[COL_BOWL].dropna().unique() if str(x).strip() not in ("", "0")])
+
+#     if not players:
+#         st.error("No players found in the chosen role column.")
+#         st.stop()
+
+#     player_selected = st.selectbox("Search for a player", players, index=0)
+
+#     # ---------- PHASE SELECTBOX RIGHT HERE (AFTER ROLE AND PLAYER) ----------
+#     phase_opts = ['Overall', 'Powerplay', 'Middle 1', 'Middle 2', 'Death']
+#     chosen_phase = st.selectbox("Phase", options=phase_opts, index=0) # Default Overall
+
+#     # ---------- Prepare player frame ----------
+#     if role == "Batting":
+#         pf = bdf[bdf[COL_BAT] == player_selected].copy()
+#     else:
+#         pf = bdf[bdf[COL_BOWL] == player_selected].copy()
+
+#     if pf.empty:
+#         st.info("No ball-by-ball rows for the selected player.")
+#         st.stop()
+
+#     # normalize runs and flags
+#     if role == "Batting":
+#         if COL_RUNS in pf.columns:
+#             pf[COL_RUNS] = pd.to_numeric(pf[COL_RUNS], errors='coerce').fillna(0).astype(int)
+#         else:
+#             alt = safe_get_col(pf, ['score','runs'])
+#             if alt:
+#                 pf[COL_RUNS] = pd.to_numeric(pf[alt], errors='coerce').fillna(0).astype(int)
+#             else:
+#                 pf[COL_RUNS] = 0
+#     else:
+#         # For Bowling, use 'bowlruns' or similar
+#         COL_RUNS_BOWL = safe_get_col(pf, ['bowlruns', 'score', 'runs'])
+#         if COL_RUNS_BOWL:
+#             pf[COL_RUNS_BOWL] = pd.to_numeric(pf[COL_RUNS_BOWL], errors='coerce').fillna(0).astype(int)
+#         else:
+#             pf['bowlruns'] = 0 # Placeholder
+#             COL_RUNS_BOWL = 'bowlruns'
+
+#     if COL_OUT in pf.columns:
+#         pf['out_flag'] = pd.to_numeric(pf[COL_OUT], errors='coerce').fillna(0).astype(int)
+#     else:
+#         pf['out_flag'] = 0
+
+#     if COL_DISMISSAL in pf.columns:
+#         pf['dismissal_clean'] = pf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+#     else:
+#         pf['dismissal_clean'] = ''
+
+#     # ---------- CORRECTED WICKET LOGIC ----------
+#     # Only these dismissal types count as bowler wickets:
+#     WICKET_TYPES = [
+#         'bowled',
+#         'caught',
+#         'hit wicket',
+#         'stumped',
+#         'leg before wicket', # full name
+#         'lbw' # common abbreviation
+#     ]
+
+#     def is_bowler_wicket(out_flag_val, dismissal_text):
+#         """
+#         Return True if the delivery is credited as a bowler wicket:
+#         - out_flag (truthy) AND dismissal contains one of the accepted wicket tokens.
+#         """
+#         try:
+#             if int(out_flag_val) != 1:
+#                 return False
+#         except Exception:
+#             # non-numeric: treat falsy
+#             if not out_flag_val:
+#                 return False
+#         if not dismissal_text or str(dismissal_text).strip() == '':
+#             return False
+#         dd = str(dismissal_text).lower()
+#         # check any wicket token is present as substring
+#         for token in WICKET_TYPES:
+#             if token in dd:
+#                 return True
+#         return False
+
+#     pf['is_wkt'] = pf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag',0), r.get('dismissal_clean','')) else 0, axis=1)
+
+#     # boundary flag (for batting, for bowling it's boundaries conceded)
+#     pf['is_boundary'] = pf.get(COL_RUNS if role == "Batting" else COL_RUNS_BOWL, 0).isin([4,6]).astype(int)
+
+#     # detect LHB for mirroring
+#     is_lhb = False
+#     if COL_BAT_HAND in pf.columns:
+#         nonull = pf[COL_BAT_HAND].dropna()
+#         if not nonull.empty and str(nonull.iloc[0]).strip().upper().startswith('L'):
+#             is_lhb = True
+
+#     # ---------- PHASE CALCULATION (run only once if not already present) ----------
+#     def assign_phase(over):
+#         if pd.isna(over):
+#             return 'Unknown'
+#         try:
+#             over_int = int(float(over)) # handle float or string
+#             if 1 <= over_int <= 6:
+#                 return 'Powerplay'
+#             elif 7 <= over_int <= 11:
+#                 return 'Middle 1'
+#             elif 12 <= over_int <= 16:
+#                 return 'Middle 2'
+#             elif 17 <= over_int <= 20:
+#                 return 'Death'
+#             else:
+#                 return 'Unknown'
+#         except:
+#             return 'Unknown'
+
+#     for df in [pf, bdf]:
+#         if 'PHASE' not in df.columns:
+#             if 'over' in df.columns:
+#                 df['PHASE'] = df['over'].apply(assign_phase)
+#             else:
+#                 df['PHASE'] = 'Unknown' # fallback if no over column
+#         df['PHASE'] = df['PHASE'].astype(str)
+
+#     # ---------- FILTER PF AND BDF BY CHOSEN PHASE (AFFECTS ALL DOWNSTREAM) ----------
+#     if chosen_phase != 'Overall':
+#         pf = pf[pf['PHASE'] == chosen_phase].copy()
+#         bdf = bdf[bdf['PHASE'] == chosen_phase].copy()
     # Now all computations below use the phase-filtered pf/bdf
 
     # ---------- Metrics helpers ----------
