@@ -9848,712 +9848,454 @@ elif sidebar_option == "Strength vs Weakness":
         
     # -------------------- end pitchmaps snippet --------------------
 
+
+
+        
     else:
-    st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Bowling — {player_selected}</div>", unsafe_allow_html=True)
-
-    # require bdf in globals
-    if 'bdf' not in globals():
-        bdf = as_dataframe(df)  # Use df if bdf not defined
-
-    # For bowler, adapt runs_col to bowler runs
-    runs_col = safe_get_col(bdf, ['bowlruns', 'score', 'runs'])
-    if runs_col is None:
-        st.error("No runs column found for bowling.")
-        st.stop()
-
-    # coerce runs col
-    bdf[runs_col] = pd.to_numeric(bdf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
-    pf[runs_col] = pd.to_numeric(pf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
-
-    # For bowling, group by bat_hand or other
-    if COL_BAT_HAND in pf.columns:
-        # keep original pf values intact for later; create a normalized col for grouping
-        pf['_bat_hand_norm'] = pf[COL_BAT_HAND].astype(str).str.strip().fillna('').replace({'nan':''})
-        kinds = sorted(pf['_bat_hand_norm'].dropna().unique().tolist())
-        group_col = '_bat_hand_norm'
-        group_label = 'Batter Hand'
-    else:
-        kinds = []
-        group_col = None
-
-    rows = []
-    if kinds:
-        for k in kinds:
-            g = pf[pf[group_col] == k]
-            m = compute_bowling_metrics(g, run_col=runs_col)
-            m['group'] = k
-            rows.append(m)
-    else:
-        m = compute_bowling_metrics(pf, run_col=runs_col)
-        m['group'] = 'unknown'
-        rows.append(m)
-    bk_df = pd.DataFrame(rows).set_index('group')
-    bk_df.index.name = group_label if group_label else 'Group'
-
-    st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by batter hand </div>", unsafe_allow_html=True)
-    st.dataframe(bk_df, use_container_width=True)
-
-    # ---------- Bowling view (rearranged) ----------
-    bf = bdf[bdf[COL_BOWL] == player_selected].copy()
-    if bf.empty:
-        st.info("No bowling rows for this bowler.")
-        st.stop()
-
-    # choose runs column for bowler frame
-    if 'bowlruns' in bf.columns:
-        bf_runs_col = 'bowlruns'
-        bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
-    elif 'score' in bf.columns:
-        bf_runs_col = 'score'
-        bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
-    else:
-        bf_runs_col = COL_RUNS
-        bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
-
-    # Ensure dismissal / out / is_wkt in bowler frame
-    if COL_DISMISSAL in bf.columns:
-        bf['dismissal_clean'] = bf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
-    else:
-        bf['dismissal_clean'] = ''
-    if COL_OUT in bf.columns:
-        bf['out_flag'] = pd.to_numeric(bf[COL_OUT], errors='coerce').fillna(0).astype(int)
-    else:
-        bf['out_flag'] = 0
-    bf['is_wkt'] = bf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag',0), r.get('dismissal_clean','')) else 0, axis=1)
-
-    # split by batter handedness for bowler frame (use original column names)
-    if COL_BAT_HAND in bf.columns:
-        bf_lhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('L')].copy()
-        bf_rhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('R')].copy()
-    else:
-        bf_lhb = bf.iloc[0:0].copy()
-        bf_rhb = bf.iloc[0:0].copy()
-
-    # Collect unique values for batter hand exploration (original values)
-    def unique_vals_union(col):
-        vals = []
-        for _df in (pf, bdf):
-            if col in _df.columns:
-                vals.extend(_df[col].dropna().astype(str).str.strip().tolist())
-        vals = sorted({v for v in vals if str(v).strip() != ''})
-        return vals
-
-    # ---- CLEAN batter hand options (force only LHB/RHB) ----
-    raw_hands = unique_vals_union('bat_hand')
-    clean_hands = []
-    for h in raw_hands:
-        if str(h).upper().startswith('L'):
-            clean_hands.append('LHB')
-        elif str(h).upper().startswith('R'):
-            clean_hands.append('RHB')
-    # ensure at least both options exist for UI (fallback)
-    if not clean_hands:
-        clean_hands = ['LHB', 'RHB']
-    else:
-        # ensure deterministic ordering and uniqueness
-        clean_hands = sorted(set(clean_hands))
-
-    # default index 0
-    chosen_hand = st.selectbox("Batter Hand", options=clean_hands, index=0)
-
-    # --------------------
-    # Helpers: robust hand filter
-    # --------------------
-    def filter_by_hand(df_local, col='bat_hand', hand=chosen_hand):
-        """Return rows where col contains the chosen hand (case-insensitive)."""
-        if col not in df_local.columns:
-            return df_local.iloc[0:0].copy()
-        hand_lo = str(hand).lower()
-        mask = df_local[col].astype(str).str.lower().str.contains(hand_lo, na=False)
-        # fallback: exact match normalized
-        if not mask.any():
-            s_norm = _norm_key(hand)
-            mask = df_local[col].apply(lambda x: _norm_key(x) == s_norm)
-        return df_local[mask].copy()
-
-    # ---------- draw caught dismissal for this bowler (robust) ----------
-    def draw_bowler_caught_dismissals_wagon(df_in, bowler_name):
-        """
-        Plot caught dismissal locations for a bowler (wagon-style).
-        Uses wagonX / wagonY like batter version. Accepts df_in that should be bowler deliveries.
-        """
-        # Basic checks
-        if df_in is None or df_in.empty:
-            st.info("No deliveries available to draw caught dismissals.")
-            return
-
-        # Accept either 'bowl' or 'bowler' as the bowler column
-        bowl_col_candidates = [COL_BOWL, 'bowl', 'bowler']
-        bowl_col = next((c for c in bowl_col_candidates if c in df_in.columns), None)
-        if bowl_col is None:
-            st.warning("Bowler column not found in data. Can't draw caught dismissals.")
-            return
-
-        # Dismissal column
-        if COL_DISMISSAL not in df_in.columns:
-            st.warning("Dismissal column missing; can't filter caught dismissals.")
-            return
-
-        # Filter rows for this bowler and caught dismissals
-        caught_df = df_in[
-            (df_in[bowl_col].astype(str) == str(bowler_name)) &
-            (df_in[COL_DISMISSAL].astype(str).str.lower().str.contains('caught', na=False))
-        ].copy()
-
-        if caught_df.empty:
-            st.info("No caught dismissals for this bowler (with current filters).")
-            return
-
-        # Find wagon coordinate column names (accept a few variants)
-        wx_candidates = ['wagonX','wagon_x','wagon_x_coord','x_coord','x']
-        wy_candidates = ['wagonY','wagon_y','wagon_y_coord','y_coord','y']
-        wx = next((c for c in wx_candidates if c in caught_df.columns), None)
-        wy = next((c for c in wy_candidates if c in caught_df.columns), None)
-        if wx is None or wy is None:
-            st.warning("No wagonX/wagonY found in data; cannot plot caught dismissal positions.")
-            return
-
-        # Normalize coords (use same center/radius as rest of app)
-        center_x, center_y, radius = 184.0, 184.0, 184.0
-        caught_df['x_plot'] = (pd.to_numeric(caught_df[wx], errors='coerce') - center_x) / radius
-        caught_df['y_plot'] = - (pd.to_numeric(caught_df[wy], errors='coerce') - center_y) / radius
-        caught_df = caught_df.dropna(subset=['x_plot','y_plot'])
-        if caught_df.empty:
-            st.info("No valid coordinates for caught dismissals.")
-            return
-
-        # Optionally detect LHB to flip display if your app uses true mirror (we keep canonical RHB by default)
-        batting_style_val = None
-        if COL_BAT_HAND in caught_df.columns:
-            try:
-                batting_style_val = caught_df[COL_BAT_HAND].dropna().iloc[0]
-            except Exception:
-                batting_style_val = None
-        is_lhb_local = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-
-        # Build Plotly figure similar to batter function
-        fig = go.Figure()
-        # field shapes
-        fig.add_shape(type="circle", x0=-1, y0=-1, x1=1, y1=1, fillcolor="#228B22", line_color="black", layer="below")
-        fig.add_shape(type="circle", x0=-0.5, y0=-0.5, x1=0.5, y1=0.5, fillcolor="#66bb6a", line_color="white", layer="below")
-        fig.add_shape(type="rect", x0=-0.04, y0=-0.08, x1=0.04, y1=0.08, fillcolor="tan", line_color=None, layer="above")
-
-        # radial lines
-        for a in np.linspace(0, 2*np.pi, 9)[:-1]:
-            fig.add_trace(go.Scatter(x=[0, np.cos(a)], y=[0, np.sin(a)], mode='lines',
-                                     line=dict(color='white', width=1), opacity=0.25, showlegend=False))
-
-        # prepare hover cols safely (bat, dismissal, fielder maybe)
-        hover_cols = []
-        for c in ('bat','batter','batsman'):
-            if c in caught_df.columns:
-                hover_cols.append(c); break
-        if 'dismissal' in caught_df.columns:
-            hover_cols.append('dismissal')
-        if 'fielder' in caught_df.columns:
-            hover_cols.append('fielder')
-        # fill missing hover fields with empty strings when building customdata
-        customdata = []
-        for _, r in caught_df.iterrows():
-            rowvals = []
-            for col in hover_cols:
-                rowvals.append("" if pd.isna(r.get(col,'')) else str(r.get(col,'')))
-            customdata.append(rowvals)
-
-        fig.add_trace(go.Scatter(
-            x=caught_df['x_plot'],
-            y=caught_df['y_plot'],
-            mode='markers',
-            marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
-            customdata=customdata,
-            hovertemplate=("".join([f"<b>{col}:</b> %{{customdata[{i}]}}<br>" for i,col in enumerate(hover_cols)]) + "<extra></extra>"),
-            name='Caught dismissals'
-        ))
-
-        fig.update_layout(
-            title=f"Caught dismissals by {bowler_name} — {chosen_hand}",
-            xaxis=dict(range=[-1.2,1.2], visible=False),
-            yaxis=dict(range=[-1.2,1.2], visible=False, scaleanchor="x"),
-            width=700, height=700, margin=dict(l=0,r=0,t=40,b=0)
-        )
-
-        st.plotly_chart(fig, use_container_width=True)
-
-
-    # ---------- When user selects a batter hand ----------
-    if chosen_hand:
-        # For bowler analysis we need the bowler's deliveries filtered by batter hand
-        # Prefer to filter the bowler frame 'bf' (that contains this bowler's deliveries)
-        df_bowler_hand = filter_by_hand(bf, col=COL_BAT_HAND, hand=chosen_hand)
-
-        # If no rows in bf for that hand, try a wider search across bdf (maybe column names differ)
-        if df_bowler_hand.empty:
-            # fallback: try bdf entries for this bowler and hand (covers cases where bf was not properly constructed)
-            if COL_BOWL in bdf.columns:
-                df_bowler_hand = bdf[(bdf[COL_BOWL].astype(str) == str(player_selected))].copy()
-                df_bowler_hand = filter_by_hand(df_bowler_hand, col=COL_BAT_HAND, hand=chosen_hand)
-
-        if df_bowler_hand.empty:
-            st.info(f"No deliveries found for batter hand '{chosen_hand}' against {player_selected}.")
+        st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Bowling — {player_selected}</div>", unsafe_allow_html=True)
+    
+        # require bdf in globals
+        if 'bdf' not in globals():
+            bdf = as_dataframe(df) # Use df if bdf not defined
+    
+        # For bowler, adapt runs_col to bowler runs
+        runs_col = safe_get_col(bdf, ['bowlruns', 'score', 'runs'])
+        if runs_col is None:
+            st.error("No runs column found for bowling.")
+            st.stop()
+    
+        # coerce runs col
+        bdf[runs_col] = pd.to_numeric(bdf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
+        pf[runs_col] = pd.to_numeric(pf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
+    
+        # For bowling, group by bat_hand or other
+        if COL_BAT_HAND in pf.columns:
+            pf[COL_BAT_HAND] = pf[COL_BAT_HAND].astype(str).str.lower().fillna('unknown')
+            kinds = sorted(pf[COL_BAT_HAND].dropna().unique().tolist())
+            group_col = COL_BAT_HAND
+            group_label = 'Batter Hand'
         else:
-            st.markdown(f"### Detailed view — Batter Hand: {chosen_hand}")
+            kinds = []
+            group_col = None
+    
+        rows = []
+        if kinds:
+            for k in kinds:
+                g = pf[pf[group_col] == k]
+                m = compute_bowling_metrics(g, run_col=runs_col)
+                m['group'] = k
+                rows.append(m)
+        else:
+            m = compute_bowling_metrics(pf, run_col=runs_col)
+            m['group'] = 'unknown'
+            rows.append(m)
+        bk_df = pd.DataFrame(rows).set_index('group')
+        bk_df.index.name = group_label if group_label else 'Group'
+    
+        st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by batter hand </div>", unsafe_allow_html=True)
+        st.dataframe(bk_df, use_container_width=True)
+    
+        # ---------- Bowling view (rearranged) ----------
+        bf = bdf[bdf[COL_BOWL] == player_selected].copy()
+        if bf.empty:
+            st.info("No bowling rows for this bowler.")
+            st.stop()
+    
+        # choose runs column for bowler frame
+        if 'bowlruns' in bf.columns:
+            bf_runs_col = 'bowlruns'
+            bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
+        elif 'score' in bf.columns:
+            bf_runs_col = 'score'
+            bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
+        else:
+            bf_runs_col = COL_RUNS
+            bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
+    
+        # Ensure dismissal / out / is_wkt in bowler frame
+        if COL_DISMISSAL in bf.columns:
+            bf['dismissal_clean'] = bf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+        else:
+            bf['dismissal_clean'] = ''
+        if COL_OUT in bf.columns:
+            bf['out_flag'] = pd.to_numeric(bf[COL_OUT], errors='coerce').fillna(0).astype(int)
+        else:
+            bf['out_flag'] = 0
+        bf['is_wkt'] = bf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag',0), r.get('dismissal_clean','')) else 0, axis=1)
+    
+        # split by batter handedness
+        if COL_BAT_HAND in bf.columns:
+            bf_lhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('L')].copy()
+            bf_rhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('R')].copy()
+        else:
+            bf_lhb = bf.iloc[0:0].copy()
+            bf_rhb = bf.iloc[0:0].copy()
+    
+        # Collect unique values for batter hand exploration
+        def unique_vals_union(col):
+            vals = []
+            for df in (pf, bdf):
+                if col in df.columns:
+                    vals.extend(df[col].dropna().astype(str).str.strip().tolist())
+            vals = sorted({v for v in vals if str(v).strip() != ''})
+            return vals
+    
+        # ---- CLEAN batter hand options ----
+        raw_hands = unique_vals_union('bat_hand')
+        
+        # Normalize to only LHB / RHB
+        clean_hands = []
+        for h in raw_hands:
+            if str(h).upper().startswith('L'):
+                clean_hands.append('LHB')
+            elif str(h).upper().startswith('R'):
+                clean_hands.append('RHB')
+        
+        clean_hands = sorted(set(clean_hands))
+        chosen_hand = st.selectbox("Batter Hand", options=clean_hands)
 
-            # Draw wagon for the bowler's deliveries (use the bowler's deliveries filtered by chosen hand)
-            draw_wagon_if_available(df_bowler_hand, player_selected)
+        def draw_bowler_caught_dismissals_wagon(df_in, bowler_name):
+            """
+            Plot caught dismissal locations for a bowler (wagon-style field).
+            Uses wagonX / wagonY like batter version.
+            """
+            if df_in.empty:
+                st.info("No deliveries available.")
+                return
+        
+            # Filter caught dismissals credited to the bowler
+            if 'dismissal' not in df_in.columns or 'bowl' not in df_in.columns:
+                st.warning("Required columns missing for caught dismissal plot.")
+                return
+        
+            caught_df = df_in[
+                (df_in['bowl'] == bowler_name) &
+                (df_in['dismissal'].astype(str).str.lower().str.contains('caught', na=False))
+            ].copy()
+        
+            if caught_df.empty:
+                st.info("No caught dismissals for this bowler.")
+                return
+        
+            # Require wagon coordinates
+            if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
+                st.warning("Missing wagonX / wagonY columns.")
+                return
+        
+            # Normalize wagon coordinates
+            center_x, center_y, radius = 184.0, 184.0, 184.0
+            caught_df['x'] = (pd.to_numeric(caught_df['wagonX'], errors='coerce') - center_x) / radius
+            caught_df['y'] = - (pd.to_numeric(caught_df['wagonY'], errors='coerce') - center_y) / radius
+            caught_df = caught_df.dropna(subset=['x', 'y'])
+        
+            if caught_df.empty:
+                st.info("No valid caught dismissal coordinates.")
+                return
+        
+            # Build plotly figure
+            fig = go.Figure()
+        
+            # Field
+            fig.add_shape(type="circle", x0=-1, y0=-1, x1=1, y1=1,
+                          fillcolor="#228B22", line_color="black")
+            fig.add_shape(type="circle", x0=-0.5, y0=-0.5, x1=0.5, y1=0.5,
+                          fillcolor="#66bb6a", line_color="white")
+        
+            # Pitch
+            fig.add_shape(type="rect", x0=-0.04, y0=-0.08, x1=0.04, y1=0.08,
+                          fillcolor="tan", line_color=None)
+        
+            # Radials
+            for a in np.linspace(0, 2*np.pi, 9)[:-1]:
+                fig.add_trace(go.Scatter(
+                    x=[0, np.cos(a)], y=[0, np.sin(a)],
+                    mode='lines', line=dict(color='white', width=1),
+                    opacity=0.25, showlegend=False
+                ))
+        
+            # Plot caught dismissal points
+            fig.add_trace(go.Scatter(
+                x=caught_df['x'],
+                y=caught_df['y'],
+                mode='markers',
+                marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
+                hovertemplate=
+                    "<b>Batter:</b> %{customdata[0]}<br>"
+                    "<b>Bowler:</b> %{customdata[1]}<br>"
+                    "<b>Shot:</b> %{customdata[2]}<br>"
+                    "<extra></extra>",
+                customdata=caught_df[['bat', 'bowl', 'shot']].fillna('').values,
+                name="Caught dismissals"
+            ))
+        
+            fig.update_layout(
+                title="Caught Dismissal Locations",
+                xaxis=dict(range=[-1.2, 1.2], visible=False),
+                yaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="x"),
+                width=700, height=700,
+                margin=dict(l=0, r=0, t=40, b=0)
+            )
+        
+            st.plotly_chart(fig, use_container_width=True)
 
-            # ---- NEW: Bowler caught dismissal wagon (HERE) ----
-            st.markdown("### Caught Dismissal Locations")
-            draw_bowler_caught_dismissals_wagon(df_bowler_hand, player_selected)
-
-            # Then pitch maps (use the same df_bowler_hand)
-            display_pitchmaps_from_df(df_bowler_hand, f"vs Batter Hand: {chosen_hand}")
-
-        
-    # else:
-    #     st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Bowling — {player_selected}</div>", unsafe_allow_html=True)
+        # ---------- robust map-lookup helpers ----------
+        def _norm_key(s):
+            if s is None:
+                return ''
+            return str(s).strip().upper().replace(' ', '_').replace('-', '_')
     
-    #     # require bdf in globals
-    #     if 'bdf' not in globals():
-    #         bdf = as_dataframe(df) # Use df if bdf not defined
+        def get_map_index(map_obj, raw_val):
+            if raw_val is None:
+                return None
+            sval = str(raw_val).strip()
+            if sval == '' or sval.lower() in ('nan', 'none'):
+                return None
     
-    #     # For bowler, adapt runs_col to bowler runs
-    #     runs_col = safe_get_col(bdf, ['bowlruns', 'score', 'runs'])
-    #     if runs_col is None:
-    #         st.error("No runs column found for bowling.")
-    #         st.stop()
+            if sval in map_obj:
+                return int(map_obj[sval])
+            s_norm = _norm_key(sval)
+            for k in map_obj:
+                try:
+                    if isinstance(k, str) and _norm_key(k) == s_norm:
+                        return int(map_obj[k])
+                except Exception:
+                    continue
+            for k in map_obj:
+                try:
+                    if isinstance(k, str) and (k.lower() in sval.lower() or sval.lower() in k.lower()):
+                        return int(map_obj[k])
+                except Exception:
+                    continue
+            return None
     
-    #     # coerce runs col
-    #     bdf[runs_col] = pd.to_numeric(bdf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
-    #     pf[runs_col] = pd.to_numeric(pf.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
+        # ---------- grids builder (adapted for bowling, but same as batting since metrics are batter performance vs bowler) ----------
+        def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', runs_col_candidates=('bowlruns', 'score'),
+                              control_col='control', dismissal_col='dismissal'):
+            if 'length_map' in globals() and isinstance(length_map, dict) and len(length_map) > 0:
+                try:
+                    max_idx = max(int(v) for v in length_map.values())
+                    n_rows = max(5, max_idx + 1)
+                except Exception:
+                    n_rows = 5
+            else:
+                n_rows = 5
+                st.warning("length_map not found; defaulting to 5 rows.")
     
-    #     # For bowling, group by bat_hand or other
-    #     if COL_BAT_HAND in pf.columns:
-    #         pf[COL_BAT_HAND] = pf[COL_BAT_HAND].astype(str).str.lower().fillna('unknown')
-    #         kinds = sorted(pf[COL_BAT_HAND].dropna().unique().tolist())
-    #         group_col = COL_BAT_HAND
-    #         group_label = 'Batter Hand'
-    #     else:
-    #         kinds = []
-    #         group_col = None
+            length_vals = df_in.get(length_col_name, pd.Series()).dropna().astype(str).str.lower().unique()
+            if any('full toss' in val for val in length_vals):
+                n_rows = max(n_rows, 6)
     
-    #     rows = []
-    #     if kinds:
-    #         for k in kinds:
-    #             g = pf[pf[group_col] == k]
-    #             m = compute_bowling_metrics(g, run_col=runs_col)
-    #             m['group'] = k
-    #             rows.append(m)
-    #     else:
-    #         m = compute_bowling_metrics(pf, run_col=runs_col)
-    #         m['group'] = 'unknown'
-    #         rows.append(m)
-    #     bk_df = pd.DataFrame(rows).set_index('group')
-    #     bk_df.index.name = group_label if group_label else 'Group'
+            n_cols = 5
     
-    #     st.markdown("<div style='font-weight:700; font-size:15px;'> Performance by batter hand </div>", unsafe_allow_html=True)
-    #     st.dataframe(bk_df, use_container_width=True)
+            count = np.zeros((n_rows, n_cols), dtype=int)
+            bounds = np.zeros((n_rows, n_cols), dtype=int)
+            dots = np.zeros((n_rows, n_cols), dtype=int)
+            runs = np.zeros((n_rows, n_cols), dtype=float)
+            wkt = np.zeros((n_rows, n_cols), dtype=int)
+            ctrl_not = np.zeros((n_rows, n_cols), dtype=int)
     
-    #     # ---------- Bowling view (rearranged) ----------
-    #     bf = bdf[bdf[COL_BOWL] == player_selected].copy()
-    #     if bf.empty:
-    #         st.info("No bowling rows for this bowler.")
-    #         st.stop()
+            # choose runs column present (for bowling, prefer bowlruns)
+            runs_col = None
+            for c in runs_col_candidates:
+                if c in df_in.columns:
+                    runs_col = c
+                    break
+            if runs_col is None:
+                runs_col = None # will use 0
     
-    #     # choose runs column for bowler frame
-    #     if 'bowlruns' in bf.columns:
-    #         bf_runs_col = 'bowlruns'
-    #         bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
-    #     elif 'score' in bf.columns:
-    #         bf_runs_col = 'score'
-    #         bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
-    #     else:
-    #         bf_runs_col = COL_RUNS
-    #         bf[bf_runs_col] = pd.to_numeric(bf[bf_runs_col], errors='coerce').fillna(0).astype(int)
+            wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
+            dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
+            for _, row in df_in.iterrows():
+                li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
+                le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
+                if li is None or le is None:
+                    continue
+                if not (0 <= le < n_rows and 0 <= li < n_cols):
+                    continue
+                count[le, li] += 1
+                rv = 0
+                if runs_col:
+                    try:
+                        rv = int(row.get(runs_col, 0) or 0)
+                    except:
+                        rv = 0
+                runs[le, li] += rv
+                if rv >= 4:
+                    bounds[le, li] += 1
+                if rv == 0:
+                    dots[le, li] += 1
+                dval = str(row.get(dismissal_col, '') or '').lower()
+                if any(tok in dval for tok in wkt_tokens):
+                    wkt[le, li] += 1
+                cval = row.get(control_col, None)
+                if cval is not None:
+                    if isinstance(cval, str) and 'not' in cval.lower():
+                        ctrl_not[le, li] += 1
+                    elif isinstance(cval, (int, float)) and float(cval) == 0:
+                        ctrl_not[le, li] += 1
     
-    #     # Ensure dismissal / out / is_wkt in bowler frame
-    #     if COL_DISMISSAL in bf.columns:
-    #         bf['dismissal_clean'] = bf[COL_DISMISSAL].astype(str).str.lower().str.strip().replace({'nan':'','none':''})
-    #     else:
-    #         bf['dismissal_clean'] = ''
-    #     if COL_OUT in bf.columns:
-    #         bf['out_flag'] = pd.to_numeric(bf[COL_OUT], errors='coerce').fillna(0).astype(int)
-    #     else:
-    #         bf['out_flag'] = 0
-    #     bf['is_wkt'] = bf.apply(lambda r: 1 if is_bowler_wicket(r.get('out_flag',0), r.get('dismissal_clean','')) else 0, axis=1)
-    
-    #     # split by batter handedness
-    #     if COL_BAT_HAND in bf.columns:
-    #         bf_lhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('L')].copy()
-    #         bf_rhb = bf[bf[COL_BAT_HAND].astype(str).str.upper().str.startswith('R')].copy()
-    #     else:
-    #         bf_lhb = bf.iloc[0:0].copy()
-    #         bf_rhb = bf.iloc[0:0].copy()
-    
-    #     # Collect unique values for batter hand exploration
-    #     def unique_vals_union(col):
-    #         vals = []
-    #         for df in (pf, bdf):
-    #             if col in df.columns:
-    #                 vals.extend(df[col].dropna().astype(str).str.strip().tolist())
-    #         vals = sorted({v for v in vals if str(v).strip() != ''})
-    #         return vals
-    
-    #     # ---- CLEAN batter hand options ----
-    #     raw_hands = unique_vals_union('bat_hand')
-        
-    #     # Normalize to only LHB / RHB
-    #     clean_hands = []
-    #     for h in raw_hands:
-    #         if str(h).upper().startswith('L'):
-    #             clean_hands.append('LHB')
-    #         elif str(h).upper().startswith('R'):
-    #             clean_hands.append('RHB')
-        
-    #     clean_hands = sorted(set(clean_hands))
-    #     chosen_hand = st.selectbox("Batter Hand", options=clean_hands)
-
-    #     def draw_bowler_caught_dismissals_wagon(df_in, bowler_name):
-    #         """
-    #         Plot caught dismissal locations for a bowler (wagon-style field).
-    #         Uses wagonX / wagonY like batter version.
-    #         """
-    #         if df_in.empty:
-    #             st.info("No deliveries available.")
-    #             return
-        
-    #         # Filter caught dismissals credited to the bowler
-    #         if 'dismissal' not in df_in.columns or 'bowl' not in df_in.columns:
-    #             st.warning("Required columns missing for caught dismissal plot.")
-    #             return
-        
-    #         caught_df = df_in[
-    #             (df_in['bowl'] == bowler_name) &
-    #             (df_in['dismissal'].astype(str).str.lower().str.contains('caught', na=False))
-    #         ].copy()
-        
-    #         if caught_df.empty:
-    #             st.info("No caught dismissals for this bowler.")
-    #             return
-        
-    #         # Require wagon coordinates
-    #         if 'wagonX' not in caught_df.columns or 'wagonY' not in caught_df.columns:
-    #             st.warning("Missing wagonX / wagonY columns.")
-    #             return
-        
-    #         # Normalize wagon coordinates
-    #         center_x, center_y, radius = 184.0, 184.0, 184.0
-    #         caught_df['x'] = (pd.to_numeric(caught_df['wagonX'], errors='coerce') - center_x) / radius
-    #         caught_df['y'] = - (pd.to_numeric(caught_df['wagonY'], errors='coerce') - center_y) / radius
-    #         caught_df = caught_df.dropna(subset=['x', 'y'])
-        
-    #         if caught_df.empty:
-    #             st.info("No valid caught dismissal coordinates.")
-    #             return
-        
-    #         # Build plotly figure
-    #         fig = go.Figure()
-        
-    #         # Field
-    #         fig.add_shape(type="circle", x0=-1, y0=-1, x1=1, y1=1,
-    #                       fillcolor="#228B22", line_color="black")
-    #         fig.add_shape(type="circle", x0=-0.5, y0=-0.5, x1=0.5, y1=0.5,
-    #                       fillcolor="#66bb6a", line_color="white")
-        
-    #         # Pitch
-    #         fig.add_shape(type="rect", x0=-0.04, y0=-0.08, x1=0.04, y1=0.08,
-    #                       fillcolor="tan", line_color=None)
-        
-    #         # Radials
-    #         for a in np.linspace(0, 2*np.pi, 9)[:-1]:
-    #             fig.add_trace(go.Scatter(
-    #                 x=[0, np.cos(a)], y=[0, np.sin(a)],
-    #                 mode='lines', line=dict(color='white', width=1),
-    #                 opacity=0.25, showlegend=False
-    #             ))
-        
-    #         # Plot caught dismissal points
-    #         fig.add_trace(go.Scatter(
-    #             x=caught_df['x'],
-    #             y=caught_df['y'],
-    #             mode='markers',
-    #             marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
-    #             hovertemplate=
-    #                 "<b>Batter:</b> %{customdata[0]}<br>"
-    #                 "<b>Bowler:</b> %{customdata[1]}<br>"
-    #                 "<b>Shot:</b> %{customdata[2]}<br>"
-    #                 "<extra></extra>",
-    #             customdata=caught_df[['bat', 'bowl', 'shot']].fillna('').values,
-    #             name="Caught dismissals"
-    #         ))
-        
-    #         fig.update_layout(
-    #             title="Caught Dismissal Locations",
-    #             xaxis=dict(range=[-1.2, 1.2], visible=False),
-    #             yaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="x"),
-    #             width=700, height=700,
-    #             margin=dict(l=0, r=0, t=40, b=0)
-    #         )
-        
-    #         st.plotly_chart(fig, use_container_width=True)
-
-    #     # ---------- robust map-lookup helpers ----------
-    #     def _norm_key(s):
-    #         if s is None:
-    #             return ''
-    #         return str(s).strip().upper().replace(' ', '_').replace('-', '_')
-    
-    #     def get_map_index(map_obj, raw_val):
-    #         if raw_val is None:
-    #             return None
-    #         sval = str(raw_val).strip()
-    #         if sval == '' or sval.lower() in ('nan', 'none'):
-    #             return None
-    
-    #         if sval in map_obj:
-    #             return int(map_obj[sval])
-    #         s_norm = _norm_key(sval)
-    #         for k in map_obj:
-    #             try:
-    #                 if isinstance(k, str) and _norm_key(k) == s_norm:
-    #                     return int(map_obj[k])
-    #             except Exception:
-    #                 continue
-    #         for k in map_obj:
-    #             try:
-    #                 if isinstance(k, str) and (k.lower() in sval.lower() or sval.lower() in k.lower()):
-    #                     return int(map_obj[k])
-    #             except Exception:
-    #                 continue
-    #         return None
-    
-    #     # ---------- grids builder (adapted for bowling, but same as batting since metrics are batter performance vs bowler) ----------
-    #     def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', runs_col_candidates=('bowlruns', 'score'),
-    #                           control_col='control', dismissal_col='dismissal'):
-    #         if 'length_map' in globals() and isinstance(length_map, dict) and len(length_map) > 0:
-    #             try:
-    #                 max_idx = max(int(v) for v in length_map.values())
-    #                 n_rows = max(5, max_idx + 1)
-    #             except Exception:
-    #                 n_rows = 5
-    #         else:
-    #             n_rows = 5
-    #             st.warning("length_map not found; defaulting to 5 rows.")
-    
-    #         length_vals = df_in.get(length_col_name, pd.Series()).dropna().astype(str).str.lower().unique()
-    #         if any('full toss' in val for val in length_vals):
-    #             n_rows = max(n_rows, 6)
-    
-    #         n_cols = 5
-    
-    #         count = np.zeros((n_rows, n_cols), dtype=int)
-    #         bounds = np.zeros((n_rows, n_cols), dtype=int)
-    #         dots = np.zeros((n_rows, n_cols), dtype=int)
-    #         runs = np.zeros((n_rows, n_cols), dtype=float)
-    #         wkt = np.zeros((n_rows, n_cols), dtype=int)
-    #         ctrl_not = np.zeros((n_rows, n_cols), dtype=int)
-    
-    #         # choose runs column present (for bowling, prefer bowlruns)
-    #         runs_col = None
-    #         for c in runs_col_candidates:
-    #             if c in df_in.columns:
-    #                 runs_col = c
-    #                 break
-    #         if runs_col is None:
-    #             runs_col = None # will use 0
-    
-    #         wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
-    #         dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
-    #         for _, row in df_in.iterrows():
-    #             li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
-    #             le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
-    #             if li is None or le is None:
-    #                 continue
-    #             if not (0 <= le < n_rows and 0 <= li < n_cols):
-    #                 continue
-    #             count[le, li] += 1
-    #             rv = 0
-    #             if runs_col:
-    #                 try:
-    #                     rv = int(row.get(runs_col, 0) or 0)
-    #                 except:
-    #                     rv = 0
-    #             runs[le, li] += rv
-    #             if rv >= 4:
-    #                 bounds[le, li] += 1
-    #             if rv == 0:
-    #                 dots[le, li] += 1
-    #             dval = str(row.get(dismissal_col, '') or '').lower()
-    #             if any(tok in dval for tok in wkt_tokens):
-    #                 wkt[le, li] += 1
-    #             cval = row.get(control_col, None)
-    #             if cval is not None:
-    #                 if isinstance(cval, str) and 'not' in cval.lower():
-    #                     ctrl_not[le, li] += 1
-    #                 elif isinstance(cval, (int, float)) and float(cval) == 0:
-    #                     ctrl_not[le, li] += 1
-    
-    #         # compute Econ (runs/6 balls) and control %
-    #         econ = np.full(count.shape, np.nan)
-    #         ctrl_pct = np.full(count.shape, np.nan)
-    #         for i in range(n_rows):
-    #             for j in range(n_cols):
-    #                 if count[i, j] > 0:
-    #                     econ[i, j] = (runs[i, j] * 6.0 / count[i, j])
-    #                     ctrl_pct[i, j] = (ctrl_not[i, j] / count[i, j]) * 100.0
+            # compute Econ (runs/6 balls) and control %
+            econ = np.full(count.shape, np.nan)
+            ctrl_pct = np.full(count.shape, np.nan)
+            for i in range(n_rows):
+                for j in range(n_cols):
+                    if count[i, j] > 0:
+                        econ[i, j] = (runs[i, j] * 6.0 / count[i, j])
+                        ctrl_pct[i, j] = (ctrl_not[i, j] / count[i, j]) * 100.0
             
-    #         return {
-    #             'count': count, 'bounds': bounds, 'dots': dots,
-    #             'runs': runs, 'econ': econ, 'ctrl_pct': ctrl_pct, 'wkt': wkt, 'n_rows': n_rows, 'n_cols': n_cols
-    #         }
+            return {
+                'count': count, 'bounds': bounds, 'dots': dots,
+                'runs': runs, 'econ': econ, 'ctrl_pct': ctrl_pct, 'wkt': wkt, 'n_rows': n_rows, 'n_cols': n_cols
+            }
     
-    #     # ---------- display utility (adapted for bowling metrics) ----------
-    #     def display_pitchmaps_from_df(df_src, title_prefix):
-    #         if df_src is None or df_src.empty:
-    #             st.info(f"No deliveries to show for {title_prefix}")
-    #             return
+        # ---------- display utility (adapted for bowling metrics) ----------
+        def display_pitchmaps_from_df(df_src, title_prefix):
+            if df_src is None or df_src.empty:
+                st.info(f"No deliveries to show for {title_prefix}")
+                return
     
-    #         grids = build_pitch_grids(df_src)
+            grids = build_pitch_grids(df_src)
     
-    #         # detect LHB presence among deliveries
-    #         bh_col_name = globals().get('bat_hand_col', 'bat_hand')
-    #         is_lhb = False
-    #         if bh_col_name in df_src.columns:
-    #             hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
-    #             if any(h.upper().startswith('L') for h in hands):
-    #                 is_lhb = True
+            # detect LHB presence among deliveries
+            bh_col_name = globals().get('bat_hand_col', 'bat_hand')
+            is_lhb = False
+            if bh_col_name in df_src.columns:
+                hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
+                if any(h.upper().startswith('L') for h in hands):
+                    is_lhb = True
     
-    #         def maybe_flip(arr):
-    #             return np.fliplr(arr) if is_lhb else arr.copy()
+            def maybe_flip(arr):
+                return np.fliplr(arr) if is_lhb else arr.copy()
     
-    #         count = maybe_flip(grids['count'])
-    #         bounds = maybe_flip(grids['bounds'])
-    #         dots = maybe_flip(grids['dots'])
-    #         econ = maybe_flip(grids['econ'])
-    #         ctrl = maybe_flip(grids['ctrl_pct'])
-    #         wkt = maybe_flip(grids['wkt'])
-    #         runs = maybe_flip(grids['runs'])
+            count = maybe_flip(grids['count'])
+            bounds = maybe_flip(grids['bounds'])
+            dots = maybe_flip(grids['dots'])
+            econ = maybe_flip(grids['econ'])
+            ctrl = maybe_flip(grids['ctrl_pct'])
+            wkt = maybe_flip(grids['wkt'])
+            runs = maybe_flip(grids['runs'])
     
-    #         total = count.sum() if count.sum() > 0 else 1.0
-    #         perc = count.astype(float) / total * 100.0
+            total = count.sum() if count.sum() > 0 else 1.0
+            perc = count.astype(float) / total * 100.0
     
-    #         # xticks order: for RHB left->right, for LHB reversed (we flipped arrays already,
-    #         # so choose labels accordingly)
-    #         xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-    #         xticks = xticks_base[::-1] if is_lhb else xticks_base
+            # xticks order: for RHB left->right, for LHB reversed (we flipped arrays already,
+            # so choose labels accordingly)
+            xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+            xticks = xticks_base[::-1] if is_lhb else xticks_base
     
-    #         # ytick labels depends on n_rows and whether FULL_TOSS exists
-    #         n_rows = grids['n_rows']
-    #         # prefer to show Full Toss on top if n_rows == 6
-    #         if n_rows >= 6:
-    #             yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-    #         else:
-    #             yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+            # ytick labels depends on n_rows and whether FULL_TOSS exists
+            n_rows = grids['n_rows']
+            # prefer to show Full Toss on top if n_rows == 6
+            if n_rows >= 6:
+                yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
+            else:
+                yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
     
-    #         fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-    #         plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
+            fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+            plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
     
-    #         plot_list = [
-    #             (perc, '% of balls (heat)', 'Blues'),
-    #             (bounds, 'Boundaries conceded (count)', 'OrRd'),
-    #             (dots, 'Dot balls (count)', 'Blues'),
-    #             (econ, 'Econ (runs/6 balls)', 'Reds'),
-    #             (ctrl, 'False Shot % (induced)', 'PuBu'),
-    #             (runs, 'Runs conceded (sum)', 'Reds')
-    #         ]
+            plot_list = [
+                (perc, '% of balls (heat)', 'Blues'),
+                (bounds, 'Boundaries conceded (count)', 'OrRd'),
+                (dots, 'Dot balls (count)', 'Blues'),
+                (econ, 'Econ (runs/6 balls)', 'Reds'),
+                (ctrl, 'False Shot % (induced)', 'PuBu'),
+                (runs, 'Runs conceded (sum)', 'Reds')
+            ]
     
-    #         for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
-    #             safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-    #             # autoscale vmax by 95th percentile to reduce outlier effect
-    #             flat = safe_arr.flatten()
-    #             if np.all(flat == 0):
-    #                 vmin, vmax = 0, 1
-    #             else:
-    #                 vmin = float(np.nanmin(flat))
-    #                 vmax = float(np.nanpercentile(flat, 95))
-    #                 if vmax <= vmin:
-    #                     vmax = vmin + 1.0
+            for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+                safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
+                # autoscale vmax by 95th percentile to reduce outlier effect
+                flat = safe_arr.flatten()
+                if np.all(flat == 0):
+                    vmin, vmax = 0, 1
+                else:
+                    vmin = float(np.nanmin(flat))
+                    vmax = float(np.nanpercentile(flat, 95))
+                    if vmax <= vmin:
+                        vmax = vmin + 1.0
     
-    #             im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
-    #             ax.set_title(ttl)
-    #             ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
-    #             ax.set_xticklabels(xticks, rotation=45, ha='right')
-    #             ax.set_yticklabels(yticklabels)
+                im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                ax.set_title(ttl)
+                ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
+                ax.set_xticklabels(xticks, rotation=45, ha='right')
+                ax.set_yticklabels(yticklabels)
     
-    #             # black minor-grid borders for cells
-    #             ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
-    #             ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
-    #             ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
-    #             ax.tick_params(which='minor', bottom=False, left=False)
+                # black minor-grid borders for cells
+                ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
+                ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
+                ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
+                ax.tick_params(which='minor', bottom=False, left=False)
     
-    #             # annotate N W for wicket cells (e.g., '2 W') ONLY in the first plot (% of balls)
-    #             if ax_idx == 0:
-    #                 for i in range(grids['n_rows']):
-    #                     for j in range(grids['n_cols']):
-    #                         w_count = int(wkt[i, j])
-    #                         if w_count > 0:
-    #                             w_text = f"{w_count} W" if w_count > 1 else 'W'
-    #                             ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
-    #                                     bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+                # annotate N W for wicket cells (e.g., '2 W') ONLY in the first plot (% of balls)
+                if ax_idx == 0:
+                    for i in range(grids['n_rows']):
+                        for j in range(grids['n_cols']):
+                            w_count = int(wkt[i, j])
+                            if w_count > 0:
+                                w_text = f"{w_count} W" if w_count > 1 else 'W'
+                                ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
+                                        bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
     
-    #             fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+                fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
     
-    #         plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+            plt.tight_layout(rect=[0, 0.03, 1, 0.97])
     
-    #         # display via safe_st_pyplot if available
-    #         safe_fn = globals().get('safe_st_pyplot', None)
-    #         try:
-    #             if callable(safe_fn):
-    #                 safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-    #             else:
-    #                 st.pyplot(fig)
-    #         except Exception:
-    #             st.pyplot(fig)
-    #         finally:
-    #             plt.close(fig)
+            # display via safe_st_pyplot if available
+            safe_fn = globals().get('safe_st_pyplot', None)
+            try:
+                if callable(safe_fn):
+                    safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                else:
+                    st.pyplot(fig)
+            except Exception:
+                st.pyplot(fig)
+            finally:
+                plt.close(fig)
     
-    #     # ---------- attempt to draw wagon chart using your existing function ----------
-    #     def draw_wagon_if_available(df_wagon, batter_name):
-    #         if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
-    #             try:
-    #                 fig_w = draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
-    #                 safe_fn = globals().get('safe_st_pyplot', None)
-    #                 if callable(safe_fn):
-    #                     safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-    #                 else:
-    #                     st.pyplot(fig_w)
-    #             except Exception as e:
-    #                 st.error(f"Wagon drawing function exists but raised: {e}")
-    #         else:
-    #             st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+        # ---------- attempt to draw wagon chart using your existing function ----------
+        def draw_wagon_if_available(df_wagon, batter_name):
+            if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
+                try:
+                    fig_w = draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
+                    safe_fn = globals().get('safe_st_pyplot', None)
+                    if callable(safe_fn):
+                        safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                    else:
+                        st.pyplot(fig_w)
+                except Exception as e:
+                    st.error(f"Wagon drawing function exists but raised: {e}")
+            else:
+                st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
     
-    #     # ---------- When user selects a batter hand ----------
-    #     if chosen_hand and chosen_hand != '-- none --':
-    #         # filter pf preferentially; else bdf - use substring contains for robustness
-    #         def filter_by_hand(df, col='bat_hand', hand=chosen_hand):
-    #             if col not in df.columns:
-    #                 return df.iloc[0:0]
-    #             mask = df[col].astype(str).str.lower().str.contains(str(hand).lower(), na=False)
-    #             if not mask.any():
-    #                 # fallback: exact match after norm
-    #                 norm_hand = _norm_key(hand)
-    #                 mask = df[col].apply(lambda x: _norm_key(x) == norm_hand)
-    #             return df[mask].copy()
+        # ---------- When user selects a batter hand ----------
+        if chosen_hand and chosen_hand != '-- none --':
+            # filter pf preferentially; else bdf - use substring contains for robustness
+            def filter_by_hand(df, col='bat_hand', hand=chosen_hand):
+                if col not in df.columns:
+                    return df.iloc[0:0]
+                mask = df[col].astype(str).str.lower().str.contains(str(hand).lower(), na=False)
+                if not mask.any():
+                    # fallback: exact match after norm
+                    norm_hand = _norm_key(hand)
+                    mask = df[col].apply(lambda x: _norm_key(x) == norm_hand)
+                return df[mask].copy()
     
-    #         sel_pf = filter_by_hand(pf)
-    #         sel_bdf = filter_by_hand(bdf)
+            sel_pf = filter_by_hand(pf)
+            sel_bdf = filter_by_hand(bdf)
     
-    #         df_use = sel_pf if not sel_pf.empty else sel_bdf
-    #         if df_use.empty:
-    #             st.info(f"No deliveries found for batter hand '{chosen_hand}'.")
-    #         else:
-    #             st.markdown(f"### Detailed view — Batter Hand: {chosen_hand}")
-    #             draw_wagon_if_available(df_use, player_selected)
+            df_use = sel_pf if not sel_pf.empty else sel_bdf
+            if df_use.empty:
+                st.info(f"No deliveries found for batter hand '{chosen_hand}'.")
+            else:
+                st.markdown(f"### Detailed view — Batter Hand: {chosen_hand}")
+                draw_wagon_if_available(df_use, player_selected)
 
-    #             # ---- NEW: Bowler caught dismissal wagon (HERE) ----
-    #             st.markdown("### Caught Dismissal Locations")
-    #             draw_bowler_caught_dismissals_wagon(df_use, player_selected)
+                # ---- NEW: Bowler caught dismissal wagon (HERE) ----
+                st.markdown("### Caught Dismissal Locations")
+                draw_bowler_caught_dismissals_wagon(df_use, player_selected)
 
-    #             display_pitchmaps_from_df(df_use, f"vs Batter Hand: {chosen_hand}")
+                display_pitchmaps_from_df(df_use, f"vs Batter Hand: {chosen_hand}")
 
 
 
