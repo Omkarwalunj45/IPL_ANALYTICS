@@ -8692,7 +8692,7 @@ elif sidebar_option == "Strength vs Weakness":
 
 
                 # Required imports (place near top of your module)
-
+                ##PROBLEM BIG PROBLEM
                 
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                     """
@@ -8700,18 +8700,21 @@ elif sidebar_option == "Strength vs Weakness":
                     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
                                         False => request true handedness visualization (LHB will appear mirrored).
                     This wrapper tries to call the function with the new parameter if available (backwards compatible).
+                    If an LHB is detected and normalize_to_rhb is False, the final displayed figure will be
+                    mirrored horizontally (vertical axis passes through the pitch center).
                     """
                     import matplotlib.pyplot as plt
                     import streamlit as st
                     import inspect
-                    from PIL import Image
-                    from io import BytesIO
-               
+                    import pandas as pd
+                    import plotly.graph_objects as go
+                    from matplotlib.figure import Figure as MplFigure
+                
                     # Defensive check
                     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
                         st.warning("No wagon data available to draw.")
                         return
-               
+                
                     # Decide handedness (for UI messages / debugging)
                     batting_style_val = None
                     if 'bat_hand' in df_wagon.columns:
@@ -8720,13 +8723,13 @@ elif sidebar_option == "Strength vs Weakness":
                         except Exception:
                             batting_style_val = None
                     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-               
+                
                     # Check function signature
                     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
                     if draw_fn is None or not callable(draw_fn):
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
                         return
-               
+                
                     try:
                         sig = inspect.signature(draw_fn)
                         if 'normalize_to_rhb' in sig.parameters:
@@ -8735,53 +8738,103 @@ elif sidebar_option == "Strength vs Weakness":
                         else:
                             # older signature: call without flag (maintain legacy behaviour)
                             fig = draw_fn(df_wagon, batter_name)
-               
-                        # If the function returned a Matplotlib fig — capture and process
-                        if isinstance(fig, plt.Figure):
-                            buf = BytesIO()
-                            fig.savefig(buf, format='png', bbox_inches='tight', dpi=200)
-                            buf.seek(0)
-                            img = Image.open(buf)
-               
-                            # NEW: If LHB, mirror (flip horizontally) along vertical axis (left-right flip)
-                            if is_lhb:
-                                img = img.transpose(Image.FLIP_LEFT_RIGHT)
-               
-                            # Display the (possibly flipped) image
-                            st.image(img, use_column_width=True)
+                
+                        # Helper: mirror a Matplotlib figure in-place by inverting x-axis on every Axes
+                        def _mirror_matplotlib(fig_obj: MplFigure):
+                            try:
+                                for ax in fig_obj.axes:
+                                    # invert x-axis to produce horizontal mirror about vertical axis through pitch
+                                    try:
+                                        ax.invert_xaxis()
+                                    except Exception:
+                                        # fallback: swap x-limits
+                                        try:
+                                            x0, x1 = ax.get_xlim()
+                                            ax.set_xlim(-x1, -x0)
+                                        except Exception:
+                                            pass
+                                # redraw canvas if interactive
+                                try:
+                                    fig_obj.canvas.draw_idle()
+                                except Exception:
+                                    pass
+                            except Exception:
+                                # if anything fails, ignore mirroring to avoid crashing display
+                                pass
+                
+                        # Helper: mirror a Plotly figure by reversing xaxis autorange
+                        def _mirror_plotly(plotly_fig: go.Figure):
+                            try:
+                                # If explicit ranges exist, reverse them; else request autorange reversed
+                                has_range = False
+                                try:
+                                    x_layout = plotly_fig.layout.xaxis
+                                    if getattr(x_layout, 'range', None) is not None:
+                                        r = list(x_layout.range)
+                                        plotly_fig.update_xaxes(range=[-r[1], -r[0]])
+                                        has_range = True
+                                except Exception:
+                                    has_range = False
+                
+                                if not has_range:
+                                    # Simple, robust reversal — works for traces and shapes
+                                    plotly_fig.update_xaxes(autorange='reversed')
+                            except Exception:
+                                pass
+                
+                        # If the function returned a Matplotlib fig — display it
+                        if isinstance(fig, MplFigure):
+                            # perform mirroring if requested: only mirror when user asked for true handedness and batter is LHB
+                            if (not normalize_to_rhb) and is_lhb:
+                                _mirror_matplotlib(fig)
+                
+                            safe_fn = globals().get('safe_st_pyplot', None)
+                            if callable(safe_fn):
+                                try:
+                                    safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                except Exception:
+                                    st.pyplot(fig)
+                            else:
+                                st.pyplot(fig)
                             return
-               
+                
                         # If function returned None, it may have drawn to current fig; capture that
                         if fig is None:
                             mpl_fig = plt.gcf()
-                            # If figure has axes and content, capture and process
-                            if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
-                                buf = BytesIO()
-                                mpl_fig.savefig(buf, format='png', bbox_inches='tight', dpi=200)
-                                buf.seek(0)
-                                img = Image.open(buf)
-               
-                                # NEW: If LHB, mirror (flip horizontally) along vertical axis
-                                if is_lhb:
-                                    img = img.transpose(Image.FLIP_LEFT_RIGHT)
-               
-                                # Display the (possibly flipped) image
-                                st.image(img, use_column_width=True)
-                                return
-               
+                            # If figure has axes and content, display it
+                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
+                                # apply mirror if needed
+                                if (not normalize_to_rhb) and is_lhb:
+                                    _mirror_matplotlib(mpl_fig)
+                
+                                safe_fn = globals().get('safe_st_pyplot', None)
+                                if callable(safe_fn):
+                                    try:
+                                        safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                    except Exception:
+                                        st.pyplot(mpl_fig)
+                                else:
+                                    st.pyplot(mpl_fig)
+                            return
+                
                         # If function returned a Plotly figure (rare), display it
-                        if 'plotly' in str(type(fig)).lower():
+                        if isinstance(fig, go.Figure):
+                            # apply mirror for LHB + true-handedness request
+                            if (not normalize_to_rhb) and is_lhb:
+                                _mirror_plotly(fig)
+                
                             try:
                                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
                             except Exception:
                                 pass
                             st.plotly_chart(fig, use_container_width=True)
                             return
-               
+                
                         # Unknown return — just state it
                         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
                     except Exception as e:
                         st.error(f"Wagon drawing function raised: {e}")
+
                 # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                 #     """
                 #     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
