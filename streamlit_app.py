@@ -917,6 +917,58 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+
+/* =========================
+   SIDEBAR (lighter blue)
+========================= */
+[data-testid="stSidebar"] {
+    background-color: #123a5e;
+    border-right: 1px solid rgba(255,255,255,0.12);
+}
+
+/* Sidebar text */
+[data-testid="stSidebar"] * {
+    color: #eef6fb !important;
+    font-weight: 500;
+}
+
+/* =========================
+   YEAR SLIDER – FORCE VISIBILITY
+========================= */
+
+/* Slider tick labels: 2021 / 2026 */
+[data-testid="stSidebar"] [data-baseweb="slider"] span {
+    color: #f08a24 !important;      /* ORANGE */
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+/* Slider label text ("Select year range") */
+[data-testid="stSidebar"] .stSlider label {
+    color: #f08a24 !important;
+    font-weight: 700 !important;
+}
+
+/* Slider rail (background) – darker so text pops */
+[data-testid="stSidebar"] [data-baseweb="slider"] div[aria-hidden="true"] {
+    background-color: rgba(255,255,255,0.35) !important;
+}
+
+/* Slider active track */
+[data-testid="stSidebar"] [data-baseweb="slider"] > div > div {
+    background-color: rgba(240,138,36,0.55) !important;
+}
+
+/* Slider handle (thumb) */
+[data-testid="stSidebar"] [role="slider"] {
+    background-color: #f08a24 !important;
+    border: 2px solid #ffffff !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 import os
 import glob
