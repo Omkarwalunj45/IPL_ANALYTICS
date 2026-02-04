@@ -877,7 +877,7 @@ components.html(
     height=155,
     scrolling=False
 )
-      st.markdown("""
+st.markdown("""
 <style>
 /* ===== Sidebar Background ===== */
 [data-testid="stSidebar"] {
