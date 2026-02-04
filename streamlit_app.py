@@ -899,7 +899,7 @@ with st.sidebar:
   <span style="background:#f08a24;color:#0b2545;padding:4px 10px;border-radius:14px;font-size:13px;">
     {year_range[0]}
   </span>
-  <span style="color:#f1f6fa;">→</span>
+  <span style="color:#f1f6fa;">&rarr;</span>
   <span style="background:#f08a24;color:#0b2545;padding:4px 10px;border-radius:14px;font-size:13px;">
     {year_range[1]}
   </span>
@@ -907,6 +907,7 @@ with st.sidebar:
         """,
         unsafe_allow_html=True
     )
+
 
 import os
 import glob
