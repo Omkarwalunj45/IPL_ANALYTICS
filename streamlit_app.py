@@ -878,31 +878,31 @@ components.html(
     scrolling=False
 )
 
-with st.sidebar:
-    st.markdown("### Select Years")
+# with st.sidebar:
+#     st.markdown("### Select Years")
 
-    year_range = st.slider(
-        "Select year range",
-        min_value=2021,
-        max_value=2026,
-        value=(2021, 2026),
-        key="year_range_sidebar"
-    )
+#     year_range = st.slider(
+#         "Select year range",
+#         min_value=2021,
+#         max_value=2026,
+#         value=(2021, 2026),
+#         key="year_range_sidebar"
+#     )
 
-    year_html = (
-        "<div style='display:flex;justify-content:center;align-items:center;"
-        "gap:10px;margin-top:8px;font-weight:700;'>"
-        f"<span style='background:#f08a24;color:#0b2545;"
-        "padding:4px 10px;border-radius:14px;font-size:13px;'>"
-        f"{year_range[0]}</span>"
-        "<span style='color:#f1f6fa;'>&rarr;</span>"
-        f"<span style='background:#f08a24;color:#0b2545;"
-        "padding:4px 10px;border-radius:14px;font-size:13px;'>"
-        f"{year_range[1]}</span>"
-        "</div>"
-    )
+#     year_html = (
+#         "<div style='display:flex;justify-content:center;align-items:center;"
+#         "gap:10px;margin-top:8px;font-weight:700;'>"
+#         f"<span style='background:#f08a24;color:#0b2545;"
+#         "padding:4px 10px;border-radius:14px;font-size:13px;'>"
+#         f"{year_range[0]}</span>"
+#         "<span style='color:#f1f6fa;'>&rarr;</span>"
+#         f"<span style='background:#f08a24;color:#0b2545;"
+#         "padding:4px 10px;border-radius:14px;font-size:13px;'>"
+#         f"{year_range[1]}</span>"
+#         "</div>"
+#     )
 
-    st.markdown(year_html, unsafe_allow_html=True)
+#     st.markdown(year_html, unsafe_allow_html=True)
 
 
 import os
