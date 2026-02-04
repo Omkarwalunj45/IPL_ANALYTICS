@@ -470,6 +470,7 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
+
 import streamlit as st
 import streamlit.components.v1 as components
 
@@ -520,25 +521,30 @@ components.html(
                 </div>
             </div>
 
-            <!-- RIGHT: QUIET LINKEDIN -->
-            <div style="text-align:right; margin-top:6px;">
+            <!-- RIGHT: LINKEDIN (QUIET) -->
+            <div style="text-align:right; margin-top:8px;">
                 <a href="https://www.linkedin.com/in/omkar-walunj-8256a4280/"
                    target="_blank"
                    style="
+                       display:flex;
+                       align-items:center;
+                       gap:6px;
+                       justify-content:flex-end;
                        text-decoration:none;
                        font-size:12px;
                        font-weight:600;
                        color:#CBD5E1;
-                       opacity:0.9;
                    ">
-                    Built by Omkar Walunj
+                    <span style="font-size:13px;">🔗</span>
+                    <span>LinkedIn</span>
                 </a>
+
                 <div style="
                     font-size:11px;
                     color:#94A3B8;
                     margin-top:4px;
                 ">
-                    Cricket Analytics · ICR Framework
+                    Omkar Walunj · Cricket Analytics
                 </div>
             </div>
 
