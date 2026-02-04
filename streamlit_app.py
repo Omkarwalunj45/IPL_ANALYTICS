@@ -970,6 +970,45 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+  st.markdown("""
+<style>
+
+/* ===== SIDEBAR (lighter blue) ===== */
+[data-testid="stSidebar"] {
+    background-color: #1b4965;
+    border-right: 1px solid rgba(255,255,255,0.15);
+}
+
+[data-testid="stSidebar"] * {
+    color: #f1f6fa !important;
+    font-weight: 500;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+year_range = st.slider(
+    "Select year range",
+    min_value=2021,
+    max_value=2026,
+    value=(2021, 2026)
+)
+
+st.markdown(
+    f"""
+    <div style="
+        margin-top: 6px;
+        font-weight: 700;
+        color: #f08a24;
+        text-align: center;
+        font-size: 14px;
+    ">
+        Season Range: {year_range[0]} – {year_range[1]}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 import os
 import glob
 import re
