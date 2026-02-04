@@ -4277,19 +4277,34 @@ if sidebar_option == "Player Profile":
         # found_top_cols["DAA"] = avg_DAA
     
         # display metrics
-        visible_metrics = [(k, v) for k, v in found_top_cols.items() if v is not None and not (isinstance(v, float) and np.isnan(v))]
+        visible_metrics = [
+            (k, v) for k, v in found_top_cols.items()
+            if v is not None and not (isinstance(v, float) and np.isnan(v))
+        ]
+        
         if visible_metrics:
             cols = st.columns(len(visible_metrics))
             for (label, val), col in zip(visible_metrics, cols):
+        
                 if isinstance(val, (int, np.integer)):
                     disp = f"{int(val)}"
+        
                 elif isinstance(val, (float, np.floating)) and not np.isnan(val):
-                    disp = f"{val:.2f}"
+                    # 🔥 smart formatting
+                    if "strike" in label.lower():
+                        disp = f"{val:.1f}"        # SR → 1 decimal
+                    elif "average" in label.lower():
+                        disp = f"{val:.2f}"        # Avg → 2 decimals
+                    else:
+                        disp = f"{val:.2f}"
+        
                 else:
                     disp = str(val)
+        
                 col.metric(label, disp)
         else:
-            st.write("Top metrics not available for this player.")
+            st.write("Top metrics not available.")
+
 
     
         # --------------------
