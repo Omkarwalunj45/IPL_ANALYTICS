@@ -4004,30 +4004,43 @@ if sidebar_option == "Player Profile":
         if not rest_series.empty:
             rest_df = rest_series.reset_index()
             rest_df.columns = ["Metric", "Value"]
-    
-            def fmt_val(x):
-                if pd.isna(x):
+        
+            def fmt_val_with_col(metric_name, value):
+                if pd.isna(value):
                     return ""
-                if isinstance(x, (int, np.integer)):
-                    return int(x)
-                if isinstance(x, (float, np.floating)):
-                    return round(x, 2)
-                return x
-    
-            rest_df["Value"] = rest_df["Value"].apply(fmt_val)
-    
-            # Light "skin" header color for Detailed stats (peach / light skin tone)
-            detailed_header_color = "#fff0e6"  # light skin/peach
+        
+                metric_lower = str(metric_name).lower()
+        
+                if any(k in metric_lower for k in ["balls", "runs", "innings"]):
+                    try:
+                        return int(round(float(value)))
+                    except Exception:
+                        return value
+        
+                if isinstance(value, (float, np.floating)):
+                    return round(value, 2)
+        
+                if isinstance(value, (int, np.integer)):
+                    return int(value)
+        
+                return value
+        
+            rest_df["Value"] = [
+                fmt_val_with_col(m, v) for m, v in zip(rest_df["Metric"], rest_df["Value"])
+            ]
+        
+            detailed_header_color = "#fff0e6"
             detailed_table_styles = [
                 {"selector": "thead th", "props": [("background-color", detailed_header_color), ("color", "#000"), ("font-weight", "600")]},
                 {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]},
                 {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#fff9f4")]},
             ]
-    
+        
             st.markdown("#### Detailed stats")
             st.dataframe(rest_df.style.set_table_styles(detailed_table_styles), use_container_width=True)
         else:
             st.write("No additional per-player summary metrics available.")
+
     
         # --------------------
         # Opponent / Year / Inning breakdowns: use scrollable, lightly-colored tables
