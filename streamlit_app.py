@@ -32,6 +32,7 @@ LHB_ZONE_SWAP = {
                 
                     "Mid Off": "Mid On",
                     "Mid On": "Mid Off"
+}
                 
 def draw_bowler_caught_dismissals_wagon(df_wagon, bowler_name, normalize_to_rhb=True):
     """
