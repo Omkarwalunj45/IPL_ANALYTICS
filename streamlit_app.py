@@ -1143,27 +1143,10 @@ years = st.sidebar.slider(
     max_value=2026,
     value=st.session_state.year_range,
     step=1,
-    key="year_slider_key"
+    key="year_slider_key",
+    label_visibility="visible"
 )
 
-st.session_state.year_range = years
-selected_years = list(range(years[0], years[1] + 1))
-
-# 🔥 CLEAR, VISIBLE YEAR DISPLAY (THIS SOLVES IT)
-st.sidebar.markdown(
-    f"""
-    <div style="
-        margin-top:6px;
-        text-align:center;
-        font-weight:700;
-        color:#f08a24;
-        font-size:14px;
-    ">
-        {years[0]} &nbsp;–&nbsp; {years[1]}
-    </div>
-    """,
-    unsafe_allow_html=True
-)
 
 
 st.sidebar.header("Select Tournaments")
