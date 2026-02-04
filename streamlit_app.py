@@ -4014,27 +4014,25 @@ if sidebar_option == "Player Profile":
                 # Force INT for Balls / Runs / Innings
                 if any(k in metric_lower for k in ["balls", "runs", "innings"]):
                     try:
-                        return int(round(float(value)))
+                        return str(int(round(float(value))))
                     except Exception:
-                        return value
+                        return str(value)
             
-                # Numeric formatting
-                if isinstance(value, (int, np.integer)):
-                    return int(value)
-            
-                if isinstance(value, (float, np.floating)):
-                    # If effectively integer, show as int
-                    if abs(value - round(value)) < 1e-6:
-                        return int(round(value))
-                    # Else round to 2 decimals
-                    return round(value, 2)
-            
-                return value
+                # Floats → clean formatting
+                try:
+                    val = float(value)
+                    if abs(val - round(val)) < 1e-6:
+                        return str(int(round(val)))      # 30.000000 → "30"
+                    return f"{val:.2f}".rstrip("0").rstrip(".")  # 13.190000 → "13.19"
+                except Exception:
+                    return str(value)
+
 
         
             rest_df["Value"] = [
                 fmt_val_with_col(m, v) for m, v in zip(rest_df["Metric"], rest_df["Value"])
             ]
+
         
             detailed_header_color = "#fff0e6"
             
@@ -4062,9 +4060,36 @@ if sidebar_option == "Player Profile":
                 {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#fff9f4")]},
             ]
 
-        
-            st.markdown("#### Detailed stats")
-            st.dataframe(rest_df.style.set_table_styles(detailed_table_styles), use_container_width=True)
+            styled_df = (
+                rest_df
+                .style
+                .set_properties(**{
+                    "text-align": "center",
+                    "vertical-align": "middle"
+                })
+                .set_table_styles([
+                    {
+                        "selector": "th",
+                        "props": [
+                            ("background-color", "#fff0e6"),
+                            ("color", "#000"),
+                            ("font-weight", "600"),
+                            ("text-align", "center"),
+                        ],
+                    },
+                    {
+                        "selector": "td",
+                        "props": [
+                            ("text-align", "center"),
+                        ],
+                    },
+                ])
+                .hide(axis="index")
+            )
+
+            st.markdown("#### Detailed Stats")
+            st.dataframe(styled_df, use_container_width=True)
+
         else:
             st.write("No additional per-player summary metrics available.")
 
