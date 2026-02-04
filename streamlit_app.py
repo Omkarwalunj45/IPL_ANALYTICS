@@ -2289,101 +2289,176 @@ def get_sector_angle_requested(zone, batting_style):
     else:
         angle_deg = float(BASE_ANGLES_LHB.get(z, 0.0))
     return math.radians(angle_deg)
-
-def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
-                                                wagon_zone_col='wagonZone',
-                                                run_col='score',
-                                                bat_hand_col='bat_hand',
-                                                normalize_to_rhb=True):
+def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
     """
-    Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
-    When normalize_to_rhb=False and batter is LHB, mirrors the zone labels to show true LHB perspective.
+    Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
+    
+    - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
+                       False => request true handedness visualization (LHB will appear mirrored).
+    
+    This wrapper tries to call the function with the new parameter if available (backwards compatible).
     """
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.set_aspect('equal')
-    ax.axis('off')
-    # Field base
-    ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
-    ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
-    ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
-    ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
-    # pitch rectangle approx
-    pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
-    ax.add_patch(pitch_rect)
-    # radial sector lines (8)
-    angles = np.linspace(0, 2*np.pi, 9)[:-1]
-    for angle in angles:
-        x = math.cos(angle)
-        y = math.sin(angle)
-        ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
-    # prepare data (runs, fours, sixes by sector)
-    tmp = final_df_local.copy()
-    if wagon_zone_col in tmp.columns:
-        tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
-    else:
-        tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
-    # raw aggregates keyed by the raw sector id (1..8)
-    runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
-    fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
-    sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
-    total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
-    # Title
-    title_text = f"{batsman_name}'s Scoring Zones"
-    plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
-    # Determine batter handedness (first non-null sample in the filtered rows)
+    import matplotlib.pyplot as plt
+    import streamlit as st
+    import inspect
+    from matplotlib.figure import Figure as MplFigure
+    
+    # Defensive check
+    if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+        st.warning("No wagon data available to draw.")
+        return
+    
+    # Decide handedness (for UI messages / debugging)
     batting_style_val = None
-    if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
-        batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
+    if 'bat_hand' in df_wagon.columns:
+        try:
+            batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+        except Exception:
+            batting_style_val = None
+    
     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
     
-    # Define LHB zone label mapping (mirror across vertical axis)
-    # RHB zones: 1=Fine Leg, 2=Square Leg, 3=Mid Wicket, 4=Mid On, 5=Mid Off, 6=Covers, 7=Point, 8=Third Man
-    # LHB zones: 1=Third Man, 2=Point, 3=Covers, 4=Mid Off, 5=Mid On, 6=Mid Wicket, 7=Square Leg, 8=Fine Leg
-    SECTOR_NAMES_LHB = {
-        1: "Third Man",
-        2: "Point", 
-        3: "Covers",
-        4: "Mid Off",
-        5: "Mid On",
-        6: "Mid Wicket",
-        7: "Square Leg",
-        8: "Fine Leg"
-    }
+    # Check function signature
+    draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
+    if draw_fn is None or not callable(draw_fn):
+        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+        return
     
-    # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
-    for zone in range(1, 9):
-        angle_mid = get_sector_angle_requested(zone, batting_style_val)
-        x = 0.60 * math.cos(angle_mid)
-        y = 0.60 * math.sin(angle_mid)
-        
-        data_zone = zone
-        runs = int(runs_by_zone.get(data_zone, 0))
-        pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
-        pct_str = f"{pct:.2f}%"
-        # main labels
-        ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
-        ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
-        # fours & sixes below
-        fours = int(fours_by_zone.get(data_zone, 0))
-        sixes = int(sixes_by_zone.get(data_zone, 0))
-        ax.text(x, y-0.12, f"4s: {fours} 6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
-        
-        # Sector name: use LHB labels when normalize_to_rhb=False and batter is LHB
-        if is_lhb and not normalize_to_rhb:
-            sector_name_to_show = SECTOR_NAMES_LHB.get(zone, f"Sector {zone}")
+    try:
+        sig = inspect.signature(draw_fn)
+        if 'normalize_to_rhb' in sig.parameters:
+            # call with the explicit flag (preferred)
+            fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
         else:
-            display_sector_idx = zone if not is_lhb else (9 - zone)
-            sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+            # older signature: call without flag (maintain legacy behaviour)
+            fig = draw_fn(df_wagon, batter_name)
         
-        sx = 0.80 * math.cos(angle_mid)
-        sy = 0.80 * math.sin(angle_mid)
-        ax.text(sx, sy, sector_name_to_show, ha='center', va='center', color='white', fontsize=8)
+        # If the function returned a Matplotlib fig — display it
+        if isinstance(fig, MplFigure):
+            safe_fn = globals().get('safe_st_pyplot', None)
+            if callable(safe_fn):
+                try:
+                    safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                except Exception:
+                    st.pyplot(fig)
+            else:
+                st.pyplot(fig)
+            return
+        
+        # If function returned None, it may have drawn to current fig; capture that
+        if fig is None:
+            mpl_fig = plt.gcf()
+            # If figure has axes and content, display it
+            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
+                safe_fn = globals().get('safe_st_pyplot', None)
+                if callable(safe_fn):
+                    try:
+                        safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                    except Exception:
+                        st.pyplot(mpl_fig)
+                else:
+                    st.pyplot(mpl_fig)
+                return
+        
+        # If function returned a Plotly figure (rare), display it
+        if isinstance(fig, go.Figure):
+            try:
+                fig.update_yaxes(scaleanchor="x", scaleratio=1)
+            except Exception:
+                pass
+            st.plotly_chart(fig, use_container_width=True)
+            return
+        
+        # Unknown return — just state it
+        st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+        
+    except Exception as e:
+        st.error(f"Wagon drawing function raised: {e}")
+# def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
+#     """
+#     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
     
-    ax.set_xlim(-1.2, 1.2)
-    ax.set_ylim(-1.2, 1.2)
-    plt.tight_layout(pad=0)
+#     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
+#                        False => request true handedness visualization (LHB will appear mirrored).
     
-    return fig
+#     This wrapper tries to call the function with the new parameter if available (backwards compatible).
+#     """
+#     import matplotlib.pyplot as plt
+#     import streamlit as st
+#     import inspect
+#     from matplotlib.figure import Figure as MplFigure
+    
+#     # Defensive check
+#     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+#         st.warning("No wagon data available to draw.")
+#         return
+    
+#     # Decide handedness (for UI messages / debugging)
+#     batting_style_val = None
+#     if 'bat_hand' in df_wagon.columns:
+#         try:
+#             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+#         except Exception:
+#             batting_style_val = None
+    
+#     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+    
+#     # Check function signature
+#     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
+#     if draw_fn is None or not callable(draw_fn):
+#         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+#         return
+    
+#     try:
+#         sig = inspect.signature(draw_fn)
+#         if 'normalize_to_rhb' in sig.parameters:
+#             # call with the explicit flag (preferred)
+#             fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
+#         else:
+#             # older signature: call without flag (maintain legacy behaviour)
+#             fig = draw_fn(df_wagon, batter_name)
+        
+#         # If the function returned a Matplotlib fig — display it
+#         if isinstance(fig, MplFigure):
+#             safe_fn = globals().get('safe_st_pyplot', None)
+#             if callable(safe_fn):
+#                 try:
+#                     safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+#                 except Exception:
+#                     st.pyplot(fig)
+#             else:
+#                 st.pyplot(fig)
+#             return
+        
+#         # If function returned None, it may have drawn to current fig; capture that
+#         if fig is None:
+#             mpl_fig = plt.gcf()
+#             # If figure has axes and content, display it
+#             if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
+#                 safe_fn = globals().get('safe_st_pyplot', None)
+#                 if callable(safe_fn):
+#                     try:
+#                         safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+#                     except Exception:
+#                         st.pyplot(mpl_fig)
+#                 else:
+#                     st.pyplot(mpl_fig)
+#                 return
+        
+#         # If function returned a Plotly figure (rare), display it
+#         if isinstance(fig, go.Figure):
+#             try:
+#                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
+#             except Exception:
+#                 pass
+#             st.plotly_chart(fig, use_container_width=True)
+#             return
+        
+#         # Unknown return — just state it
+#         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+        
+#     except Exception as e:
+#         st.error(f"Wagon drawing function raised: {e}")
 # def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
 #                                                 wagon_zone_col='wagonZone',
 #                                                 run_col='score',
@@ -8814,19 +8889,22 @@ elif sidebar_option == "Strength vs Weakness":
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                     """
                     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
+                    
                     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
-                                        False => request true handedness visualization (LHB will appear mirrored).
+                                       False => request true handedness visualization (LHB will appear mirrored).
+                    
                     This wrapper tries to call the function with the new parameter if available (backwards compatible).
                     """
                     import matplotlib.pyplot as plt
                     import streamlit as st
                     import inspect
-               
+                    from matplotlib.figure import Figure as MplFigure
+                    
                     # Defensive check
                     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
                         st.warning("No wagon data available to draw.")
                         return
-               
+                    
                     # Decide handedness (for UI messages / debugging)
                     batting_style_val = None
                     if 'bat_hand' in df_wagon.columns:
@@ -8834,36 +8912,26 @@ elif sidebar_option == "Strength vs Weakness":
                             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
                         except Exception:
                             batting_style_val = None
+                    
                     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-               
-                    # NEW: For LHB, flip X coordinates in data (assumes 'wagonX' is the column; adjust if different)
-                    df_wagon_copy = df_wagon.copy() # Avoid modifying original
-                    if is_lhb:
-                        if 'wagonX' in df_wagon_copy.columns:
-                            df_wagon_copy['wagonX'] = -df_wagon_copy['wagonX'] # Flip X coords (data swap left/right)
-                        # If using wagonZone (1-8), swap zones symmetrically
-                        # Assume standard zones: 1 (sq leg) <-> 8 (third man), 2 <-> 7, 3 <-> 6, 4 <-> 5, etc.
-                        if 'wagonZone' in df_wagon_copy.columns:
-                            zone_map = {1: 8, 8: 1, 2: 7, 7: 2, 3: 6, 6: 3, 4: 5, 5: 4} # Symmetric flip
-                            df_wagon_copy['wagonZone'] = df_wagon_copy['wagonZone'].map(zone_map).fillna(df_wagon_copy['wagonZone'])
-               
+                    
                     # Check function signature
                     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
                     if draw_fn is None or not callable(draw_fn):
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
                         return
-               
+                    
                     try:
                         sig = inspect.signature(draw_fn)
                         if 'normalize_to_rhb' in sig.parameters:
                             # call with the explicit flag (preferred)
-                            fig = draw_fn(df_wagon_copy, batter_name, normalize_to_rhb=normalize_to_rhb)
+                            fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
                         else:
                             # older signature: call without flag (maintain legacy behaviour)
-                            fig = draw_fn(df_wagon_copy, batter_name)
-               
+                            fig = draw_fn(df_wagon, batter_name)
+                        
                         # If the function returned a Matplotlib fig — display it
-                        if isinstance(fig, plt.Figure):
+                        if isinstance(fig, MplFigure):
                             safe_fn = globals().get('safe_st_pyplot', None)
                             if callable(safe_fn):
                                 try:
@@ -8873,12 +8941,12 @@ elif sidebar_option == "Strength vs Weakness":
                             else:
                                 st.pyplot(fig)
                             return
-               
+                        
                         # If function returned None, it may have drawn to current fig; capture that
                         if fig is None:
                             mpl_fig = plt.gcf()
                             # If figure has axes and content, display it
-                            if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
+                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
                                 safe_fn = globals().get('safe_st_pyplot', None)
                                 if callable(safe_fn):
                                     try:
@@ -8888,18 +8956,19 @@ elif sidebar_option == "Strength vs Weakness":
                                 else:
                                     st.pyplot(mpl_fig)
                                 return
-               
+                        
                         # If function returned a Plotly figure (rare), display it
-                        if 'plotly' in str(type(fig)).lower():
+                        if isinstance(fig, go.Figure):
                             try:
                                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
                             except Exception:
                                 pass
                             st.plotly_chart(fig, use_container_width=True)
                             return
-               
+                        
                         # Unknown return — just state it
                         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+                        
                     except Exception as e:
                         st.error(f"Wagon drawing function raised: {e}")
                 
