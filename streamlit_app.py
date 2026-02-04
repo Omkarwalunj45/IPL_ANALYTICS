@@ -470,9 +470,51 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
-st.markdown("""<h1 style='margin-bottom:0;'>DeepCrease</h1><p style='color:#6b7280; margin-top:0;'>Contextual Cricket Intelligence Engine</p>""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <div style="
+        background: linear-gradient(135deg, #0f5132 0%, #14532d 50%, #064e3b 100%);
+        padding: 22px 28px;
+        border-radius: 14px;
+        margin-bottom: 18px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    ">
+        <div style="display:flex; flex-direction:column;">
+            <span style="
+                font-size: 36px;
+                font-weight: 800;
+                color: #ecfdf5;
+                letter-spacing: 0.5px;
+                line-height: 1.1;
+            ">
+                DeepCrease
+            </span>
 
-st.title('T20 Performance Analysis Portal (Since 2021)')
+            <span style="
+                font-size: 16px;
+                font-weight: 600;
+                color: #a7f3d0;
+                margin-top: 4px;
+                letter-spacing: 0.4px;
+            ">
+                Contextual Cricket Intelligence Engine
+            </span>
+
+            <span style="
+                margin-top: 10px;
+                font-size: 18px;
+                font-weight: 500;
+                color: #fef3c7;
+                letter-spacing: 0.3px;
+            ">
+                T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
+            </span>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 import os
 import glob
 import re
