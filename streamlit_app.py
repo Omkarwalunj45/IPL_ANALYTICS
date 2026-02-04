@@ -8692,6 +8692,8 @@ elif sidebar_option == "Strength vs Weakness":
 
 
                 # Required imports (place near top of your module)
+
+                
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                     """
                     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
@@ -8702,12 +8704,14 @@ elif sidebar_option == "Strength vs Weakness":
                     import matplotlib.pyplot as plt
                     import streamlit as st
                     import inspect
-                
+                    from PIL import Image
+                    from io import BytesIO
+               
                     # Defensive check
                     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
                         st.warning("No wagon data available to draw.")
                         return
-                
+               
                     # Decide handedness (for UI messages / debugging)
                     batting_style_val = None
                     if 'bat_hand' in df_wagon.columns:
@@ -8716,13 +8720,13 @@ elif sidebar_option == "Strength vs Weakness":
                         except Exception:
                             batting_style_val = None
                     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-                
+               
                     # Check function signature
                     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
                     if draw_fn is None or not callable(draw_fn):
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
                         return
-                
+               
                     try:
                         sig = inspect.signature(draw_fn)
                         if 'normalize_to_rhb' in sig.parameters:
@@ -8731,47 +8735,133 @@ elif sidebar_option == "Strength vs Weakness":
                         else:
                             # older signature: call without flag (maintain legacy behaviour)
                             fig = draw_fn(df_wagon, batter_name)
-                
-                        # If the function returned a Matplotlib fig — display it
-                        if isinstance(fig, MplFigure):
-                            safe_fn = globals().get('safe_st_pyplot', None)
-                            if callable(safe_fn):
-                                try:
-                                    safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                                except Exception:
-                                    st.pyplot(fig)
-                            else:
-                                st.pyplot(fig)
+               
+                        # If the function returned a Matplotlib fig — capture and process
+                        if isinstance(fig, plt.Figure):
+                            buf = BytesIO()
+                            fig.savefig(buf, format='png', bbox_inches='tight', dpi=200)
+                            buf.seek(0)
+                            img = Image.open(buf)
+               
+                            # NEW: If LHB, mirror (flip horizontally) along vertical axis (left-right flip)
+                            if is_lhb:
+                                img = img.transpose(Image.FLIP_LEFT_RIGHT)
+               
+                            # Display the (possibly flipped) image
+                            st.image(img, use_column_width=True)
                             return
-                
+               
                         # If function returned None, it may have drawn to current fig; capture that
                         if fig is None:
                             mpl_fig = plt.gcf()
-                            # If figure has axes and content, display it
-                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
-                                safe_fn = globals().get('safe_st_pyplot', None)
-                                if callable(safe_fn):
-                                    try:
-                                        safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                                    except Exception:
-                                        st.pyplot(mpl_fig)
-                                else:
-                                    st.pyplot(mpl_fig)
+                            # If figure has axes and content, capture and process
+                            if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
+                                buf = BytesIO()
+                                mpl_fig.savefig(buf, format='png', bbox_inches='tight', dpi=200)
+                                buf.seek(0)
+                                img = Image.open(buf)
+               
+                                # NEW: If LHB, mirror (flip horizontally) along vertical axis
+                                if is_lhb:
+                                    img = img.transpose(Image.FLIP_LEFT_RIGHT)
+               
+                                # Display the (possibly flipped) image
+                                st.image(img, use_column_width=True)
                                 return
-                
+               
                         # If function returned a Plotly figure (rare), display it
-                        if isinstance(fig, go.Figure):
+                        if 'plotly' in str(type(fig)).lower():
                             try:
                                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
                             except Exception:
                                 pass
                             st.plotly_chart(fig, use_container_width=True)
                             return
-                
+               
                         # Unknown return — just state it
                         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
                     except Exception as e:
                         st.error(f"Wagon drawing function raised: {e}")
+                # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
+                #     """
+                #     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
+                #     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
+                #                         False => request true handedness visualization (LHB will appear mirrored).
+                #     This wrapper tries to call the function with the new parameter if available (backwards compatible).
+                #     """
+                #     import matplotlib.pyplot as plt
+                #     import streamlit as st
+                #     import inspect
+                
+                #     # Defensive check
+                #     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+                #         st.warning("No wagon data available to draw.")
+                #         return
+                
+                #     # Decide handedness (for UI messages / debugging)
+                #     batting_style_val = None
+                #     if 'bat_hand' in df_wagon.columns:
+                #         try:
+                #             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                #         except Exception:
+                #             batting_style_val = None
+                #     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+                
+                #     # Check function signature
+                #     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
+                #     if draw_fn is None or not callable(draw_fn):
+                #         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                #         return
+                
+                #     try:
+                #         sig = inspect.signature(draw_fn)
+                #         if 'normalize_to_rhb' in sig.parameters:
+                #             # call with the explicit flag (preferred)
+                #             fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
+                #         else:
+                #             # older signature: call without flag (maintain legacy behaviour)
+                #             fig = draw_fn(df_wagon, batter_name)
+                
+                #         # If the function returned a Matplotlib fig — display it
+                #         if isinstance(fig, MplFigure):
+                #             safe_fn = globals().get('safe_st_pyplot', None)
+                #             if callable(safe_fn):
+                #                 try:
+                #                     safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                #                 except Exception:
+                #                     st.pyplot(fig)
+                #             else:
+                #                 st.pyplot(fig)
+                #             return
+                
+                #         # If function returned None, it may have drawn to current fig; capture that
+                #         if fig is None:
+                #             mpl_fig = plt.gcf()
+                #             # If figure has axes and content, display it
+                #             if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
+                #                 safe_fn = globals().get('safe_st_pyplot', None)
+                #                 if callable(safe_fn):
+                #                     try:
+                #                         safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                #                     except Exception:
+                #                         st.pyplot(mpl_fig)
+                #                 else:
+                #                     st.pyplot(mpl_fig)
+                #                 return
+                
+                #         # If function returned a Plotly figure (rare), display it
+                #         if isinstance(fig, go.Figure):
+                #             try:
+                #                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                #             except Exception:
+                #                 pass
+                #             st.plotly_chart(fig, use_container_width=True)
+                #             return
+                
+                #         # Unknown return — just state it
+                #         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+                #     except Exception as e:
+                #         st.error(f"Wagon drawing function raised: {e}")
                 
                 
                 # -------------------------
