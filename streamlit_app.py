@@ -473,58 +473,81 @@ st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)'
 import streamlit as st
 import streamlit.components.v1 as components
 
-# Remove any existing st.title or previous banner code before using this.
-# This renders a fixed header banner using raw HTML/CSS via Streamlit Components.
+components.html(
+    """
+    <div style="
+        width: 100%;
+        background: linear-gradient(135deg, #0A2540 0%, #0f2f55 60%, #0A2540 100%);
+        padding: 26px 32px;
+        border-radius: 14px;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+        font-family: Inter, Arial, sans-serif;
+        box-sizing: border-box;
+    ">
 
-banner_html = """
-<div style="
-  box-sizing: border-box;
-  width: 100%;
-  background: linear-gradient(135deg, #0f5132 0%, #14532d 50%, #064e3b 100%);
-  padding: 26px 32px;
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.20);
-  color: #fff;
-  font-family: 'Inter', Arial, sans-serif;
-">
-  <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
-    <div style="display:flex; flex-direction:column;">
-      <div style="font-size:40px; font-weight:800; color:#ecfdf5; line-height:1.05;">
-        DeepCrease
-      </div>
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:20px;">
 
-      <div style="
-          font-size:15px;
-          font-weight:600;
-          color:#a7f3d0;
-          margin-top:6px;
-          letter-spacing:0.4px;
-      ">
-        Contextual Cricket Intelligence Engine
-      </div>
+            <!-- LEFT: BRAND -->
+            <div>
+                <div style="
+                    font-size: 40px;
+                    font-weight: 800;
+                    color: #F8FAFC;
+                    letter-spacing: 0.4px;
+                    line-height: 1.05;
+                ">
+                    DeepCrease
+                </div>
 
-      <div style="
-          margin-top:10px;
-          font-size:16px;
-          font-weight:500;
-          color:#fef3c7;
-          letter-spacing:0.3px;
-      ">
-        T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
-      </div>
+                <div style="
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: #2DD4BF;
+                    margin-top: 6px;
+                    letter-spacing: 0.4px;
+                ">
+                    Contextual Cricket Intelligence Engine
+                </div>
+
+                <div style="
+                    margin-top: 10px;
+                    font-size: 17px;
+                    font-weight: 500;
+                    color: #FACC15;
+                    letter-spacing: 0.3px;
+                ">
+                    T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
+                </div>
+            </div>
+
+            <!-- RIGHT: QUIET LINKEDIN -->
+            <div style="text-align:right; margin-top:6px;">
+                <a href="https://www.linkedin.com/in/omkar-walunj-8256a4280/"
+                   target="_blank"
+                   style="
+                       text-decoration:none;
+                       font-size:12px;
+                       font-weight:600;
+                       color:#CBD5E1;
+                       opacity:0.9;
+                   ">
+                    Built by Omkar Walunj
+                </a>
+                <div style="
+                    font-size:11px;
+                    color:#94A3B8;
+                    margin-top:4px;
+                ">
+                    Cricket Analytics · ICR Framework
+                </div>
+            </div>
+
+        </div>
     </div>
-
-    <!-- right side small credits - optional -->
-    <div style="margin-left:auto; text-align:right;">
-      <div style="font-size:12px; color:#d1fae5; font-weight:600;">Built by Omkar Walunj</div>
-      <div style="font-size:11px; color:rgba(255,255,255,0.8); margin-top:4px;">ICR — Integrated Contextual Ratings</div>
-    </div>
-  </div>
-</div>
-"""
-
-# Use components.html — height small so it fits; set scrolling False
-components.html(banner_html, height=140, scrolling=False)
+    """,
+    height=150,
+    scrolling=False
+)
 
 
 import os
