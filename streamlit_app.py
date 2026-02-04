@@ -521,22 +521,27 @@ components.html(
                 </div>
             </div>
 
-            <!-- RIGHT: LINKEDIN (QUIET) -->
-            <div style="text-align:right; margin-top:8px;">
+            <!-- RIGHT: NAME + LINKEDIN -->
+            <div style="text-align:right; margin-top:6px;">
+                <div style="
+                    font-size:13px;
+                    font-weight:600;
+                    color:#E5E7EB;
+                ">
+                    Omkar Walunj
+                </div>
+
                 <a href="https://www.linkedin.com/in/omkar-walunj-8256a4280/"
                    target="_blank"
                    style="
-                       display:flex;
-                       align-items:center;
-                       gap:6px;
-                       justify-content:flex-end;
+                       display:inline-block;
+                       margin-top:4px;
                        text-decoration:none;
                        font-size:12px;
-                       font-weight:600;
-                       color:#CBD5E1;
+                       font-weight:500;
+                       color:#94A3B8;
                    ">
-                    <span style="font-size:13px;">🔗</span>
-                    <span>LinkedIn</span>
+                    LinkedIn
                 </a>
 
                 <div style="
@@ -544,14 +549,14 @@ components.html(
                     color:#94A3B8;
                     margin-top:4px;
                 ">
-                    Omkar Walunj · Cricket Analytics
+                    Cricket Analytics · ICR Framework
                 </div>
             </div>
 
         </div>
     </div>
     """,
-    height=150,
+    height=155,
     scrolling=False
 )
 
