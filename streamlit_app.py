@@ -877,6 +877,29 @@ components.html(
     height=155,
     scrolling=False
 )
+      st.markdown("""
+<style>
+/* ===== Sidebar Background ===== */
+[data-testid="stSidebar"] {
+    background-color: #48cae4;
+}
+
+/* Sidebar text (ensure readability) */
+[data-testid="stSidebar"] * {
+    color: #0b2545 !important;   /* deep navy text for contrast */
+    font-weight: 500;
+}
+
+/* Sidebar headers */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #023047 !important;
+    font-weight: 700;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # with st.sidebar:
 #     st.markdown("### Select Years")
