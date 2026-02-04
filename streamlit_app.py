@@ -478,50 +478,66 @@ st.markdown("""
 
 /* ===== Main app background ===== */
 .stApp {
-    background-color: #0b1220;
+    background-color: #f8fafc;
 }
 
-/* ===== Sidebar background ===== */
+/* ===== Sidebar ===== */
 [data-testid="stSidebar"] {
-    background-color: #0f172a;
+    background: linear-gradient(180deg, #0f172a, #020617);
     border-right: 1px solid #1e293b;
 }
 
-/* ===== Sidebar text ===== */
+/* Sidebar text */
 [data-testid="stSidebar"] * {
-    color: #e5e7eb;
+    color: #e5e7eb !important;
 }
 
-/* ===== Headers ===== */
+/* ===== Main text ===== */
 h1, h2, h3, h4 {
-    color: #f8fafc;
+    color: #0f172a;
 }
 
-/* ===== Regular text ===== */
 p, span, label {
-    color: #cbd5e1;
+    color: #334155;
 }
 
-/* ===== Radio / checkbox labels ===== */
-.stRadio label, .stCheckbox label {
-    color: #e5e7eb !important;
-}
-
-/* ===== Selectbox / input background ===== */
+/* ===== Inputs ===== */
 .stSelectbox div[data-baseweb="select"],
-.stNumberInput input {
-    background-color: #020617 !important;
-    color: #e5e7eb !important;
-    border-radius: 6px;
+.stNumberInput input,
+.stSlider {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
 }
 
-/* ===== Dataframe background ===== */
+/* ===== Dataframes ===== */
 [data-testid="stDataFrame"] {
-    background-color: #020617;
+    background-color: #ffffff;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+}
+
+/* ===== Plot containers ===== */
+div[data-testid="stPlotlyChart"],
+div[data-testid="stPyplot"] {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+}
+
+/* ===== Section dividers ===== */
+hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 24px 0;
 }
 
 </style>
 """, unsafe_allow_html=True)
+
 
 components.html(
     """
