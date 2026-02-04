@@ -762,6 +762,30 @@ hr {
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+
+/* ===== Sidebar YEAR / SLIDER LABELS ===== */
+[data-testid="stSidebar"] .stSlider label,
+[data-testid="stSidebar"] .stSlider span,
+[data-testid="stSidebar"] [data-baseweb="slider"] span {
+    color: #f08a24 !important;
+    font-weight: 600;
+}
+
+/* Slider tick values (years) */
+[data-testid="stSidebar"] [data-baseweb="slider"] div {
+    color: #f08a24 !important;
+}
+
+/* Slider value bubble (if visible) */
+[data-testid="stSidebar"] [role="slider"] {
+    color: #f08a24 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 
 components.html(
     """
