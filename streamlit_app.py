@@ -1132,7 +1132,6 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
 # ────────────────────────────────────────────────
 # SIDEBAR CONTROLS
 # ────────────────────────────────────────────────
-
 st.sidebar.header("Select Years")
 
 if "year_range" not in st.session_state:
@@ -1140,14 +1139,32 @@ if "year_range" not in st.session_state:
 
 years = st.sidebar.slider(
     "Select year range",
-    2021, 2026,
-    st.session_state.year_range,
+    min_value=2021,
+    max_value=2026,
+    value=st.session_state.year_range,
     step=1,
     key="year_slider_key"
 )
 
 st.session_state.year_range = years
 selected_years = list(range(years[0], years[1] + 1))
+
+# 🔥 CLEAR, VISIBLE YEAR DISPLAY (THIS SOLVES IT)
+st.sidebar.markdown(
+    f"""
+    <div style="
+        margin-top:6px;
+        text-align:center;
+        font-weight:700;
+        color:#f08a24;
+        font-size:14px;
+    ">
+        {years[0]} &nbsp;–&nbsp; {years[1]}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 
 st.sidebar.header("Select Tournaments")
 
