@@ -4032,6 +4032,8 @@ if sidebar_option == "Player Profile":
             rest_df["Value"] = [
                 fmt_val_with_col(m, v) for m, v in zip(rest_df["Metric"], rest_df["Value"])
             ]
+            rest_df = rest_df[rest_df["Metric"].str.upper() != "BATTING TEAM"]
+
 
         
             detailed_header_color = "#fff0e6"
