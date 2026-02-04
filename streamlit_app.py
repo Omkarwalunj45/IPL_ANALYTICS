@@ -521,7 +521,7 @@ components.html(
                 </div>
             </div>
 
-            <!-- RIGHT: NAME + LINKEDIN -->
+            <!-- RIGHT: NAME + LINKS -->
             <div style="text-align:right; margin-top:6px;">
                 <div style="
                     font-size:13px;
@@ -534,9 +534,9 @@ components.html(
                 <a href="https://www.linkedin.com/in/omkar-walunj-8256a4280/"
                    target="_blank"
                    style="
-                       display:inline-block;
+                       display:block;
                        margin-top:4px;
-                       text-decoration:none;
+                       text-decoration:underline;
                        font-size:12px;
                        font-weight:500;
                        color:#94A3B8;
@@ -544,13 +544,18 @@ components.html(
                     LinkedIn
                 </a>
 
-                <div style="
-                    font-size:11px;
-                    color:#94A3B8;
-                    margin-top:4px;
-                ">
-                    Cricket Analytics · ICR Framework
-                </div>
+                <a href="https://substack.com/@theunseengame"
+                   target="_blank"
+                   style="
+                       display:block;
+                       margin-top:2px;
+                       text-decoration:underline;
+                       font-size:12px;
+                       font-weight:500;
+                       color:#94A3B8;
+                   ">
+                    Substack
+                </a>
             </div>
 
         </div>
@@ -559,6 +564,7 @@ components.html(
     height=155,
     scrolling=False
 )
+
 
 
 import os
