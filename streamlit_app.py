@@ -9006,7 +9006,8 @@ elif sidebar_option == "Strength vs Weakness":
 
                 # Required imports (place near top of your module)
                 ##PROBLEM BIG PROBLEM
-                                def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
+                def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
+                  
                     """
                     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
                     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
