@@ -470,42 +470,61 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
-st.markdown(
-    """
-    <div style="
-        background: linear-gradient(135deg, #0f5132 0%, #14532d 50%, #064e3b 100%);
-        padding: 26px 32px;
-        border-radius: 16px;
-        margin-bottom: 24px;
-        box-shadow: 0 12px 30px rgba(0,0,0,0.25);
-    ">
-        <div style="font-size:40px; font-weight:800; color:#ecfdf5; line-height:1.1;">
-            DeepCrease
-        </div>
+import streamlit as st
+import streamlit.components.v1 as components
 
-        <div style="
-            font-size:16px;
-            font-weight:600;
-            color:#a7f3d0;
-            margin-top:6px;
-            letter-spacing:0.4px;
-        ">
-            Contextual Cricket Intelligence Engine
-        </div>
+# Remove any existing st.title or previous banner code before using this.
+# This renders a fixed header banner using raw HTML/CSS via Streamlit Components.
 
-        <div style="
-            margin-top:12px;
-            font-size:18px;
-            font-weight:500;
-            color:#fef3c7;
-            letter-spacing:0.3px;
-        ">
-            T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
-        </div>
+banner_html = """
+<div style="
+  box-sizing: border-box;
+  width: 100%;
+  background: linear-gradient(135deg, #0f5132 0%, #14532d 50%, #064e3b 100%);
+  padding: 26px 32px;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.20);
+  color: #fff;
+  font-family: 'Inter', Arial, sans-serif;
+">
+  <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+    <div style="display:flex; flex-direction:column;">
+      <div style="font-size:40px; font-weight:800; color:#ecfdf5; line-height:1.05;">
+        DeepCrease
+      </div>
+
+      <div style="
+          font-size:15px;
+          font-weight:600;
+          color:#a7f3d0;
+          margin-top:6px;
+          letter-spacing:0.4px;
+      ">
+        Contextual Cricket Intelligence Engine
+      </div>
+
+      <div style="
+          margin-top:10px;
+          font-size:16px;
+          font-weight:500;
+          color:#fef3c7;
+          letter-spacing:0.3px;
+      ">
+        T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
+      </div>
     </div>
-    """,
-    unsafe_allow_html=True
-)
+
+    <!-- right side small credits - optional -->
+    <div style="margin-left:auto; text-align:right;">
+      <div style="font-size:12px; color:#d1fae5; font-weight:600;">Built by Omkar Walunj</div>
+      <div style="font-size:11px; color:rgba(255,255,255,0.8); margin-top:4px;">ICR — Integrated Contextual Ratings</div>
+    </div>
+  </div>
+</div>
+"""
+
+# Use components.html — height small so it fits; set scrolling False
+components.html(banner_html, height=140, scrolling=False)
 
 
 import os
