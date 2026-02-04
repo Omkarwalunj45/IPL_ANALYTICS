@@ -473,6 +473,55 @@ st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)'
 
 import streamlit as st
 import streamlit.components.v1 as components
+st.markdown("""
+<style>
+
+/* ===== Main app background ===== */
+.stApp {
+    background-color: #0b1220;
+}
+
+/* ===== Sidebar background ===== */
+[data-testid="stSidebar"] {
+    background-color: #0f172a;
+    border-right: 1px solid #1e293b;
+}
+
+/* ===== Sidebar text ===== */
+[data-testid="stSidebar"] * {
+    color: #e5e7eb;
+}
+
+/* ===== Headers ===== */
+h1, h2, h3, h4 {
+    color: #f8fafc;
+}
+
+/* ===== Regular text ===== */
+p, span, label {
+    color: #cbd5e1;
+}
+
+/* ===== Radio / checkbox labels ===== */
+.stRadio label, .stCheckbox label {
+    color: #e5e7eb !important;
+}
+
+/* ===== Selectbox / input background ===== */
+.stSelectbox div[data-baseweb="select"],
+.stNumberInput input {
+    background-color: #020617 !important;
+    color: #e5e7eb !important;
+    border-radius: 6px;
+}
+
+/* ===== Dataframe background ===== */
+[data-testid="stDataFrame"] {
+    background-color: #020617;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 components.html(
     """
