@@ -878,6 +878,44 @@ components.html(
     scrolling=False
 )
 
+st.markdown("""
+<style>
+
+/* ===============================
+   SIDEBAR SLIDER – YEAR VISIBILITY FIX
+================================ */
+
+/* Slider tick labels (2021, 2026) */
+[data-testid="stSidebar"] [data-baseweb="slider"] span {
+    color: #f08a24 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+/* Slider value text */
+[data-testid="stSidebar"] .stSlider label {
+    color: #f08a24 !important;
+    font-weight: 700 !important;
+}
+
+/* Slider track background (make it darker for contrast) */
+[data-testid="stSidebar"] [data-baseweb="slider"] > div > div {
+    background-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Slider handle (thumb) */
+[data-testid="stSidebar"] [role="slider"] {
+    background-color: #f08a24 !important;
+    border: 2px solid #ffffff !important;
+}
+
+/* Slider rail (inactive track) */
+[data-testid="stSidebar"] [data-baseweb="slider"] div[aria-hidden="true"] {
+    background-color: rgba(255,255,255,0.35) !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 
 import os
