@@ -9,6 +9,122 @@ from io import BytesIO
 from PIL import Image
 st.set_page_config(layout="wide")
 
+def draw_bowler_caught_dismissals_wagon(df_wagon, bowler_name, normalize_to_rhb=True):
+    """
+    Plotly wagon chart for caught dismissals FOR BOWLER.
+    Clean, single-render, no duplication.
+    """
+    import plotly.graph_objects as go
+    import numpy as np
+    import pandas as pd
+    import streamlit as st
+
+    # ---------------- Defensive checks ----------------
+    if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+        return
+
+    if not {'dismissal', 'bowl', 'wagonX', 'wagonY'}.issubset(df_wagon.columns):
+        st.warning("Required columns missing for caught dismissal wagon.")
+        return
+
+    # ---------------- Filter caught dismissals ----------------
+    caught_df = df_wagon[
+        (df_wagon['bowl'] == bowler_name) &
+        (df_wagon['dismissal'].astype(str).str.lower().str.contains('caught', na=False))
+    ].copy()
+
+    if caught_df.empty:
+        st.info(f"No caught dismissals for {bowler_name}.")
+        return
+
+    caught_df['wagonX'] = pd.to_numeric(caught_df['wagonX'], errors='coerce')
+    caught_df['wagonY'] = pd.to_numeric(caught_df['wagonY'], errors='coerce')
+    caught_df = caught_df.dropna(subset=['wagonX', 'wagonY'])
+    if caught_df.empty:
+        return
+
+    # ---------------- Normalize coordinates ----------------
+    center, radius = 184.0, 184.0
+    x = (caught_df['wagonX'] - center) / radius
+    y = - (caught_df['wagonY'] - center) / radius
+
+    # Detect LHB
+    is_lhb = False
+    if 'bat_hand' in caught_df.columns:
+        try:
+            is_lhb = caught_df['bat_hand'].dropna().iloc[0].upper().startswith('L')
+        except Exception:
+            pass
+
+    if (not normalize_to_rhb) and is_lhb:
+        x = -x
+
+    mask = np.sqrt(x**2 + y**2) <= 1
+    x, y = x[mask], y[mask]
+    caught_df = caught_df.loc[mask]
+
+    if caught_df.empty:
+        return
+
+    # ---------------- Hover data ----------------
+    hover_cols = [c for c in ['bat', 'bowl', 'line', 'length', 'shot', 'dismissal'] if c in caught_df.columns]
+    customdata = caught_df[hover_cols].astype(str).values
+
+    hovertemplate = (
+        "<br>".join(
+            [f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(hover_cols)]
+        ) + "<extra></extra>"
+    )
+
+    # ---------------- Build figure ----------------
+    fig = go.Figure()
+
+    def add_circle(x0, y0, x1, y1, **kw):
+        if (not normalize_to_rhb) and is_lhb:
+            x0, x1 = -x1, -x0
+        fig.add_shape(type="circle", x0=x0, y0=y0, x1=x1, y1=y1, **kw)
+
+    # Field
+    add_circle(-1, -1, 1, 1, fillcolor="#228B22", line_color="black", layer="below")
+    add_circle(-0.5, -0.5, 0.5, 0.5, fillcolor="#66bb6a", line_color="white", layer="below")
+
+    # Pitch
+    px0, px1 = (-0.04, 0.04)
+    if (not normalize_to_rhb) and is_lhb:
+        px0, px1 = -px1, -px0
+    fig.add_shape(type="rect", x0=px0, y0=-0.08, x1=px1, y1=0.08,
+                  fillcolor="tan", line_color=None)
+
+    # Radials
+    for ang in np.linspace(0, 2*np.pi, 8, endpoint=False):
+        xe, ye = np.cos(ang), np.sin(ang)
+        if (not normalize_to_rhb) and is_lhb:
+            xe = -xe
+        fig.add_trace(go.Scatter(
+            x=[0, xe], y=[0, ye],
+            mode="lines", line=dict(color="white", width=1),
+            opacity=0.25, showlegend=False
+        ))
+
+    # Points (ONCE)
+    fig.add_trace(go.Scatter(
+        x=x, y=y,
+        mode="markers",
+        marker=dict(color="red", size=12, line=dict(color="black", width=1.5)),
+        customdata=customdata,
+        hovertemplate=hovertemplate,
+        name="Caught Dismissals"
+    ))
+
+    fig.update_layout(
+        xaxis=dict(range=[-1.2, 1.2], visible=False),
+        yaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="x"),
+        height=700,
+        margin=dict(l=0, r=0, t=0, b=0),
+        showlegend=True
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 
 line_map = {
     'WIDE_OUTSIDE_OFFSTUMP': 0,
