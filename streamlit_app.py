@@ -977,8 +977,51 @@ with st.sidebar:
         "Select year range",
         min_value=2021,
         max_value=2026,
-        value=(2021, 2026)
+        value=(2021, 2026),
+        key="year_range_sidebar"
     )
+
+    # Premium visible indicator (this is NOT another slider)
+    st.markdown(
+        f"""
+        <div style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            font-weight: 700;
+        ">
+            <span style="
+                background: #f08a24;
+                color: #0b2545;
+                padding: 4px 10px;
+                border-radius: 14px;
+                font-size: 13px;
+            ">
+                {year_range[0]}
+            </span>
+            <span style="color:#f1f6fa;">→</span>
+            <span style="
+                background: #f08a24;
+                color: #0b2545;
+                padding: 4px 10px;
+                border-radius: 14px;
+                font-size: 13px;
+            ">
+                {year_range[1]}
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # year_range = st.slider(
+    #     "Select year range",
+    #     min_value=2021,
+    #     max_value=2026,
+    #     value=(2021, 2026)
+    # )
 
     # Custom visible year indicator (premium pill style)
     st.markdown(
