@@ -470,6 +470,8 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
+st.markdown("""<h1 style='margin-bottom:0;'>DeepCrease</h1><p style='color:#6b7280; margin-top:0;'>Contextual Cricket Intelligence Engine</p>""", unsafe_allow_html=True)
+
 st.title('T20 Performance Analysis Portal (Since 2021)')
 import os
 import glob
