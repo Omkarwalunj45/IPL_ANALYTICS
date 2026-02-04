@@ -4359,66 +4359,195 @@ if sidebar_option == "Player Profile":
                     except Exception:
                         val = disp_stats[col].values[0] if len(disp_stats[col].values) > 0 else None
                 found_top_cols[label] = val
-    
+
+
             st.markdown("### Bowling Statistics")
-    
-            # show top metrics as metric cards
+
+            # -------------------------
+            # Top metrics as metric cards
+            # -------------------------
             visible_metrics = [
                 (k, v) for k, v in found_top_cols.items()
                 if v is not None and not (isinstance(v, float) and np.isnan(v))
             ]
+            
             if visible_metrics:
                 cols = st.columns(len(visible_metrics))
                 for (label, val), col in zip(visible_metrics, cols):
                     if isinstance(val, (int, np.integer)):
-                        disp = f"{int(val)}"
+                        disp = str(int(val))
                     elif isinstance(val, (float, np.floating)) and not np.isnan(val):
-                        disp = f"{val:.2f}"
+                        # remove trailing zeros
+                        if abs(val - round(val)) < 1e-6:
+                            disp = str(int(round(val)))
+                        else:
+                            disp = f"{val:.2f}".rstrip("0").rstrip(".")
                     else:
                         disp = str(val)
                     col.metric(label, disp)
             else:
                 st.write("Top bowling metrics not available.")
-    
+            
             # -------------------------
-            # Detailed stats (vertical key:value). keep RUNS displayed
+            # Detailed stats (vertical key:value)
+            # keep RUNS, remove BOWLING TEAM
             # -------------------------
             top_cols_used = [find_col(disp_stats, cand) for cand in top_metric_mapping.values()]
             top_cols_used = [c for c in top_cols_used if c is not None]
-            top_cols_used_excluding_runs = [c for c in top_cols_used if c is not None and str(c).upper() != 'RUNS']
-    
+            top_cols_used_excluding_runs = [
+                c for c in top_cols_used
+                if c is not None and str(c).upper() != "RUNS"
+            ]
+            
             try:
-                rest_series = disp_stats.iloc[0].drop(labels=top_cols_used_excluding_runs, errors='ignore')
+                rest_series = disp_stats.iloc[0].drop(
+                    labels=top_cols_used_excluding_runs, errors="ignore"
+                )
             except Exception:
                 rest_series = pd.Series(dtype=object)
-    
+            
             if not rest_series.empty:
                 rest_df = rest_series.reset_index()
                 rest_df.columns = ["Metric", "Value"]
-    
-                def fmt_val(x):
-                    if pd.isna(x):
-                        return ""
-                    if isinstance(x, (int, np.integer)):
-                        return int(x)
-                    if isinstance(x, (float, np.floating)):
-                        return round(x, 2)
-                    return x
-    
-                rest_df["Value"] = rest_df["Value"].apply(fmt_val)
-    
-                # light skin / peach header color
-                detailed_header_color = "#fff0e6"
-                detailed_table_styles = [
-                    {"selector": "thead th", "props": [("background-color", detailed_header_color), ("color", "#000"), ("font-weight", "600")]},
-                    {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]},
-                    {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#fff9f4")]},
+            
+                # ❌ remove BOWLING TEAM row
+                rest_df = rest_df[
+                    ~rest_df["Metric"].str.lower().str.contains("bowling team")
                 ]
-    
-                st.markdown("#### Detailed stats")
-                st.dataframe(rest_df.style.set_table_styles(detailed_table_styles), use_container_width=True)
+            
+                # -------------------------
+                # Formatting (STRING SAFE – STREAMLIT PROOF)
+                # -------------------------
+                def fmt_val_with_col(metric_name, value):
+                    if pd.isna(value):
+                        return ""
+            
+                    metric_lower = str(metric_name).lower()
+            
+                    # force int for balls / runs / innings
+                    if any(k in metric_lower for k in ["balls", "runs", "innings"]):
+                        try:
+                            return str(int(round(float(value))))
+                        except Exception:
+                            return str(value)
+            
+                    # numeric formatting
+                    try:
+                        val = float(value)
+                        if abs(val - round(val)) < 1e-6:
+                            return str(int(round(val)))
+                        return f"{val:.2f}".rstrip("0").rstrip(".")
+                    except Exception:
+                        return str(value)
+            
+                rest_df["Value"] = [
+                    fmt_val_with_col(m, v)
+                    for m, v in zip(rest_df["Metric"], rest_df["Value"])
+                ]
+            
+                # -------------------------
+                # Styling + Center alignment
+                # -------------------------
+                detailed_header_color = "#fff0e6"
+            
+                styled_df = (
+                    rest_df
+                    .style
+                    .set_properties(**{
+                        "text-align": "center",
+                        "vertical-align": "middle"
+                    })
+                    .set_table_styles([
+                        {
+                            "selector": "th",
+                            "props": [
+                                ("background-color", detailed_header_color),
+                                ("color", "#000"),
+                                ("font-weight", "600"),
+                                ("text-align", "center"),
+                            ],
+                        },
+                        {
+                            "selector": "td",
+                            "props": [("text-align", "center")],
+                        },
+                        {
+                            "selector": "tbody tr:nth-child(odd)",
+                            "props": [("background-color", "#ffffff")],
+                        },
+                        {
+                            "selector": "tbody tr:nth-child(even)",
+                            "props": [("background-color", "#fff9f4")],
+                        },
+                    ])
+                    .hide(axis="index")
+                )
+            
+                st.markdown("#### Detailed Stats")
+                st.dataframe(styled_df, use_container_width=True)
+            
             else:
                 st.write("No detailed bowling metrics available.")
+  
+            # st.markdown("### Bowling Statistics")
+    
+            # # show top metrics as metric cards
+            # visible_metrics = [
+            #     (k, v) for k, v in found_top_cols.items()
+            #     if v is not None and not (isinstance(v, float) and np.isnan(v))
+            # ]
+            # if visible_metrics:
+            #     cols = st.columns(len(visible_metrics))
+            #     for (label, val), col in zip(visible_metrics, cols):
+            #         if isinstance(val, (int, np.integer)):
+            #             disp = f"{int(val)}"
+            #         elif isinstance(val, (float, np.floating)) and not np.isnan(val):
+            #             disp = f"{val:.2f}"
+            #         else:
+            #             disp = str(val)
+            #         col.metric(label, disp)
+            # else:
+            #     st.write("Top bowling metrics not available.")
+    
+            # # -------------------------
+            # # Detailed stats (vertical key:value). keep RUNS displayed
+            # # -------------------------
+            # top_cols_used = [find_col(disp_stats, cand) for cand in top_metric_mapping.values()]
+            # top_cols_used = [c for c in top_cols_used if c is not None]
+            # top_cols_used_excluding_runs = [c for c in top_cols_used if c is not None and str(c).upper() != 'RUNS']
+    
+            # try:
+            #     rest_series = disp_stats.iloc[0].drop(labels=top_cols_used_excluding_runs, errors='ignore')
+            # except Exception:
+            #     rest_series = pd.Series(dtype=object)
+    
+            # if not rest_series.empty:
+            #     rest_df = rest_series.reset_index()
+            #     rest_df.columns = ["Metric", "Value"]
+    
+            #     def fmt_val(x):
+            #         if pd.isna(x):
+            #             return ""
+            #         if isinstance(x, (int, np.integer)):
+            #             return int(x)
+            #         if isinstance(x, (float, np.floating)):
+            #             return round(x, 2)
+            #         return x
+    
+            #     rest_df["Value"] = rest_df["Value"].apply(fmt_val)
+    
+            #     # light skin / peach header color
+            #     detailed_header_color = "#fff0e6"
+            #     detailed_table_styles = [
+            #         {"selector": "thead th", "props": [("background-color", detailed_header_color), ("color", "#000"), ("font-weight", "600")]},
+            #         {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]},
+            #         {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#fff9f4")]},
+            #     ]
+    
+            #     st.markdown("#### Detailed stats")
+            #     st.dataframe(rest_df.style.set_table_styles(detailed_table_styles), use_container_width=True)
+            # else:
+            #     st.write("No detailed bowling metrics available.")
     
         # Use the raw ball-by-ball df
         bpdf = as_dataframe(df)
