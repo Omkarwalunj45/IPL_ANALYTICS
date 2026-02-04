@@ -470,7 +470,7 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
 
 
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
-st.title('IPL Performance Analysis Portal')
+st.title('T20 Performance Analysis Portal (Since 2021)')
 import os
 import glob
 import re
