@@ -474,80 +474,80 @@ st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)'
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.markdown("""
-<style>
+# st.markdown("""
+# <style>
 
-/* ===== Global app background ===== */
-.stApp {
-    background-color: #0e1624;
-}
+# /* ===== Global app background ===== */
+# .stApp {
+#     background-color: #0e1624;
+# }
 
-/* ===== Sidebar ===== */
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0b1220, #020617);
-    border-right: 1px solid #1e293b;
-}
+# /* ===== Sidebar ===== */
+# [data-testid="stSidebar"] {
+#     background: linear-gradient(180deg, #0b1220, #020617);
+#     border-right: 1px solid #1e293b;
+# }
 
-[data-testid="stSidebar"] * {
-    color: #e5e7eb !important;
-}
+# [data-testid="stSidebar"] * {
+#     color: #e5e7eb !important;
+# }
 
-/* ===== Headings ===== */
-h1, h2, h3, h4 {
-    color: #f8fafc;
-}
+# /* ===== Headings ===== */
+# h1, h2, h3, h4 {
+#     color: #f8fafc;
+# }
 
-/* ===== Body text ===== */
-p, span, label {
-    color: #cbd5e1;
-}
+# /* ===== Body text ===== */
+# p, span, label {
+#     color: #cbd5e1;
+# }
 
-/* ===== Inputs ===== */
-.stSelectbox div[data-baseweb="select"],
-.stNumberInput input,
-.stSlider {
-    background-color: #121c2e !important;
-    color: #e5e7eb !important;
-    border-radius: 8px;
-    border: 1px solid #1e293b;
-}
+# /* ===== Inputs ===== */
+# .stSelectbox div[data-baseweb="select"],
+# .stNumberInput input,
+# .stSlider {
+#     background-color: #121c2e !important;
+#     color: #e5e7eb !important;
+#     border-radius: 8px;
+#     border: 1px solid #1e293b;
+# }
 
-/* ===== Dataframes ===== */
-[data-testid="stDataFrame"] {
-    background-color: #121c2e;
-    border-radius: 12px;
-    border: 1px solid #1e293b;
-}
+# /* ===== Dataframes ===== */
+# [data-testid="stDataFrame"] {
+#     background-color: #121c2e;
+#     border-radius: 12px;
+#     border: 1px solid #1e293b;
+# }
 
-/* ===== Plot containers (CRITICAL FIX) ===== */
-div[data-testid="stPlotlyChart"],
-div[data-testid="stPyplot"] {
-    background-color: #121c2e;
-    border-radius: 14px;
-    padding: 14px;
-    border: 1px solid #1e293b;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-}
+# /* ===== Plot containers (CRITICAL FIX) ===== */
+# div[data-testid="stPlotlyChart"],
+# div[data-testid="stPyplot"] {
+#     background-color: #121c2e;
+#     border-radius: 14px;
+#     padding: 14px;
+#     border: 1px solid #1e293b;
+#     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+# }
 
-/* ===== Section dividers ===== */
-hr {
-    border: none;
-    border-top: 1px solid #1e293b;
-    margin: 24px 0;
-}
+# /* ===== Section dividers ===== */
+# hr {
+#     border: none;
+#     border-top: 1px solid #1e293b;
+#     margin: 24px 0;
+# }
 
-</style>
-""", unsafe_allow_html=True)
-import matplotlib.pyplot as plt
+# </style>
+# """, unsafe_allow_html=True)
+# import matplotlib.pyplot as plt
 
-plt.rcParams.update({
-    "figure.facecolor": "#121c2e",
-    "axes.facecolor": "#121c2e",
-    "text.color": "#e5e7eb",
-    "axes.labelcolor": "#e5e7eb",
-    "xtick.color": "#cbd5e1",
-    "ytick.color": "#cbd5e1",
-})
+# plt.rcParams.update({
+#     "figure.facecolor": "#121c2e",
+#     "axes.facecolor": "#121c2e",
+#     "text.color": "#e5e7eb",
+#     "axes.labelcolor": "#e5e7eb",
+#     "xtick.color": "#cbd5e1",
+#     "ytick.color": "#cbd5e1",
+# })
 
 
 components.html(
