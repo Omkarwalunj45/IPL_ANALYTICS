@@ -4444,6 +4444,33 @@ if sidebar_option == "Player Profile":
                     fmt_val_with_col(m, v)
                     for m, v in zip(rest_df["Metric"], rest_df["Value"])
                 ]
+                # -------------------------------------------------
+                # Remove unwanted metadata rows
+                # -------------------------------------------------
+                remove_keywords = [
+                    "unknown",
+                    "mega over",
+                    "debut year",
+                    "final year",
+                    "match id"
+                ]
+                
+                rest_df = rest_df[
+                    ~rest_df["Metric"].str.lower().apply(
+                        lambda x: any(k in x for k in remove_keywords)
+                    )
+                ]
+
+                # -------------------------------------------------
+                # Rename specific metric labels
+                # -------------------------------------------------
+                rest_df["Metric"] = (
+                    rest_df["Metric"]
+                    .str.replace("7 PLUS RUN OVERS", ">6 RUN OVERS", case=False, regex=False)
+                    .str.replace("6 MINUS RUN OVERS", "<7 RUN OVERS", case=False, regex=False)
+                )
+
+
             
                 # -------------------------
                 # Styling + Center alignment
