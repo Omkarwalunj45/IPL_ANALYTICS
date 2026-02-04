@@ -8719,311 +8719,98 @@ elif sidebar_option == "Strength vs Weakness":
                 # Required imports (place near top of your module)
                 ##PROBLEM BIG PROBLEM
 
-                WAGON_ZONES = [
-                    "Third Man",
-                    "Point",
-                    "Cover",
-                    "Mid Off",
-                    "Mid On",
-                    "Mid Wicket",
-                    "Square Leg",
-                    "Fine Leg"
-                ]
-                
-                # Semantic swaps for LHB
-                LHB_ZONE_SWAP = {
-                    "Third Man": "Fine Leg",
-                    "Fine Leg": "Third Man",
-                
-                    "Point": "Square Leg",
-                    "Square Leg": "Point",
-                
-                    "Cover": "Mid Wicket",
-                    "Mid Wicket": "Cover",
-                
-                    "Mid Off": "Mid On",
-                    "Mid On": "Mid Off"
-                }
-
-                def remap_wagon_zones_for_lhb(zone_df):
-                    """
-                    Remap wagon zones for LHB so that off/leg side semantics are preserved.
-                    Expects a DataFrame with a 'zone' column.
-                    """
-                    import pandas as pd
-                
-                    if zone_df.empty or 'zone' not in zone_df.columns:
-                        return zone_df
-                
-                    df = zone_df.copy()
-                
-                    # create new zone column with swapped labels
-                    df['zone_mapped'] = df['zone'].apply(
-                        lambda z: LHB_ZONE_SWAP.get(z, z)
-                    )
-                
-                    # aggregate again because swaps can collide
-                    agg_cols = [c for c in df.columns if c not in ('zone', 'zone_mapped')]
-                
-                    df_out = (
-                        df
-                        .groupby('zone_mapped', as_index=False)[agg_cols]
-                        .sum()
-                        .rename(columns={'zone_mapped': 'zone'})
-                    )
-                
-                    return df_out
-                import pandas as pd
-
-                def compute_wagon_zone_stats(df):
-                    """
-                    Returns zone-wise aggregated stats in RHB reference.
-                    """
-                    df = df.copy()
-                
-                    # normalize zone to names
-                    if df['wagon_zone'].dtype != object:
-                        df['zone'] = df['wagon_zone'].apply(lambda x: WAGON_ZONES[int(x) - 1])
-                    else:
-                        df['zone'] = df['wagon_zone']
-                
-                    agg = (
-                        df
-                        .groupby('zone', as_index=False)
-                        .agg(
-                            runs=('runs', 'sum'),
-                            balls=('runs', 'count'),
-                            fours=('is_four', 'sum'),
-                            sixes=('is_six', 'sum')
-                        )
-                    )
-                
-                    total_runs = agg['runs'].sum()
-                    agg['pct'] = (agg['runs'] / total_runs * 100).round(2)
-                
-                    return agg
-
-
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
-                    """
-                    Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
-                    - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
-                                        False => request true handedness visualization (LHB will appear mirrored).
-                    Backwards-compatible call to draw_cricket_field_with_run_totals_requested.
-                    Additionally: when (not normalize_to_rhb) and a LHB is detected, this wrapper
-                    performs a **semantic zone remap** on the input dataframe so that zone labels/data
-                    (Third Man <-> Fine Leg, Point <-> Square Leg, Cover <-> Mid Wicket, Mid Off <-> Mid On)
-                    are swapped prior to plotting. This preserves correct cricket semantics for LHBs.
-                    The geometric mirroring fallback is retained for figures returned by the draw function.
-                    """
-                    import matplotlib.pyplot as plt
-                    import streamlit as st
-                    import inspect
-                    import pandas as pd
-                    import numpy as np
-                    import plotly.graph_objects as go
-                    from matplotlib.figure import Figure as MplFigure
-                
-                    # Defensive check
-                    if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
-                        st.warning("No wagon data available to draw.")
-                        return
-                
-                    # Decide handedness (for UI messages / debugging)
-                    batting_style_val = None
-                    if 'bat_hand' in df_wagon.columns:
-                        try:
-                            batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
-                        except Exception:
-                            batting_style_val = None
-                    is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-                
-                    # Zone names & LHB swap mapping (semantic)
-                    WAGON_ZONES = [
-                        "Third Man", "Point", "Cover", "Mid Off",
-                        "Mid On", "Mid Wicket", "Square Leg", "Fine Leg"
-                    ]
-                    LHB_ZONE_SWAP = {
-                        "Third Man": "Fine Leg",
-                        "Fine Leg": "Third Man",
-                        "Point": "Square Leg",
-                        "Square Leg": "Point",
-                        "Cover": "Mid Wicket",
-                        "Mid Wicket": "Cover",
-                        "Mid Off": "Mid On",
-                        "Mid On": "Mid Off"
-                    }
-                
-                    # Helper: identify a zone column if present
-                    def _find_zone_column(df):
-                        candidates = [
-                            'zone', 'wagon_zone', 'wagonZone', 'wagon_zone_label', 'zone_label',
-                            'wagon', 'wagon_label', 'zone_name'
-                        ]
-                        for c in candidates:
-                            if c in df.columns:
-                                return c
-                        # fallback: try to detect numeric 1-8 column that matches zones
-                        for c in df.columns:
-                            if np.issubdtype(df[c].dtype, np.number):
-                                vals = pd.Series(df[c].dropna().unique())
-                                if vals.between(1, 8).all():
-                                    return c
-                        return None
-                
-                    # Helper: perform semantic mapping on the zone column; preserves dtype (numeric->numeric, str->str)
-                    def _apply_lhb_zone_swap(df):
-                        zone_col = _find_zone_column(df)
-                        if zone_col is None:
-                            return df.copy()
-                
-                        df_copy = df.copy()
-                        col_dtype_numeric = np.issubdtype(df_copy[zone_col].dtype, np.number)
-                
-                        def map_val(v):
-                            if pd.isna(v):
-                                return v
-                            # numeric 1-8
-                            if col_dtype_numeric:
-                                try:
-                                    idx = int(v)
-                                    if 1 <= idx <= 8:
-                                        name = WAGON_ZONES[idx - 1]
-                                        mapped_name = LHB_ZONE_SWAP.get(name, name)
-                                        return WAGON_ZONES.index(mapped_name) + 1
-                                except Exception:
-                                    return v
-                                return v
-                            # string labels
-                            sval = str(v).strip()
-                            # exact match ignoring case
-                            for name in WAGON_ZONES:
-                                if sval.lower() == name.lower():
-                                    return LHB_ZONE_SWAP.get(name, name)
-                            # partial match (robust)
-                            for name in WAGON_ZONES:
-                                if name.lower() in sval.lower() or sval.lower() in name.lower():
-                                    return LHB_ZONE_SWAP.get(name, name)
-                            return v
-                
-                        df_copy[zone_col] = df_copy[zone_col].apply(map_val)
-                        return df_copy
-                
-                    # Check function signature
-                    draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
-                    if draw_fn is None or not callable(draw_fn):
-                        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
-                        return
-                
-                    # If LHB and user asked for true-handedness (normalize_to_rhb==False), remap zones in the dataframe
-                    df_to_pass = df_wagon
-                    if (not normalize_to_rhb) and is_lhb:
-                        try:
-                            df_to_pass = _apply_lhb_zone_swap(df_wagon)
-                            # small debug hint in UI (non-blocking)
-                            try:
-                                st.caption("🔁 Zones remapped for LHB perspective")
-                            except Exception:
-                                pass
-                        except Exception:
-                            df_to_pass = df_wagon  # fallback: pass original
-                
-                    try:
-                        sig = inspect.signature(draw_fn)
-                        if 'normalize_to_rhb' in sig.parameters:
-                            # call with the explicit flag (preferred)
-                            fig = draw_fn(df_to_pass, batter_name, normalize_to_rhb=normalize_to_rhb)
-                        else:
-                            # older signature: call without flag (maintain legacy behaviour)
-                            fig = draw_fn(df_to_pass, batter_name)
-                
-                        # Helper: mirror a Matplotlib figure in-place by inverting x-axis on every Axes
-                        def _mirror_matplotlib(fig_obj: MplFigure):
-                            try:
-                                for ax in fig_obj.axes:
-                                    try:
-                                        ax.invert_xaxis()
-                                    except Exception:
-                                        try:
-                                            x0, x1 = ax.get_xlim()
-                                            ax.set_xlim(-x1, -x0)
-                                        except Exception:
-                                            pass
-                                try:
-                                    fig_obj.canvas.draw_idle()
-                                except Exception:
-                                    pass
-                            except Exception:
-                                pass
-                
-                        # Helper: mirror a Plotly figure by reversing xaxis autorange
-                        def _mirror_plotly(plotly_fig: go.Figure):
-                            try:
-                                # reverse explicit range if set
-                                try:
-                                    x_layout = plotly_fig.layout.xaxis
-                                    if getattr(x_layout, 'range', None) is not None:
-                                        r = list(x_layout.range)
-                                        plotly_fig.update_xaxes(range=[-r[1], -r[0]])
-                                        return
-                                except Exception:
-                                    pass
-                                plotly_fig.update_xaxes(autorange='reversed')
-                            except Exception:
-                                pass
-                
-                        # If the function returned a Matplotlib fig — display it
-                        if isinstance(fig, MplFigure):
-                            # perform mirroring if requested (keep backward behavior)
-                            if (not normalize_to_rhb) and is_lhb:
-                                _mirror_matplotlib(fig)
-                
-                            safe_fn = globals().get('safe_st_pyplot', None)
-                            if callable(safe_fn):
-                                try:
-                                    safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                                except Exception:
-                                    st.pyplot(fig)
-                            else:
-                                st.pyplot(fig)
-                            return
-                
-                        # If function returned None, it may have drawn to current fig; capture that
-                        if fig is None:
-                            mpl_fig = plt.gcf()
-                            # If figure has axes and content, display it
-                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
-                                # apply mirror if needed
-                                if (not normalize_to_rhb) and is_lhb:
-                                    _mirror_matplotlib(mpl_fig)
-                
-                                safe_fn = globals().get('safe_st_pyplot', None)
-                                if callable(safe_fn):
-                                    try:
-                                        safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                                    except Exception:
-                                        st.pyplot(mpl_fig)
-                                else:
-                                    st.pyplot(mpl_fig)
-                            return
-                
-                        # If function returned a Plotly figure (rare), display it
-                        if isinstance(fig, go.Figure):
-                            # apply mirror for LHB + true-handedness request only if the draw function did not already
-                            if (not normalize_to_rhb) and is_lhb:
-                                _mirror_plotly(fig)
-                
-                            try:
-                                fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                            except Exception:
-                                pass
-                            st.plotly_chart(fig, use_container_width=True)
-                            return
-                
-                        # Unknown return — just state it
-                        st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
-                    except Exception as e:
-                        st.error(f"Wagon drawing function raised: {e}")
+                  """
+                  Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
+                  - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
+                                      False => request true handedness visualization (LHB will appear mirrored).
+                  For LHB: flips both data points AND field labels symmetrically.
+                  """
+                  import matplotlib.pyplot as plt
+                  import streamlit as st
+                  import inspect
+              
+                  # Defensive check
+                  if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+                      st.warning("No wagon data available to draw.")
+                      return
+              
+                  # Detect handedness
+                  batting_style_val = None
+                  if 'bat_hand' in df_wagon.columns:
+                      try:
+                          batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                      except Exception:
+                          batting_style_val = None
+                  is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+              
+                  # Copy data to avoid modifying original
+                  df_wagon_copy = df_wagon.copy()
+              
+                  # If LHB: flip X coordinates and swap zone numbers symmetrically
+                  if is_lhb:
+                      if 'wagonX' in df_wagon_copy.columns:
+                          df_wagon_copy['wagonX'] = -df_wagon_copy['wagonX']
+              
+                      # Zone flip map (assuming standard 1-8 zones: 1=third man, 8=fine leg, etc.)
+                      zone_map = {1: 8, 8: 1, 2: 7, 7: 2, 3: 6, 6: 3, 4: 5, 5: 4}
+                      if 'wagonZone' in df_wagon_copy.columns:
+                          df_wagon_copy['wagonZone'] = df_wagon_copy['wagonZone'].map(zone_map).fillna(df_wagon_copy['wagonZone'])
+              
+                  # Check function signature
+                  draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
+                  if draw_fn is None or not callable(draw_fn):
+                      st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                      return
+              
+                  try:
+                      sig = inspect.signature(draw_fn)
+                      if 'normalize_to_rhb' in sig.parameters:
+                          # Call with explicit flag
+                          fig = draw_fn(df_wagon_copy, batter_name, normalize_to_rhb=normalize_to_rhb)
+                      else:
+                          # Older signature
+                          fig = draw_fn(df_wagon_copy, batter_name)
+              
+                      # Display Matplotlib figure
+                      if isinstance(fig, plt.Figure):
+                          safe_fn = globals().get('safe_st_pyplot', None)
+                          if callable(safe_fn):
+                              try:
+                                  safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                              except Exception:
+                                  st.pyplot(fig)
+                          else:
+                              st.pyplot(fig)
+                          return
+              
+                      # If function drew to current figure
+                      if fig is None:
+                          mpl_fig = plt.gcf()
+                          if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
+                              safe_fn = globals().get('safe_st_pyplot', None)
+                              if callable(safe_fn):
+                                  try:
+                                      safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                  except Exception:
+                                      st.pyplot(mpl_fig)
+                              else:
+                                  st.pyplot(mpl_fig)
+                              return
+              
+                      # If Plotly figure (unlikely, but safe)
+                      if 'plotly' in str(type(fig)).lower():
+                          try:
+                              fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                          except Exception:
+                              pass
+                          st.plotly_chart(fig, use_container_width=True)
+                          return
+              
+                      st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+              
+                  except Exception as e:
+                      st.error(f"Wagon drawing function raised: {e}")
 
                 # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                 #     """
