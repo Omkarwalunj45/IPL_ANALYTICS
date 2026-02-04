@@ -881,7 +881,7 @@ st.markdown("""
 <style>
 /* ===== Sidebar Background ===== */
 [data-testid="stSidebar"] {
-    background-color: #334155;
+    background-color: #F8FAFC;
 }
 
 /* Sidebar text (ensure readability) */
@@ -899,6 +899,9 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
+def chunk_list(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 
 # with st.sidebar:
@@ -4692,41 +4695,38 @@ if sidebar_option == "Player Profile":
             ]
             
             if visible_metrics:
-                cols = st.columns(len(visible_metrics))
-                for (label, val), col in zip(visible_metrics, cols):
             
-                    label_l = label.lower()
+                MAX_PER_ROW = 4   # 🔥 key fix (3–4 is ideal)
             
-                    # ---- BBI: keep exactly as string (e.g. 4/17)
-                    if "bbi" in label_l:
-                        disp = str(val)
+                for row_metrics in chunk_list(visible_metrics, MAX_PER_ROW):
+                    cols = st.columns(len(row_metrics))
             
-                    # ---- Integers
-                    elif isinstance(val, (int, np.integer)):
-                        disp = str(int(val))
+                    for (label, val), col in zip(row_metrics, cols):
+                        label_l = label.lower()
             
-                    # ---- Floats
-                    elif isinstance(val, (float, np.floating)) and not np.isnan(val):
+                        # ---- BBI: always string
+                        if "bbi" in label_l:
+                            disp = str(val)
             
-                        if "strike" in label_l:
-                            disp = f"{val:.1f}"              # 1 decimal → no truncation
+                        elif isinstance(val, (int, np.integer)):
+                            disp = str(int(val))
             
-                        elif "average" in label_l:
-                            disp = f"{val:.2f}".rstrip("0").rstrip(".")
-            
-                        else:
-                            # generic float handling
-                            if abs(val - round(val)) < 1e-6:
-                                disp = str(int(round(val)))
+                        elif isinstance(val, (float, np.floating)) and not np.isnan(val):
+                            if "strike" in label_l:
+                                disp = f"{val:.1f}"
+                            elif "average" in label_l:
+                                disp = f"{val:.2f}".rstrip("0").rstrip(".")
                             else:
                                 disp = f"{val:.2f}".rstrip("0").rstrip(".")
             
-                    else:
-                        disp = str(val)
+                        else:
+                            disp = str(val)
             
-                    col.metric(label, disp)
+                        col.metric(label, disp)
+            
             else:
                 st.write("Top bowling metrics not available.")
+
 
             
             # -------------------------
