@@ -12633,6 +12633,27 @@ else:
     import io
     import pandas as pd
     import streamlit as st
+    def title_case_df_values(df, exclude_cols=None):
+      """
+      Title-case (First Letter Caps) all string values in the dataframe,
+      except columns listed in exclude_cols.
+      """
+      if exclude_cols is None:
+          exclude_cols = []
+  
+      df_out = df.copy()
+      for col in df_out.columns:
+          if col in exclude_cols:
+              continue
+          if df_out[col].dtype == object:
+              df_out[col] = (
+                  df_out[col]
+                  .astype(str)
+                  .str.strip()
+                  .str.title()
+              )
+      return df_out
+
 
     # ================= LOAD DATA =================
     icr_25 = pd.read_csv("Datasets/Batting ICR IPL 2025.csv")
@@ -12736,6 +12757,17 @@ else:
         st.warning("No data available.")
     else:
         df_disp = df_show.copy()
+
+        # Apply Title Case ONLY for 2023 & 2024 (values, not headers)
+        if year_choice in ["2023", "2024"]:
+            # Do NOT title-case numeric percentile column
+            if board_choice.startswith("Bat"):
+                exclude = ["ICR Percentile", "Matches"]
+            else:
+                exclude = ["BICR Percentile", "Matches"]
+        
+            df_disp = title_case_df_values(df_disp, exclude_cols=exclude)
+
 
         # sort by percentile
         df_disp[rating_label] = pd.to_numeric(
