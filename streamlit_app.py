@@ -475,69 +475,252 @@ import streamlit as st
 import streamlit.components.v1 as components
 st.markdown("""
 <style>
-
 /* ===== Main app background ===== */
 .stApp {
-    background-color: #f8fafc;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background-attachment: fixed;
+}
+
+/* Add a white overlay container for content */
+.main .block-container {
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
 }
 
 /* ===== Sidebar ===== */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0f172a, #020617);
-    border-right: 1px solid #1e293b;
+    background: linear-gradient(180deg, #1e3a8a, #1e40af, #3b82f6);
+    border-right: 2px solid #60a5fa;
 }
 
 /* Sidebar text */
 [data-testid="stSidebar"] * {
-    color: #e5e7eb !important;
+    color: #f0f9ff !important;
+}
+
+/* Sidebar headings */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #ffffff !important;
+    font-weight: 600;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* ===== Main text ===== */
-h1, h2, h3, h4 {
-    color: #0f172a;
+h1 {
+    color: #1e293b;
+    font-weight: 700;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+h2, h3, h4 {
+    color: #334155;
+    font-weight: 600;
 }
 
 p, span, label {
-    color: #334155;
+    color: #475569;
 }
 
 /* ===== Inputs ===== */
 .stSelectbox div[data-baseweb="select"],
 .stNumberInput input,
-.stSlider {
+.stTextInput input {
     background-color: #ffffff !important;
-    color: #0f172a !important;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    color: #1e293b !important;
+    border-radius: 10px;
+    border: 2px solid #e0e7ff;
+    transition: all 0.3s ease;
+}
+
+.stSelectbox div[data-baseweb="select"]:hover,
+.stNumberInput input:hover,
+.stTextInput input:hover {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1);
+}
+
+/* ===== Sliders ===== */
+.stSlider {
+    padding: 10px 0;
+}
+
+.stSlider [data-baseweb="slider"] {
+    background: linear-gradient(90deg, #818cf8, #a78bfa);
+}
+
+/* ===== Buttons ===== */
+.stButton > button {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
 }
 
 /* ===== Dataframes ===== */
 [data-testid="stDataFrame"] {
     background-color: #ffffff;
-    border-radius: 10px;
-    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    border: 2px solid #e0e7ff;
+    overflow: hidden;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+[data-testid="stDataFrame"] thead {
+    background: linear-gradient(135deg, #818cf8, #a78bfa);
+}
+
+[data-testid="stDataFrame"] thead th {
+    color: white !important;
+    font-weight: 600;
 }
 
 /* ===== Plot containers ===== */
 div[data-testid="stPlotlyChart"],
 div[data-testid="stPyplot"] {
     background-color: #ffffff;
-    border-radius: 12px;
-    padding: 12px;
-    border: 1px solid #e5e7eb;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    border-radius: 16px;
+    padding: 20px;
+    border: 2px solid #e0e7ff;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+    transition: all 0.3s ease;
+}
+
+div[data-testid="stPlotlyChart"]:hover,
+div[data-testid="stPyplot"]:hover {
+    box-shadow: 0 12px 32px rgba(102, 126, 234, 0.25);
+    transform: translateY(-2px);
+}
+
+/* ===== Metrics ===== */
+[data-testid="stMetricValue"] {
+    color: #667eea;
+    font-weight: 700;
+}
+
+[data-testid="stMetricDelta"] {
+    font-weight: 600;
 }
 
 /* ===== Section dividers ===== */
 hr {
     border: none;
-    border-top: 1px solid #e5e7eb;
-    margin: 24px 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, #818cf8, transparent);
+    margin: 32px 0;
 }
 
+/* ===== Radio buttons ===== */
+.stRadio > label {
+    font-weight: 600;
+    color: #334155;
+}
+
+.stRadio [role="radiogroup"] label {
+    background-color: #f8fafc;
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 2px solid #e0e7ff;
+    transition: all 0.2s ease;
+}
+
+.stRadio [role="radiogroup"] label:hover {
+    background-color: #ede9fe;
+    border-color: #a78bfa;
+}
+
+/* ===== Expander ===== */
+.streamlit-expanderHeader {
+    background: linear-gradient(135deg, #f0f9ff, #e0e7ff);
+    border-radius: 10px;
+    border: 2px solid #ddd6fe;
+    font-weight: 600;
+    color: #4338ca;
+}
+
+.streamlit-expanderHeader:hover {
+    background: linear-gradient(135deg, #e0e7ff, #ddd6fe);
+}
+
+/* ===== Success/Info/Warning boxes ===== */
+.stAlert {
+    border-radius: 12px;
+    border-left: 4px solid;
+}
+
+[data-baseweb="notification"][kind="info"] {
+    background-color: #eff6ff;
+    border-left-color: #3b82f6;
+}
+
+[data-baseweb="notification"][kind="success"] {
+    background-color: #f0fdf4;
+    border-left-color: #22c55e;
+}
+
+[data-baseweb="notification"][kind="warning"] {
+    background-color: #fffbeb;
+    border-left-color: #f59e0b;
+}
+
+/* ===== Tabs ===== */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background-color: transparent;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background-color: #f8fafc;
+    border-radius: 10px 10px 0 0;
+    border: 2px solid #e0e7ff;
+    color: #64748b;
+    font-weight: 600;
+    padding: 10px 20px;
+}
+
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white !important;
+    border-color: #667eea;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #818cf8, #a78bfa);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
 </style>
 """, unsafe_allow_html=True)
-
 
 components.html(
     """
