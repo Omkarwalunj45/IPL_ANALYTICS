@@ -549,6 +549,77 @@ import streamlit.components.v1 as components
 #     "ytick.color": "#cbd5e1",
 # })
 
+st.markdown("""
+<style>
+
+/* ===== Main app background ===== */
+.stApp {
+    background-color: #caf0f8;
+}
+
+/* ===== Sidebar ===== */
+[data-testid="stSidebar"] {
+    background-color: #023047;
+    border-right: 1px solid #035e7b;
+}
+
+/* Sidebar text */
+[data-testid="stSidebar"] * {
+    color: #f1f5f9 !important;
+}
+
+/* ===== Headings ===== */
+h1, h2, h3, h4 {
+    color: #0f172a;
+}
+
+/* ===== Body text ===== */
+p, span, label {
+    color: #0f172a;
+}
+
+/* ===== Accent text (use in charts & labels) ===== */
+.orange-accent {
+    color: #fb8500;
+    font-weight: 600;
+}
+
+/* ===== Inputs ===== */
+.stSelectbox div[data-baseweb="select"],
+.stNumberInput input,
+.stSlider {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-radius: 8px;
+    border: 1px solid #b6e3f2;
+}
+
+/* ===== Dataframes ===== */
+[data-testid="stDataFrame"] {
+    background-color: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #b6e3f2;
+}
+
+/* ===== Plot containers ===== */
+div[data-testid="stPlotlyChart"],
+div[data-testid="stPyplot"] {
+    background-color: #ffffff;
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid #b6e3f2;
+    box-shadow: 0 6px 18px rgba(2, 48, 71, 0.12);
+}
+
+/* ===== Section dividers ===== */
+hr {
+    border: none;
+    border-top: 1px solid #b6e3f2;
+    margin: 24px 0;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 components.html(
     """
