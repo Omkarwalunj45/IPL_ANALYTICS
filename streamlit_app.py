@@ -552,74 +552,132 @@ import streamlit.components.v1 as components
 st.markdown("""
 <style>
 
-/* ===== Main app background ===== */
+/* =========================
+   GLOBAL
+========================= */
 .stApp {
     background-color: #caf0f8;
+    color: #0f172a;
 }
 
-/* ===== Sidebar ===== */
+/* Remove default Streamlit padding blocks */
+.block-container {
+    padding-top: 1.5rem;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
 [data-testid="stSidebar"] {
-    background-color: #023047;
-    border-right: 1px solid #035e7b;
+    background: linear-gradient(
+        180deg,
+        #023047 0%,
+        #022738 100%
+    );
+    border-right: 1px solid rgba(255,255,255,0.08);
 }
 
-/* Sidebar text */
+/* Sidebar text – force visibility */
 [data-testid="stSidebar"] * {
-    color: #f1f5f9 !important;
+    color: #e5f4fb !important;
+    font-weight: 500;
 }
 
-/* ===== Headings ===== */
-h1, h2, h3, h4 {
-    color: #0f172a;
+/* Sidebar section headers */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #ffffff !important;
+    font-weight: 700;
 }
 
-/* ===== Body text ===== */
-p, span, label {
-    color: #0f172a;
-}
-
-/* ===== Accent text (use in charts & labels) ===== */
-.orange-accent {
-    color: #fb8500;
-    font-weight: 600;
-}
-
-/* ===== Inputs ===== */
+/* =========================
+   INPUT WIDGETS (MAIN + SIDEBAR)
+========================= */
 .stSelectbox div[data-baseweb="select"],
+.stMultiSelect div[data-baseweb="select"],
 .stNumberInput input,
-.stSlider {
-    background-color: #ffffff !important;
-    color: #0f172a !important;
-    border-radius: 8px;
-    border: 1px solid #b6e3f2;
-}
-
-/* ===== Dataframes ===== */
-[data-testid="stDataFrame"] {
-    background-color: #ffffff;
+.stTextInput input,
+.stSlider > div {
+    background: rgba(255, 255, 255, 0.55) !important;
+    backdrop-filter: blur(10px);
     border-radius: 12px;
-    border: 1px solid #b6e3f2;
+    border: 1px solid rgba(2, 48, 71, 0.15);
+    color: #0f172a !important;
 }
 
-/* ===== Plot containers ===== */
-div[data-testid="stPlotlyChart"],
-div[data-testid="stPyplot"] {
-    background-color: #ffffff;
+/* Dropdown text */
+.stSelectbox span {
+    color: #0f172a !important;
+}
+
+/* =========================
+   RADIO / CHECKBOX
+========================= */
+.stRadio label,
+.stCheckbox label {
+    color: #e5f4fb !important;
+}
+
+/* =========================
+   METRIC CARDS
+========================= */
+[data-testid="stMetric"] {
+    background: rgba(255,255,255,0.65);
     border-radius: 14px;
     padding: 14px;
-    border: 1px solid #b6e3f2;
-    box-shadow: 0 6px 18px rgba(2, 48, 71, 0.12);
+    border: 1px solid rgba(2, 48, 71, 0.15);
+    backdrop-filter: blur(10px);
 }
 
-/* ===== Section dividers ===== */
+/* =========================
+   DATAFRAMES & PLOTS
+========================= */
+[data-testid="stDataFrame"],
+div[data-testid="stPlotlyChart"],
+div[data-testid="stPyplot"] {
+    background: rgba(255,255,255,0.7);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid rgba(2, 48, 71, 0.18);
+    box-shadow: 0 8px 24px rgba(2,48,71,0.12);
+}
+
+/* =========================
+   HEADINGS
+========================= */
+h1, h2 {
+    color: #0f172a;
+    font-weight: 800;
+}
+
+h3, h4 {
+    color: #0f172a;
+    font-weight: 700;
+}
+
+/* =========================
+   ORANGE ACCENTS
+========================= */
+.orange-accent {
+    color: #fb8500;
+    font-weight: 700;
+}
+
+/* =========================
+   DIVIDERS
+========================= */
 hr {
     border: none;
-    border-top: 1px solid #b6e3f2;
+    border-top: 1px solid rgba(2,48,71,0.2);
     margin: 24px 0;
 }
 
 </style>
 """, unsafe_allow_html=True)
+
+
+
 
 components.html(
     """
