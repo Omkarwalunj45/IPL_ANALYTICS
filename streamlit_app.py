@@ -881,7 +881,7 @@ st.markdown("""
 <style>
 /* ===== Sidebar Background ===== */
 [data-testid="stSidebar"] {
-    background-color: #064E3B;
+    background-color: #334155;
 }
 
 /* Sidebar text (ensure readability) */
