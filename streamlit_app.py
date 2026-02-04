@@ -9006,67 +9006,59 @@ elif sidebar_option == "Strength vs Weakness":
 
                 # Required imports (place near top of your module)
                 ##PROBLEM BIG PROBLEM
-                def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
+                                def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                     """
                     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
-                    HARD-CODED LHB MIRRORING APPLIED HERE.
-                    
                     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
-                                       False => request true handedness visualization (LHB will appear mirrored).
+                                        False => request true handedness visualization (LHB will appear mirrored).
+                    This wrapper tries to call the function with the new parameter if available (backwards compatible).
                     """
                     import matplotlib.pyplot as plt
                     import streamlit as st
                     import inspect
-                    from matplotlib.figure import Figure as MplFigure
-                    st.write("pROBLEM SOLVED?")
+               
                     # Defensive check
                     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
                         st.warning("No wagon data available to draw.")
                         return
-                    
-                    # Decide handedness
+               
+                    # Decide handedness (for UI messages / debugging)
                     batting_style_val = None
                     if 'bat_hand' in df_wagon.columns:
                         try:
                             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
                         except Exception:
                             batting_style_val = None
-                    
                     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-                    
-                    # HARD-CODED LHB DATA SWAP
-                    if is_lhb and not normalize_to_rhb:
-                        df_wagon_modified = df_wagon.copy()
-                        
-                        # HARD-CODED ZONE SWAP: 1<->8, 2<->7, 3<->6, 4<->5
-                        ZONE_SWAP = {1: 8, 2: 7, 3: 6, 4: 5, 5: 4, 6: 3, 7: 2, 8: 1}
-                        
-                        if 'wagonZone' in df_wagon_modified.columns:
-                            df_wagon_modified['wagonZone'] = df_wagon_modified['wagonZone'].apply(
-                                lambda z: ZONE_SWAP.get(int(z), z) if pd.notna(z) else z
-                            )
-                    else:
-                        df_wagon_modified = df_wagon
-                    
+               
+                    # NEW: For LHB, flip X coordinates in data (assumes 'wagonX' is the column; adjust if different)
+                    df_wagon_copy = df_wagon.copy() # Avoid modifying original
+                    if is_lhb:
+                        if 'wagonX' in df_wagon_copy.columns:
+                            df_wagon_copy['wagonX'] = -df_wagon_copy['wagonX'] # Flip X coords (data swap left/right)
+                        # If using wagonZone (1-8), swap zones symmetrically
+                        # Assume standard zones: 1 (sq leg) <-> 8 (third man), 2 <-> 7, 3 <-> 6, 4 <-> 5, etc.
+                        if 'wagonZone' in df_wagon_copy.columns:
+                            zone_map = {1: 8, 8: 1, 2: 7, 7: 2, 3: 6, 6: 3, 4: 5, 5: 4} # Symmetric flip
+                            df_wagon_copy['wagonZone'] = df_wagon_copy['wagonZone'].map(zone_map).fillna(df_wagon_copy['wagonZone'])
+               
                     # Check function signature
                     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
                     if draw_fn is None or not callable(draw_fn):
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
                         return
-                    
+               
                     try:
                         sig = inspect.signature(draw_fn)
-                        
-                        # ALWAYS pass normalize_to_rhb=True to the drawing function since we've already swapped the data
                         if 'normalize_to_rhb' in sig.parameters:
-                            # Call with modified data and force normalize_to_rhb=True
-                            fig = draw_fn(df_wagon_modified, batter_name, normalize_to_rhb=True)
+                            # call with the explicit flag (preferred)
+                            fig = draw_fn(df_wagon_copy, batter_name, normalize_to_rhb=normalize_to_rhb)
                         else:
-                            # older signature: call without flag
-                            fig = draw_fn(df_wagon_modified, batter_name)
-                        
+                            # older signature: call without flag (maintain legacy behaviour)
+                            fig = draw_fn(df_wagon_copy, batter_name)
+               
                         # If the function returned a Matplotlib fig — display it
-                        if isinstance(fig, MplFigure):
+                        if isinstance(fig, plt.Figure):
                             safe_fn = globals().get('safe_st_pyplot', None)
                             if callable(safe_fn):
                                 try:
@@ -9076,12 +9068,12 @@ elif sidebar_option == "Strength vs Weakness":
                             else:
                                 st.pyplot(fig)
                             return
-                        
+               
                         # If function returned None, it may have drawn to current fig; capture that
                         if fig is None:
                             mpl_fig = plt.gcf()
                             # If figure has axes and content, display it
-                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
+                            if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
                                 safe_fn = globals().get('safe_st_pyplot', None)
                                 if callable(safe_fn):
                                     try:
@@ -9091,23 +9083,18 @@ elif sidebar_option == "Strength vs Weakness":
                                 else:
                                     st.pyplot(mpl_fig)
                                 return
-                        
+               
                         # If function returned a Plotly figure (rare), display it
-                        try:
-                            import plotly.graph_objects as go
-                            if isinstance(fig, go.Figure):
-                                try:
-                                    fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                                except Exception:
-                                    pass
-                                st.plotly_chart(fig, use_container_width=True)
-                                return
-                        except:
-                            pass
-                        
+                        if 'plotly' in str(type(fig)).lower():
+                            try:
+                                fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                            except Exception:
+                                pass
+                            st.plotly_chart(fig, use_container_width=True)
+                            return
+               
                         # Unknown return — just state it
                         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
-                        
                     except Exception as e:
                         st.error(f"Wagon drawing function raised: {e}")
                                 
