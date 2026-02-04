@@ -8719,98 +8719,121 @@ elif sidebar_option == "Strength vs Weakness":
                 # Required imports (place near top of your module)
                 ##PROBLEM BIG PROBLEM
 
+                # Required imports (place near top of your module)
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
-                  """
-                  Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
-                  - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
-                                      False => request true handedness visualization (LHB will appear mirrored).
-                  For LHB: flips both data points AND field labels symmetrically.
-                  """
-                  import matplotlib.pyplot as plt
-                  import streamlit as st
-                  import inspect
-              
-                  # Defensive check
-                  if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
-                      st.warning("No wagon data available to draw.")
-                      return
-              
-                  # Detect handedness
-                  batting_style_val = None
-                  if 'bat_hand' in df_wagon.columns:
-                      try:
-                          batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
-                      except Exception:
-                          batting_style_val = None
-                  is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-              
-                  # Copy data to avoid modifying original
-                  df_wagon_copy = df_wagon.copy()
-              
-                  # If LHB: flip X coordinates and swap zone numbers symmetrically
-                  if is_lhb:
-                      if 'wagonX' in df_wagon_copy.columns:
-                          df_wagon_copy['wagonX'] = -df_wagon_copy['wagonX']
-              
-                      # Zone flip map (assuming standard 1-8 zones: 1=third man, 8=fine leg, etc.)
-                      zone_map = {1: 8, 8: 1, 2: 7, 7: 2, 3: 6, 6: 3, 4: 5, 5: 4}
-                      if 'wagonZone' in df_wagon_copy.columns:
-                          df_wagon_copy['wagonZone'] = df_wagon_copy['wagonZone'].map(zone_map).fillna(df_wagon_copy['wagonZone'])
-              
-                  # Check function signature
-                  draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
-                  if draw_fn is None or not callable(draw_fn):
-                      st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
-                      return
-              
-                  try:
-                      sig = inspect.signature(draw_fn)
-                      if 'normalize_to_rhb' in sig.parameters:
-                          # Call with explicit flag
-                          fig = draw_fn(df_wagon_copy, batter_name, normalize_to_rhb=normalize_to_rhb)
-                      else:
-                          # Older signature
-                          fig = draw_fn(df_wagon_copy, batter_name)
-              
-                      # Display Matplotlib figure
-                      if isinstance(fig, plt.Figure):
-                          safe_fn = globals().get('safe_st_pyplot', None)
-                          if callable(safe_fn):
-                              try:
-                                  safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                              except Exception:
-                                  st.pyplot(fig)
-                          else:
-                              st.pyplot(fig)
-                          return
-              
-                      # If function drew to current figure
-                      if fig is None:
-                          mpl_fig = plt.gcf()
-                          if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
-                              safe_fn = globals().get('safe_st_pyplot', None)
-                              if callable(safe_fn):
-                                  try:
-                                      safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                                  except Exception:
-                                      st.pyplot(mpl_fig)
-                              else:
-                                  st.pyplot(mpl_fig)
-                              return
-              
-                      # If Plotly figure (unlikely, but safe)
-                      if 'plotly' in str(type(fig)).lower():
-                          try:
-                              fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                          except Exception:
-                              pass
-                          st.plotly_chart(fig, use_container_width=True)
-                          return
-              
-                      st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
-              
-                  except Exception as e:
-                      st.error(f"Wagon drawing function raised: {e}")
+                    """
+                    Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
+                    
+                    - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
+                                       False => request true handedness visualization (LHB will appear mirrored).
+                    
+                    This wrapper tries to call the function with the new parameter if available (backwards compatible).
+                    For LHB batters when normalize_to_rhb=False, applies a vertical flip to the final output.
+                    """
+                    import matplotlib.pyplot as plt
+                    import streamlit as st
+                    import inspect
+                    
+                    # Defensive check
+                    if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
+                        st.warning("No wagon data available to draw.")
+                        return
+                    
+                    # Decide handedness (for UI messages / debugging)
+                    batting_style_val = None
+                    if 'bat_hand' in df_wagon.columns:
+                        try:
+                            batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
+                        except Exception:
+                            batting_style_val = None
+                    
+                    is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+                    
+                    # Check function signature
+                    draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
+                    if draw_fn is None or not callable(draw_fn):
+                        st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
+                        return
+                    
+                    try:
+                        sig = inspect.signature(draw_fn)
+                        if 'normalize_to_rhb' in sig.parameters:
+                            # call with the explicit flag (preferred)
+                            fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
+                        else:
+                            # older signature: call without flag (maintain legacy behaviour)
+                            fig = draw_fn(df_wagon, batter_name)
+                        
+                        # If the function returned a Matplotlib fig — apply mirroring if needed, then display
+                        if isinstance(fig, MplFigure):
+                            # Apply vertical flip for LHB when not normalizing to RHB
+                            if is_lhb and not normalize_to_rhb:
+                                apply_vertical_mirror(fig)
+                            
+                            safe_fn = globals().get('safe_st_pyplot', None)
+                            if callable(safe_fn):
+                                try:
+                                    safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                except Exception:
+                                    st.pyplot(fig)
+                            else:
+                                st.pyplot(fig)
+                            return
+                        
+                        # If function returned None, it may have drawn to current fig; capture that
+                        if fig is None:
+                            mpl_fig = plt.gcf()
+                            # If figure has axes and content, display it
+                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
+                                # Apply vertical flip for LHB when not normalizing to RHB
+                                if is_lhb and not normalize_to_rhb:
+                                    apply_vertical_mirror(mpl_fig)
+                                
+                                safe_fn = globals().get('safe_st_pyplot', None)
+                                if callable(safe_fn):
+                                    try:
+                                        safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                                    except Exception:
+                                        st.pyplot(mpl_fig)
+                                else:
+                                    st.pyplot(mpl_fig)
+                                return
+                        
+                        # If function returned a Plotly figure (rare), display it
+                        if isinstance(fig, go.Figure):
+                            # Apply vertical flip for LHB when not normalizing to RHB
+                            if is_lhb and not normalize_to_rhb:
+                                apply_vertical_mirror_plotly(fig)
+                            
+                            try:
+                                fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                            except Exception:
+                                pass
+                            st.plotly_chart(fig, use_container_width=True)
+                            return
+                        
+                        # Unknown return — just state it
+                        st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
+                        
+                    except Exception as e:
+                        st.error(f"Wagon drawing function raised: {e}")
+                
+                
+                def apply_vertical_mirror(fig):
+                    """
+                    Apply vertical flip (mirror across vertical axis passing through pitch) to a Matplotlib figure.
+                    This inverts the x-coordinates of all plotted elements.
+                    """
+                    for ax in fig.axes:
+                        # Invert x-axis
+                        ax.invert_xaxis()
+                
+                
+                def apply_vertical_mirror_plotly(fig):
+                    """
+                    Apply vertical flip to a Plotly figure by inverting x-axis.
+                    """
+                    fig.update_xaxes(autorange="reversed")
 
                 # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                 #     """
