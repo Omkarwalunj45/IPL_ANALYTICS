@@ -549,132 +549,132 @@ import streamlit.components.v1 as components
 #     "ytick.color": "#cbd5e1",
 # })
 
-st.markdown("""
-<style>
+# st.markdown("""
+# <style>
 
-/* =========================
-   GLOBAL
-========================= */
-.stApp {
-    background-color: #caf0f8;
-    color: #0f172a;
-}
+# /* =========================
+#    GLOBAL
+# ========================= */
+# .stApp {
+#     background-color: #caf0f8;
+#     color: #0f172a;
+# }
 
-/* Remove default Streamlit padding blocks */
-.block-container {
-    padding-top: 1.5rem;
-}
+# /* Remove default Streamlit padding blocks */
+# .block-container {
+#     padding-top: 1.5rem;
+# }
 
-/* =========================
-   SIDEBAR
-========================= */
-[data-testid="stSidebar"] {
-    background: linear-gradient(
-        180deg,
-        #023047 0%,
-        #022738 100%
-    );
-    border-right: 1px solid rgba(255,255,255,0.08);
-}
+# /* =========================
+#    SIDEBAR
+# ========================= */
+# [data-testid="stSidebar"] {
+#     background: linear-gradient(
+#         180deg,
+#         #023047 0%,
+#         #022738 100%
+#     );
+#     border-right: 1px solid rgba(255,255,255,0.08);
+# }
 
-/* Sidebar text – force visibility */
-[data-testid="stSidebar"] * {
-    color: #e5f4fb !important;
-    font-weight: 500;
-}
+# /* Sidebar text – force visibility */
+# [data-testid="stSidebar"] * {
+#     color: #e5f4fb !important;
+#     font-weight: 500;
+# }
 
-/* Sidebar section headers */
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
-    color: #ffffff !important;
-    font-weight: 700;
-}
+# /* Sidebar section headers */
+# [data-testid="stSidebar"] h1,
+# [data-testid="stSidebar"] h2,
+# [data-testid="stSidebar"] h3 {
+#     color: #ffffff !important;
+#     font-weight: 700;
+# }
 
-/* =========================
-   INPUT WIDGETS (MAIN + SIDEBAR)
-========================= */
-.stSelectbox div[data-baseweb="select"],
-.stMultiSelect div[data-baseweb="select"],
-.stNumberInput input,
-.stTextInput input,
-.stSlider > div {
-    background: rgba(255, 255, 255, 0.55) !important;
-    backdrop-filter: blur(10px);
-    border-radius: 12px;
-    border: 1px solid rgba(2, 48, 71, 0.15);
-    color: #0f172a !important;
-}
+# /* =========================
+#    INPUT WIDGETS (MAIN + SIDEBAR)
+# ========================= */
+# .stSelectbox div[data-baseweb="select"],
+# .stMultiSelect div[data-baseweb="select"],
+# .stNumberInput input,
+# .stTextInput input,
+# .stSlider > div {
+#     background: rgba(255, 255, 255, 0.55) !important;
+#     backdrop-filter: blur(10px);
+#     border-radius: 12px;
+#     border: 1px solid rgba(2, 48, 71, 0.15);
+#     color: #0f172a !important;
+# }
 
-/* Dropdown text */
-.stSelectbox span {
-    color: #0f172a !important;
-}
+# /* Dropdown text */
+# .stSelectbox span {
+#     color: #0f172a !important;
+# }
 
-/* =========================
-   RADIO / CHECKBOX
-========================= */
-.stRadio label,
-.stCheckbox label {
-    color: #e5f4fb !important;
-}
+# /* =========================
+#    RADIO / CHECKBOX
+# ========================= */
+# .stRadio label,
+# .stCheckbox label {
+#     color: #e5f4fb !important;
+# }
 
-/* =========================
-   METRIC CARDS
-========================= */
-[data-testid="stMetric"] {
-    background: rgba(255,255,255,0.65);
-    border-radius: 14px;
-    padding: 14px;
-    border: 1px solid rgba(2, 48, 71, 0.15);
-    backdrop-filter: blur(10px);
-}
+# /* =========================
+#    METRIC CARDS
+# ========================= */
+# [data-testid="stMetric"] {
+#     background: rgba(255,255,255,0.65);
+#     border-radius: 14px;
+#     padding: 14px;
+#     border: 1px solid rgba(2, 48, 71, 0.15);
+#     backdrop-filter: blur(10px);
+# }
 
-/* =========================
-   DATAFRAMES & PLOTS
-========================= */
-[data-testid="stDataFrame"],
-div[data-testid="stPlotlyChart"],
-div[data-testid="stPyplot"] {
-    background: rgba(255,255,255,0.7);
-    border-radius: 16px;
-    padding: 16px;
-    border: 1px solid rgba(2, 48, 71, 0.18);
-    box-shadow: 0 8px 24px rgba(2,48,71,0.12);
-}
+# /* =========================
+#    DATAFRAMES & PLOTS
+# ========================= */
+# [data-testid="stDataFrame"],
+# div[data-testid="stPlotlyChart"],
+# div[data-testid="stPyplot"] {
+#     background: rgba(255,255,255,0.7);
+#     border-radius: 16px;
+#     padding: 16px;
+#     border: 1px solid rgba(2, 48, 71, 0.18);
+#     box-shadow: 0 8px 24px rgba(2,48,71,0.12);
+# }
 
-/* =========================
-   HEADINGS
-========================= */
-h1, h2 {
-    color: #0f172a;
-    font-weight: 800;
-}
+# /* =========================
+#    HEADINGS
+# ========================= */
+# h1, h2 {
+#     color: #0f172a;
+#     font-weight: 800;
+# }
 
-h3, h4 {
-    color: #0f172a;
-    font-weight: 700;
-}
+# h3, h4 {
+#     color: #0f172a;
+#     font-weight: 700;
+# }
 
-/* =========================
-   ORANGE ACCENTS
-========================= */
-.orange-accent {
-    color: #fb8500;
-    font-weight: 700;
-}
+# /* =========================
+#    ORANGE ACCENTS
+# ========================= */
+# .orange-accent {
+#     color: #fb8500;
+#     font-weight: 700;
+# }
 
-/* =========================
-   DIVIDERS
-========================= */
-hr {
-    border: none;
-    border-top: 1px solid rgba(2,48,71,0.2);
-    margin: 24px 0;
-}
+# /* =========================
+#    DIVIDERS
+# ========================= */
+# hr {
+#     border: none;
+#     border-top: 1px solid rgba(2,48,71,0.2);
+#     margin: 24px 0;
+# }
 
-</style>
-""", unsafe_allow_html=True)
+# </style>
+# """, unsafe_allow_html=True)
 
 
 
