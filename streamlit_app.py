@@ -2289,6 +2289,106 @@ def get_sector_angle_requested(zone, batting_style):
     else:
         angle_deg = float(BASE_ANGLES_LHB.get(z, 0.0))
     return math.radians(angle_deg)
+
+def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
+                                                wagon_zone_col='wagonZone',
+                                                run_col='score',
+                                                bat_hand_col='bat_hand',
+                                                normalize_to_rhb=True):
+    """
+    Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
+    When normalize_to_rhb=False and batter is LHB, shows true mirrored perspective.
+    """
+    fig, ax = plt.subplots(figsize=(10, 10))
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    # Field base
+    ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
+    ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
+    ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
+    ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
+
+    # pitch rectangle approx
+    pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
+    ax.add_patch(pitch_rect)
+
+    # radial sector lines (8)
+    angles = np.linspace(0, 2*np.pi, 9)[:-1]
+    for angle in angles:
+        x = math.cos(angle)
+        y = math.sin(angle)
+        ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
+
+    # prepare data (runs, fours, sixes by sector)
+    tmp = final_df_local.copy()
+    if wagon_zone_col in tmp.columns:
+        tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
+    else:
+        tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
+
+    # raw aggregates keyed by the raw sector id (1..8)
+    runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
+    fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
+    sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
+    total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
+
+    # Title
+    title_text = f"{batsman_name}'s Scoring Zones"
+    plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
+
+    # Determine batter handedness (first non-null sample in the filtered rows)
+    batting_style_val = None
+    if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
+        batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
+    is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+
+    # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
+    for zone in range(1, 9):
+        angle_mid = get_sector_angle_requested(zone, batting_style_val)
+        x = 0.60 * math.cos(angle_mid)
+        y = 0.60 * math.sin(angle_mid)
+
+        data_zone = zone
+
+        runs = int(runs_by_zone.get(data_zone, 0))
+        pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
+        pct_str = f"{pct:.2f}%"
+
+        # main labels
+        ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
+        ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
+
+        # fours & sixes below
+        fours = int(fours_by_zone.get(data_zone, 0))
+        sixes = int(sixes_by_zone.get(data_zone, 0))
+        ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
+
+        # sector name slightly farther out:
+        # KEY FIX: For LHB with normalize_to_rhb=False, use the SAME zone label (don't reverse)
+        # The invert_xaxis() will handle the visual mirroring
+        if is_lhb and not normalize_to_rhb:
+            # Show true LHB perspective - just use the zone as-is
+            sector_name_to_show = SECTOR_NAMES_RHB.get(zone, f"Sector {zone}")
+        else:
+            # RHB or normalized LHB: use the mirrored name calculation
+            display_sector_idx = zone if not is_lhb else (9 - zone)
+            sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+        
+        sx = 0.80 * math.cos(angle_mid)
+        sy = 0.80 * math.sin(angle_mid)
+        ax.text(sx, sy, sector_name_to_show, ha='center', va='center', color='white', fontsize=8)
+
+    ax.set_xlim(-1.2, 1.2)
+    ax.set_ylim(-1.2, 1.2)
+    plt.tight_layout(pad=0)
+    
+    # Apply x-axis inversion for LHB when not normalizing
+    if is_lhb and not normalize_to_rhb:
+        ax.invert_xaxis()
+
+    return fig
+                                                  
 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
     """
     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
