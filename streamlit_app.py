@@ -677,6 +677,90 @@ import streamlit.components.v1 as components
 # """, unsafe_allow_html=True)
 
 
+st.markdown("""
+<style>
+
+/* ===== APP BACKGROUND ===== */
+.stApp {
+    background-color: #f5f7fa;
+    color: #0f172a;
+}
+
+/* ===== SIDEBAR ===== */
+[data-testid="stSidebar"] {
+    background-color: #0b2545;
+    border-right: 1px solid rgba(255,255,255,0.08);
+}
+
+[data-testid="stSidebar"] * {
+    color: #e6edf5 !important;
+    font-weight: 500;
+}
+
+/* ===== BANNER ===== */
+.app-banner {
+    background: linear-gradient(135deg, #081c2f, #0b2545);
+    border-radius: 18px;
+    padding: 28px 32px;
+    color: #ffffff;
+}
+
+/* ===== INPUTS ===== */
+.stSelectbox div[data-baseweb="select"],
+.stMultiSelect div[data-baseweb="select"],
+.stNumberInput input,
+.stTextInput input,
+.stSlider > div {
+    background-color: #fbfdff !important;
+    border: 1px solid #dbe2ea;
+    border-radius: 10px;
+    color: #0f172a !important;
+}
+
+/* ===== METRIC CARDS ===== */
+[data-testid="stMetric"] {
+    background-color: #fbfdff;
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid #dbe2ea;
+}
+
+/* ===== TABLES & PLOTS ===== */
+[data-testid="stDataFrame"],
+div[data-testid="stPlotlyChart"],
+div[data-testid="stPyplot"] {
+    background-color: #fbfdff;
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid #dbe2ea;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.08);
+}
+
+/* ===== HEADINGS ===== */
+h1, h2 {
+    font-weight: 800;
+    color: #0f172a;
+}
+
+h3, h4 {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+/* ===== ORANGE ACCENT ===== */
+.orange-accent {
+    color: #f08a24;
+    font-weight: 700;
+}
+
+/* ===== DIVIDERS ===== */
+hr {
+    border: none;
+    border-top: 1px solid #dbe2ea;
+}
+
+</style>
+""", unsafe_allow_html=True)
 
 
 components.html(
