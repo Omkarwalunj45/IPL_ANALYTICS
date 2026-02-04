@@ -474,46 +474,39 @@ st.markdown(
     """
     <div style="
         background: linear-gradient(135deg, #0f5132 0%, #14532d 50%, #064e3b 100%);
-        padding: 22px 28px;
-        border-radius: 14px;
-        margin-bottom: 18px;
-        box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+        padding: 26px 32px;
+        border-radius: 16px;
+        margin-bottom: 24px;
+        box-shadow: 0 12px 30px rgba(0,0,0,0.25);
     ">
-        <div style="display:flex; flex-direction:column;">
-            <span style="
-                font-size: 36px;
-                font-weight: 800;
-                color: #ecfdf5;
-                letter-spacing: 0.5px;
-                line-height: 1.1;
-            ">
-                DeepCrease
-            </span>
+        <div style="font-size:40px; font-weight:800; color:#ecfdf5; line-height:1.1;">
+            DeepCrease
+        </div>
 
-            <span style="
-                font-size: 16px;
-                font-weight: 600;
-                color: #a7f3d0;
-                margin-top: 4px;
-                letter-spacing: 0.4px;
-            ">
-                Contextual Cricket Intelligence Engine
-            </span>
+        <div style="
+            font-size:16px;
+            font-weight:600;
+            color:#a7f3d0;
+            margin-top:6px;
+            letter-spacing:0.4px;
+        ">
+            Contextual Cricket Intelligence Engine
+        </div>
 
-            <span style="
-                margin-top: 10px;
-                font-size: 18px;
-                font-weight: 500;
-                color: #fef3c7;
-                letter-spacing: 0.3px;
-            ">
-                T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
-            </span>
+        <div style="
+            margin-top:12px;
+            font-size:18px;
+            font-weight:500;
+            color:#fef3c7;
+            letter-spacing:0.3px;
+        ">
+            T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
         </div>
     </div>
     """,
     unsafe_allow_html=True
 )
+
 
 import os
 import glob
