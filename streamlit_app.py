@@ -881,7 +881,7 @@ st.markdown("""
 <style>
 /* ===== Sidebar Background ===== */
 [data-testid="stSidebar"] {
-    background-color: #ade8f4;
+    background-color: ##0F172A;
 }
 
 /* Sidebar text (ensure readability) */
@@ -4694,19 +4694,40 @@ if sidebar_option == "Player Profile":
             if visible_metrics:
                 cols = st.columns(len(visible_metrics))
                 for (label, val), col in zip(visible_metrics, cols):
-                    if isinstance(val, (int, np.integer)):
+            
+                    label_l = label.lower()
+            
+                    # ---- BBI: keep exactly as string (e.g. 4/17)
+                    if "bbi" in label_l:
+                        disp = str(val)
+            
+                    # ---- Integers
+                    elif isinstance(val, (int, np.integer)):
                         disp = str(int(val))
+            
+                    # ---- Floats
                     elif isinstance(val, (float, np.floating)) and not np.isnan(val):
-                        # remove trailing zeros
-                        if abs(val - round(val)) < 1e-6:
-                            disp = str(int(round(val)))
-                        else:
+            
+                        if "strike" in label_l:
+                            disp = f"{val:.1f}"              # 1 decimal → no truncation
+            
+                        elif "average" in label_l:
                             disp = f"{val:.2f}".rstrip("0").rstrip(".")
+            
+                        else:
+                            # generic float handling
+                            if abs(val - round(val)) < 1e-6:
+                                disp = str(int(round(val)))
+                            else:
+                                disp = f"{val:.2f}".rstrip("0").rstrip(".")
+            
                     else:
                         disp = str(val)
+            
                     col.metric(label, disp)
             else:
                 st.write("Top bowling metrics not available.")
+
             
             # -------------------------
             # Detailed stats (vertical key:value)
