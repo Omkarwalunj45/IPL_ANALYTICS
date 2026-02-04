@@ -9009,23 +9009,22 @@ elif sidebar_option == "Strength vs Weakness":
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                     """
                     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
+                    HARD-CODED LHB MIRRORING APPLIED HERE.
                     
                     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
                                        False => request true handedness visualization (LHB will appear mirrored).
-                    
-                    This wrapper tries to call the function with the new parameter if available (backwards compatible).
                     """
                     import matplotlib.pyplot as plt
                     import streamlit as st
                     import inspect
                     from matplotlib.figure import Figure as MplFigure
-                    
+                    st.write("pROBLEM SOLVED?")
                     # Defensive check
                     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
                         st.warning("No wagon data available to draw.")
                         return
                     
-                    # Decide handedness (for UI messages / debugging)
+                    # Decide handedness
                     batting_style_val = None
                     if 'bat_hand' in df_wagon.columns:
                         try:
@@ -9035,6 +9034,20 @@ elif sidebar_option == "Strength vs Weakness":
                     
                     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
                     
+                    # HARD-CODED LHB DATA SWAP
+                    if is_lhb and not normalize_to_rhb:
+                        df_wagon_modified = df_wagon.copy()
+                        
+                        # HARD-CODED ZONE SWAP: 1<->8, 2<->7, 3<->6, 4<->5
+                        ZONE_SWAP = {1: 8, 2: 7, 3: 6, 4: 5, 5: 4, 6: 3, 7: 2, 8: 1}
+                        
+                        if 'wagonZone' in df_wagon_modified.columns:
+                            df_wagon_modified['wagonZone'] = df_wagon_modified['wagonZone'].apply(
+                                lambda z: ZONE_SWAP.get(int(z), z) if pd.notna(z) else z
+                            )
+                    else:
+                        df_wagon_modified = df_wagon
+                    
                     # Check function signature
                     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
                     if draw_fn is None or not callable(draw_fn):
@@ -9043,12 +9056,14 @@ elif sidebar_option == "Strength vs Weakness":
                     
                     try:
                         sig = inspect.signature(draw_fn)
+                        
+                        # ALWAYS pass normalize_to_rhb=True to the drawing function since we've already swapped the data
                         if 'normalize_to_rhb' in sig.parameters:
-                            # call with the explicit flag (preferred)
-                            fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
+                            # Call with modified data and force normalize_to_rhb=True
+                            fig = draw_fn(df_wagon_modified, batter_name, normalize_to_rhb=True)
                         else:
-                            # older signature: call without flag (maintain legacy behaviour)
-                            fig = draw_fn(df_wagon, batter_name)
+                            # older signature: call without flag
+                            fig = draw_fn(df_wagon_modified, batter_name)
                         
                         # If the function returned a Matplotlib fig — display it
                         if isinstance(fig, MplFigure):
@@ -9078,20 +9093,24 @@ elif sidebar_option == "Strength vs Weakness":
                                 return
                         
                         # If function returned a Plotly figure (rare), display it
-                        if isinstance(fig, go.Figure):
-                            try:
-                                fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                            except Exception:
-                                pass
-                            st.plotly_chart(fig, use_container_width=True)
-                            return
+                        try:
+                            import plotly.graph_objects as go
+                            if isinstance(fig, go.Figure):
+                                try:
+                                    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+                                except Exception:
+                                    pass
+                                st.plotly_chart(fig, use_container_width=True)
+                                return
+                        except:
+                            pass
                         
                         # Unknown return — just state it
                         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
                         
                     except Exception as e:
                         st.error(f"Wagon drawing function raised: {e}")
-                
+                                
                 # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                 #     """
                 #     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
