@@ -2290,101 +2290,194 @@ def get_sector_angle_requested(zone, batting_style):
         angle_deg = float(BASE_ANGLES_LHB.get(z, 0.0))
     return math.radians(angle_deg)
 
-
 def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
                                                 wagon_zone_col='wagonZone',
                                                 run_col='score',
-                                                bat_hand_col='bat_hand'):
+                                                bat_hand_col='bat_hand',
+                                                normalize_to_rhb=True):
     """
     Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
-    No other logic changed.
+    When normalize_to_rhb=False and batter is LHB, mirrors the zone labels to show true LHB perspective.
     """
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_aspect('equal')
     ax.axis('off')
-
     # Field base
     ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
     ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
     ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
     ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
-
     # pitch rectangle approx
     pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
     ax.add_patch(pitch_rect)
-
     # radial sector lines (8)
     angles = np.linspace(0, 2*np.pi, 9)[:-1]
     for angle in angles:
         x = math.cos(angle)
         y = math.sin(angle)
         ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
-
     # prepare data (runs, fours, sixes by sector)
     tmp = final_df_local.copy()
     if wagon_zone_col in tmp.columns:
         tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
     else:
         tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
-
     # raw aggregates keyed by the raw sector id (1..8)
     runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
     fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
     sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
     total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
-
     # Title
     title_text = f"{batsman_name}'s Scoring Zones"
     plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
-
     # Determine batter handedness (first non-null sample in the filtered rows)
     batting_style_val = None
     if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
         batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-
+    
+    # Define LHB zone label mapping (mirror across vertical axis)
+    # RHB zones: 1=Fine Leg, 2=Square Leg, 3=Mid Wicket, 4=Mid On, 5=Mid Off, 6=Covers, 7=Point, 8=Third Man
+    # LHB zones: 1=Third Man, 2=Point, 3=Covers, 4=Mid Off, 5=Mid On, 6=Mid Wicket, 7=Square Leg, 8=Fine Leg
+    SECTOR_NAMES_LHB = {
+        1: "Third Man",
+        2: "Point", 
+        3: "Covers",
+        4: "Mid Off",
+        5: "Mid On",
+        6: "Mid Wicket",
+        7: "Square Leg",
+        8: "Fine Leg"
+    }
+    
     # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
     for zone in range(1, 9):
         angle_mid = get_sector_angle_requested(zone, batting_style_val)
         x = 0.60 * math.cos(angle_mid)
         y = 0.60 * math.sin(angle_mid)
-
-        # data_zone: use raw sector index (1..8) directly; we only changed the display angle mapping
-        # BUT to keep labels and data aligned visually for LHB we need to pick the data zone that corresponds
-        # to the displayed sector name. With BASE_ANGLES_LHB we've already swapped sector angles, so the display
-        # location uses the mirrored mapping. To ensure the numeric data (runs/fours/sixes) goes into the
-        # correct display sector we should still pull from the *raw* zone that the batter's wagon data used.
-        # The approach below keeps behaviour identical to prior logic: show data for the raw zone index.
+        
         data_zone = zone
-
         runs = int(runs_by_zone.get(data_zone, 0))
         pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
         pct_str = f"{pct:.2f}%"
-
         # main labels
         ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
         ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
-
         # fours & sixes below
         fours = int(fours_by_zone.get(data_zone, 0))
         sixes = int(sixes_by_zone.get(data_zone, 0))
-        ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
-
-        # sector name slightly farther out:
-        # For LHB we display the mirrored sector name so label and data match visually.
-        display_sector_idx = zone if not is_lhb else (9 - zone)
-        sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+        ax.text(x, y-0.12, f"4s: {fours} 6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
+        
+        # Sector name: use LHB labels when normalize_to_rhb=False and batter is LHB
+        if is_lhb and not normalize_to_rhb:
+            sector_name_to_show = SECTOR_NAMES_LHB.get(zone, f"Sector {zone}")
+        else:
+            display_sector_idx = zone if not is_lhb else (9 - zone)
+            sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+        
         sx = 0.80 * math.cos(angle_mid)
         sy = 0.80 * math.sin(angle_mid)
         ax.text(sx, sy, sector_name_to_show, ha='center', va='center', color='white', fontsize=8)
-
+    
     ax.set_xlim(-1.2, 1.2)
     ax.set_ylim(-1.2, 1.2)
     plt.tight_layout(pad=0)
-    # if is_lhb:
-    #     ax.invert_xaxis()
-
+    
     return fig
+# def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
+#                                                 wagon_zone_col='wagonZone',
+#                                                 run_col='score',
+#                                                 bat_hand_col='bat_hand'):
+#     """
+#     Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
+#     No other logic changed.
+#     """
+#     fig, ax = plt.subplots(figsize=(10, 10))
+#     ax.set_aspect('equal')
+#     ax.axis('off')
+
+#     # Field base
+#     ax.add_patch(Circle((0, 0), 1, fill=True, color='#228B22', alpha=1))
+#     ax.add_patch(Circle((0, 0), 1, fill=False, color='black', linewidth=3))
+#     ax.add_patch(Circle((0, 0), 0.5, fill=True, color='#66bb6a'))
+#     ax.add_patch(Circle((0, 0), 0.5, fill=False, color='white', linewidth=1))
+
+#     # pitch rectangle approx
+#     pitch_rect = Rectangle((-0.04, -0.08), 0.08, 0.16, color='tan', alpha=1, zorder=8)
+#     ax.add_patch(pitch_rect)
+
+#     # radial sector lines (8)
+#     angles = np.linspace(0, 2*np.pi, 9)[:-1]
+#     for angle in angles:
+#         x = math.cos(angle)
+#         y = math.sin(angle)
+#         ax.plot([0, x], [0, y], color='white', alpha=0.25, linewidth=1)
+
+#     # prepare data (runs, fours, sixes by sector)
+#     tmp = final_df_local.copy()
+#     if wagon_zone_col in tmp.columns:
+#         tmp['wagon_zone_int'] = pd.to_numeric(tmp[wagon_zone_col], errors='coerce').astype('Int64')
+#     else:
+#         tmp['wagon_zone_int'] = pd.Series(dtype='Int64')
+
+#     # raw aggregates keyed by the raw sector id (1..8)
+#     runs_by_zone = tmp.groupby('wagon_zone_int')[run_col].sum().to_dict()
+#     fours_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==4).sum())).to_dict()
+#     sixes_by_zone = tmp.groupby('wagon_zone_int')[run_col].apply(lambda s: int((s==6).sum())).to_dict()
+#     total_runs_in_wagon = sum(int(v) for v in runs_by_zone.values())
+
+#     # Title
+#     title_text = f"{batsman_name}'s Scoring Zones"
+#     plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
+
+#     # Determine batter handedness (first non-null sample in the filtered rows)
+#     batting_style_val = None
+#     if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
+#         batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
+#     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
+
+#     # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
+#     for zone in range(1, 9):
+#         angle_mid = get_sector_angle_requested(zone, batting_style_val)
+#         x = 0.60 * math.cos(angle_mid)
+#         y = 0.60 * math.sin(angle_mid)
+
+#         # data_zone: use raw sector index (1..8) directly; we only changed the display angle mapping
+#         # BUT to keep labels and data aligned visually for LHB we need to pick the data zone that corresponds
+#         # to the displayed sector name. With BASE_ANGLES_LHB we've already swapped sector angles, so the display
+#         # location uses the mirrored mapping. To ensure the numeric data (runs/fours/sixes) goes into the
+#         # correct display sector we should still pull from the *raw* zone that the batter's wagon data used.
+#         # The approach below keeps behaviour identical to prior logic: show data for the raw zone index.
+#         data_zone = zone
+
+#         runs = int(runs_by_zone.get(data_zone, 0))
+#         pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
+#         pct_str = f"{pct:.2f}%"
+
+#         # main labels
+#         ax.text(x, y+0.03, pct_str, ha='center', va='center', color='white', fontweight='bold', fontsize=18)
+#         ax.text(x, y-0.03, f"{runs} runs", ha='center', va='center', color='white', fontsize=10)
+
+#         # fours & sixes below
+#         fours = int(fours_by_zone.get(data_zone, 0))
+#         sixes = int(sixes_by_zone.get(data_zone, 0))
+#         ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
+
+#         # sector name slightly farther out:
+#         # For LHB we display the mirrored sector name so label and data match visually.
+#         display_sector_idx = zone if not is_lhb else (9 - zone)
+#         sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+#         sx = 0.80 * math.cos(angle_mid)
+#         sy = 0.80 * math.sin(angle_mid)
+#         ax.text(sx, sy, sector_name_to_show, ha='center', va='center', color='white', fontsize=8)
+
+#     ax.set_xlim(-1.2, 1.2)
+#     ax.set_ylim(-1.2, 1.2)
+#     plt.tight_layout(pad=0)
+#     # if is_lhb:
+#     #     ax.invert_xaxis()
+
+#     return fig
 
 import math
 import numpy as np
@@ -8718,29 +8811,22 @@ elif sidebar_option == "Strength vs Weakness":
 
                 # Required imports (place near top of your module)
                 ##PROBLEM BIG PROBLEM
-
-                # Required imports (place near top of your module)
-# Required imports (place near top of your module)
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                     """
                     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
-                    
                     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
-                                       False => request true handedness visualization (LHB will appear mirrored).
-                    
+                                        False => request true handedness visualization (LHB will appear mirrored).
                     This wrapper tries to call the function with the new parameter if available (backwards compatible).
-                    For LHB batters when normalize_to_rhb=False, applies a complete mirror image (vertical flip).
                     """
                     import matplotlib.pyplot as plt
                     import streamlit as st
                     import inspect
-                    import numpy as np
-                    
+               
                     # Defensive check
                     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
                         st.warning("No wagon data available to draw.")
                         return
-                    
+               
                     # Decide handedness (for UI messages / debugging)
                     batting_style_val = None
                     if 'bat_hand' in df_wagon.columns:
@@ -8748,30 +8834,36 @@ elif sidebar_option == "Strength vs Weakness":
                             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
                         except Exception:
                             batting_style_val = None
-                    
                     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-                    
+               
+                    # NEW: For LHB, flip X coordinates in data (assumes 'wagonX' is the column; adjust if different)
+                    df_wagon_copy = df_wagon.copy() # Avoid modifying original
+                    if is_lhb:
+                        if 'wagonX' in df_wagon_copy.columns:
+                            df_wagon_copy['wagonX'] = -df_wagon_copy['wagonX'] # Flip X coords (data swap left/right)
+                        # If using wagonZone (1-8), swap zones symmetrically
+                        # Assume standard zones: 1 (sq leg) <-> 8 (third man), 2 <-> 7, 3 <-> 6, 4 <-> 5, etc.
+                        if 'wagonZone' in df_wagon_copy.columns:
+                            zone_map = {1: 8, 8: 1, 2: 7, 7: 2, 3: 6, 6: 3, 4: 5, 5: 4} # Symmetric flip
+                            df_wagon_copy['wagonZone'] = df_wagon_copy['wagonZone'].map(zone_map).fillna(df_wagon_copy['wagonZone'])
+               
                     # Check function signature
                     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
                     if draw_fn is None or not callable(draw_fn):
                         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
                         return
-                    
+               
                     try:
                         sig = inspect.signature(draw_fn)
                         if 'normalize_to_rhb' in sig.parameters:
                             # call with the explicit flag (preferred)
-                            fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
+                            fig = draw_fn(df_wagon_copy, batter_name, normalize_to_rhb=normalize_to_rhb)
                         else:
                             # older signature: call without flag (maintain legacy behaviour)
-                            fig = draw_fn(df_wagon, batter_name)
-                        
-                        # If the function returned a Matplotlib fig — apply mirroring if needed, then display
-                        if isinstance(fig, MplFigure):
-                            # Apply vertical flip for LHB when not normalizing to RHB
-                            if is_lhb and not normalize_to_rhb:
-                                apply_complete_vertical_mirror(fig)
-                            
+                            fig = draw_fn(df_wagon_copy, batter_name)
+               
+                        # If the function returned a Matplotlib fig — display it
+                        if isinstance(fig, plt.Figure):
                             safe_fn = globals().get('safe_st_pyplot', None)
                             if callable(safe_fn):
                                 try:
@@ -8781,16 +8873,12 @@ elif sidebar_option == "Strength vs Weakness":
                             else:
                                 st.pyplot(fig)
                             return
-                        
+               
                         # If function returned None, it may have drawn to current fig; capture that
                         if fig is None:
                             mpl_fig = plt.gcf()
                             # If figure has axes and content, display it
-                            if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
-                                # Apply vertical flip for LHB when not normalizing to RHB
-                                if is_lhb and not normalize_to_rhb:
-                                    apply_complete_vertical_mirror(mpl_fig)
-                                
+                            if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
                                 safe_fn = globals().get('safe_st_pyplot', None)
                                 if callable(safe_fn):
                                     try:
@@ -8800,130 +8888,21 @@ elif sidebar_option == "Strength vs Weakness":
                                 else:
                                     st.pyplot(mpl_fig)
                                 return
-                        
+               
                         # If function returned a Plotly figure (rare), display it
-                        if isinstance(fig, go.Figure):
-                            # Apply vertical flip for LHB when not normalizing to RHB
-                            if is_lhb and not normalize_to_rhb:
-                                apply_complete_vertical_mirror_plotly(fig)
-                            
+                        if 'plotly' in str(type(fig)).lower():
                             try:
                                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
                             except Exception:
                                 pass
                             st.plotly_chart(fig, use_container_width=True)
                             return
-                        
+               
                         # Unknown return — just state it
                         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
-                        
                     except Exception as e:
                         st.error(f"Wagon drawing function raised: {e}")
                 
-                
-                def apply_complete_vertical_mirror(fig):
-                    """
-                    Apply complete vertical flip (mirror across vertical axis passing through pitch) to a Matplotlib figure.
-                    This inverts x-coordinates of all elements: data points, text, patches, etc.
-                    """
-                    import numpy as np
-                    from matplotlib.text import Text
-                    
-                    for ax in fig.axes:
-                        # Get current x-axis limits before transformation
-                        xlim = ax.get_xlim()
-                        x_center = (xlim[0] + xlim[1]) / 2.0
-                        
-                        # Mirror all collections (scatter plots, lines, etc.)
-                        for collection in ax.collections:
-                            offsets = collection.get_offsets()
-                            if len(offsets) > 0:
-                                # Mirror x-coordinates around the center
-                                offsets[:, 0] = 2 * x_center - offsets[:, 0]
-                                collection.set_offsets(offsets)
-                        
-                        # Mirror all line plots
-                        for line in ax.lines:
-                            xdata = line.get_xdata()
-                            if len(xdata) > 0:
-                                line.set_xdata(2 * x_center - xdata)
-                        
-                        # Mirror all patches (circles, rectangles, wedges, etc.)
-                        for patch in ax.patches:
-                            # Get the patch's current position/center
-                            if hasattr(patch, 'center'):
-                                # For Circle, Ellipse, etc.
-                                cx, cy = patch.center
-                                patch.center = (2 * x_center - cx, cy)
-                            elif hasattr(patch, 'get_xy'):
-                                # For Rectangle, Polygon, etc.
-                                xy = patch.get_xy()
-                                if len(xy) > 0:
-                                    xy[:, 0] = 2 * x_center - xy[:, 0]
-                                    patch.set_xy(xy)
-                            elif hasattr(patch, 'get_path'):
-                                # For general paths
-                                path = patch.get_path()
-                                vertices = path.vertices.copy()
-                                vertices[:, 0] = 2 * x_center - vertices[:, 0]
-                                patch.get_path().vertices = vertices
-                        
-                        # Mirror all text elements
-                        for text in ax.texts:
-                            x, y = text.get_position()
-                            text.set_position((2 * x_center - x, y))
-                            
-                            # Flip horizontal alignment
-                            ha = text.get_ha()
-                            if ha == 'left':
-                                text.set_ha('right')
-                            elif ha == 'right':
-                                text.set_ha('left')
-                        
-                        # Invert the x-axis to complete the mirror effect
-                        ax.invert_xaxis()
-                
-                
-                def apply_complete_vertical_mirror_plotly(fig):
-                    """
-                    Apply complete vertical flip to a Plotly figure.
-                    Mirrors all traces and annotations across the vertical axis.
-                    """
-                    # Get x-axis range
-                    if fig.layout.xaxis.range:
-                        x_range = fig.layout.xaxis.range
-                        x_center = (x_range[0] + x_range[1]) / 2.0
-                    else:
-                        # Estimate from data
-                        all_x = []
-                        for trace in fig.data:
-                            if hasattr(trace, 'x') and trace.x is not None:
-                                all_x.extend(trace.x)
-                        if all_x:
-                            x_center = (min(all_x) + max(all_x)) / 2.0
-                        else:
-                            x_center = 0
-                    
-                    # Mirror all trace data
-                    for trace in fig.data:
-                        if hasattr(trace, 'x') and trace.x is not None:
-                            trace.x = [2 * x_center - x for x in trace.x]
-                    
-                    # Mirror all annotations
-                    if fig.layout.annotations:
-                        for annotation in fig.layout.annotations:
-                            if hasattr(annotation, 'x'):
-                                annotation.x = 2 * x_center - annotation.x
-                                
-                                # Flip text alignment
-                                if hasattr(annotation, 'xanchor'):
-                                    if annotation.xanchor == 'left':
-                                        annotation.xanchor = 'right'
-                                    elif annotation.xanchor == 'right':
-                                        annotation.xanchor = 'left'
-                    
-                    # Reverse the x-axis
-                    fig.update_xaxes(autorange="reversed")
                 # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                 #     """
                 #     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
