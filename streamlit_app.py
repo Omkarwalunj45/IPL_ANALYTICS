@@ -2296,7 +2296,8 @@ def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
                                                 bat_hand_col='bat_hand',
                                                 normalize_to_rhb=True):
     """
-    Draw wagon wheel / scoring zones with HARD-CODED LHB mirroring.
+    Draw wagon wheel / scoring zones with explicit LHB angle swap implemented via BASE_ANGLES_LHB.
+    When normalize_to_rhb=False and batter is LHB, shows true mirrored perspective.
     """
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.set_aspect('equal')
@@ -2336,48 +2337,19 @@ def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
     title_text = f"{batsman_name}'s Scoring Zones"
     plt.title(title_text, pad=20, color='white', size=14, fontweight='bold')
 
-    # Determine batter handedness
+    # Determine batter handedness (first non-null sample in the filtered rows)
     batting_style_val = None
     if bat_hand_col in tmp.columns and not tmp[bat_hand_col].dropna().empty:
         batting_style_val = tmp[bat_hand_col].dropna().iloc[0]
     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
 
-    # HARD-CODED ZONE MAPPING FOR LHB
-    # LHB: swap zones 1<->8, 2<->7, 3<->6, 4<->5
-    LHB_ZONE_MAP = {
-        1: 8,  # Fine Leg data -> Third Man position
-        2: 7,  # Square Leg data -> Point position
-        3: 6,  # Mid Wicket data -> Covers position
-        4: 5,  # Mid On data -> Mid Off position
-        5: 4,  # Mid Off data -> Mid On position
-        6: 3,  # Covers data -> Mid Wicket position
-        7: 2,  # Point data -> Square Leg position
-        8: 1   # Third Man data -> Fine Leg position
-    }
-    
-    # HARD-CODED LABEL MAPPING FOR LHB
-    LHB_LABEL_MAP = {
-        1: "Third Man",    # position 1 shows Third Man
-        2: "Point",        # position 2 shows Point
-        3: "Covers",       # position 3 shows Covers
-        4: "Mid Off",      # position 4 shows Mid Off
-        5: "Mid On",       # position 5 shows Mid On
-        6: "Mid Wicket",   # position 6 shows Mid Wicket
-        7: "Square Leg",   # position 7 shows Square Leg
-        8: "Fine Leg"      # position 8 shows Fine Leg
-    }
-
-    # Place % runs and runs in each sector
+    # Place % runs and runs in each sector using sector centers (angles chosen from explicit maps)
     for zone in range(1, 9):
         angle_mid = get_sector_angle_requested(zone, batting_style_val)
         x = 0.60 * math.cos(angle_mid)
         y = 0.60 * math.sin(angle_mid)
 
-        # HARD-CODED DATA SWAP FOR LHB
-        if is_lhb and not normalize_to_rhb:
-            data_zone = LHB_ZONE_MAP[zone]  # Get mirrored data
-        else:
-            data_zone = zone
+        data_zone = zone
 
         runs = int(runs_by_zone.get(data_zone, 0))
         pct = (runs / total_runs_in_wagon * 100) if total_runs_in_wagon > 0 else 0.0
@@ -2392,12 +2364,9 @@ def draw_cricket_field_with_run_totals_requested(final_df_local, batsman_name,
         sixes = int(sixes_by_zone.get(data_zone, 0))
         ax.text(x, y-0.12, f"4s: {fours}  6s: {sixes}", ha='center', va='center', color='white', fontsize=9)
 
-        # HARD-CODED LABEL SWAP FOR LHB
-        if is_lhb and not normalize_to_rhb:
-            sector_name_to_show = LHB_LABEL_MAP[zone]  # Get mirrored label
-        else:
-            display_sector_idx = zone if not is_lhb else (9 - zone)
-            sector_name_to_show = SECTOR_NAMES_RHB.get(display_sector_idx, f"Sector {display_sector_idx}")
+        # HARD-CODED FIX: Use SECTOR_NAMES_RHB directly with zone number
+        # Since the wrapper already swapped the data zones, we just use the zone as-is
+        sector_name_to_show = SECTOR_NAMES_RHB.get(zone, f"Sector {zone}")
         
         sx = 0.80 * math.cos(angle_mid)
         sy = 0.80 * math.sin(angle_mid)
