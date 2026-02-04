@@ -970,44 +970,50 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<style>
+with st.sidebar:
+    st.markdown("### Select Years")
 
-/* ===== SIDEBAR (lighter blue) ===== */
-[data-testid="stSidebar"] {
-    background-color: #1b4965;
-    border-right: 1px solid rgba(255,255,255,0.15);
-}
+    year_range = st.slider(
+        "Select year range",
+        min_value=2021,
+        max_value=2026,
+        value=(2021, 2026)
+    )
 
-[data-testid="stSidebar"] * {
-    color: #f1f6fa !important;
-    font-weight: 500;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-year_range = st.slider(
-    "Select year range",
-    min_value=2021,
-    max_value=2026,
-    value=(2021, 2026)
-)
-
-st.markdown(
-    f"""
-    <div style="
-        margin-top: 6px;
-        font-weight: 700;
-        color: #f08a24;
-        text-align: center;
-        font-size: 14px;
-    ">
-        Season Range: {year_range[0]} – {year_range[1]}
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+    # Custom visible year indicator (premium pill style)
+    st.markdown(
+        f"""
+        <div style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            font-weight: 700;
+        ">
+            <span style="
+                background: #f08a24;
+                color: #0b2545;
+                padding: 4px 10px;
+                border-radius: 14px;
+                font-size: 13px;
+            ">
+                {year_range[0]}
+            </span>
+            <span style="color:#f1f6fa;">→</span>
+            <span style="
+                background: #f08a24;
+                color: #0b2545;
+                padding: 4px 10px;
+                border-radius: 14px;
+                font-size: 13px;
+            ">
+                {year_range[1]}
+            </span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 import os
 import glob
