@@ -10097,12 +10097,22 @@ elif sidebar_option == "Strength vs Weakness":
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
                 
-                    # False Shot % — FIXED: recompute from 'control' column
+                    # FIXED False Shot % — handles BOTH formats of 'control' column
                     false_shot_pct = np.zeros_like(count, dtype=float)
                     if 'control' in df_src.columns:
-                        # Mark deliveries as "not in control" (safe for string/boolean)
-                        not_in_control = df_src['control'].astype(str).str.lower().str.contains('not', na=False)
-                        not_in_control = not_in_control | (df_src['control'] == 0) | (df_src['control'] == False)
+                        ctrl_col = df_src['control']
+                
+                        # Detect column type
+                        if pd.api.types.is_numeric_dtype(ctrl_col):
+                            # Type 1: 0 = not in control, 1 = in control
+                            not_in_control = (ctrl_col == 0) | ctrl_col.isna()  # treat NaN as not in control
+                        else:
+                            # Type 2: string like 'not in control'
+                            not_in_control = ctrl_col.astype(str).str.lower().str.contains('not', na=False)
+                
+                        # Convert to 1/0
+                        not_in_control = not_in_control.astype(int)
+                
                         # If build_pitch_grids added indices, group by them
                         if 'line_idx' in df_src.columns and 'length_idx' in df_src.columns:
                             ctrl_raw = df_src.groupby(['line_idx', 'length_idx'])[not_in_control].mean() * 100
@@ -10110,7 +10120,7 @@ elif sidebar_option == "Strength vs Weakness":
                                 index=range(grids['n_rows']), columns=range(grids['n_cols']), fill_value=0
                             ).values
                         else:
-                            # Fallback: use existing ctrl_pct if no indices
+                            # Fallback to existing ctrl_pct if no indices
                             false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
                     else:
                         false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
@@ -10124,7 +10134,7 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # RAA per cell — using your working compute_pitchmap_raa (no changes)
+                    # RAA per cell — using your working compute_pitchmap_raa (unchanged)
                     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
                     if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
                         raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
@@ -10146,7 +10156,7 @@ elif sidebar_option == "Strength vs Weakness":
                         (dot_pct, 'Dot %', 'Blues'),
                         (sr, 'SR (runs/100 balls)', 'Reds'),
                         (false_shot_pct, 'False Shot %', 'PuBu'),
-                        (raa_grid, 'RAA', 'RdYlGn')  # Diverging cmap
+                        (raa_grid, 'RAA', 'RdYlGn')
                     ]
                 
                     for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
