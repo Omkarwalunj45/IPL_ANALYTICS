@@ -10112,15 +10112,15 @@ elif sidebar_option == "Strength vs Weakness":
                     # FIXED False Shot % — handles 0/1 column correctly
                     # FIXED False Shot % — opposite of Control %, using same logic as your working Control % code
                     # FIXED False Shot % — mirror your working build_control_and_counts logic
+              # FIXED False Shot % — mirror your working build_control_and_counts logic
                     false_shot_grid = np.zeros((grids['n_rows'], grids['n_cols']), dtype=float)
                     total_grid = np.zeros((grids['n_rows'], grids['n_cols']), dtype=int)
-                
                     if 'control' in df_src.columns:
                         # Loop over rows (same as your working code)
                         for _, r in df_src.iterrows():
                             if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
                                 continue
-                            if not _is_legal_row(r):  # Reuse your legal check if defined, else skip
+                            if not _is_legal_row(r): # Reuse your legal check if defined, else skip
                                 continue
                             li = LINE_MAP.get(r[COL_LINE], None)
                             le = LENGTH_MAP.get(r[COL_LENGTH], None)
@@ -10130,16 +10130,20 @@ elif sidebar_option == "Strength vs Weakness":
                             is_false = 1 if r['control'] == 0 else 0
                             false_shot_grid[le, li] += is_false
                             total_grid[le, li] += 1
-                
                         # Compute % per cell
                         mask = total_grid > 0
                         false_shot_pct = np.zeros_like(false_shot_grid, dtype=float)
                         false_shot_pct[mask] = (false_shot_grid[mask] / total_grid[mask]) * 100.0
-                        false_shot_pct = maybe_flip(false_shot_pct)  # Apply LHB flip
+                        false_shot_pct = maybe_flip(false_shot_pct) # Apply LHB flip
                     else:
                         # Fallback if no 'control' column
                         false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
                         st.warning("No 'control' column. Using existing ctrl_pct fallback.")
+                
+                    # NEW: Custom Red-Yellow-Green colormap (red = high False Shot %, green = low)
+                    from matplotlib.colors import LinearSegmentedColormap
+                    colors = ['red', 'yellow', 'green']  # high → medium → low
+                    cmap_false = LinearSegmentedColormap.from_list('false_shot_cmap', colors)
                 
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
@@ -10167,12 +10171,12 @@ elif sidebar_option == "Strength vs Weakness":
                     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
                     plot_list = [
-                        (perc, '% of Balls (heat)', 'Blues'),
-                        (bound_pct, 'Boundary %', 'OrRd'),
-                        (dot_pct, 'Dot %', 'Blues'),
-                        (sr, 'SR (runs/100 balls)', 'Reds'),
-                        (false_shot_pct, 'False Shot %', 'PuBu'),
-                        (raa_grid, 'RAA', 'RdYlGn')
+                        (perc, '% of Balls (heat)', 'Blues', False),
+                        (bound_pct, 'Boundary %', 'OrRd', False),
+                        (dot_pct, 'Dot %', 'Blues', False),
+                        (sr, 'SR (runs/100 balls)', 'Reds', False),
+                        (false_shot_pct, 'False Shot %', cmap_false, False),  # <-- Use custom cmap_false here
+                        (raa_grid, 'RAA', 'RdYlGn', True)
                     ]
                 
                     for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
