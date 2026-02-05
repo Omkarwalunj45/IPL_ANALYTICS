@@ -10098,32 +10098,34 @@ elif sidebar_option == "Strength vs Weakness":
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
                 
                     # FIXED False Shot % — handles BOTH formats of 'control' column
+                    # FIXED False Shot % — handles 0/1 column correctly
                     false_shot_pct = np.zeros_like(count, dtype=float)
                     if 'control' in df_src.columns:
                         ctrl_col = df_src['control']
                 
-                        # Detect column type
-                        if pd.api.types.is_numeric_dtype(ctrl_col):
-                            # Type 1: 0 = not in control, 1 = in control
-                            not_in_control = (ctrl_col == 0) | ctrl_col.isna()  # treat NaN as not in control
-                        else:
-                            # Type 2: string like 'not in control'
-                            not_in_control = ctrl_col.astype(str).str.lower().str.contains('not', na=False)
-                
-                        # Convert to 1/0
+                        # Create not_in_control mask (0 = not in control, 1 = in control)
+                        not_in_control = (ctrl_col == 0) | ctrl_col.isna()  # NaN → treat as not in control (conservative)
                         not_in_control = not_in_control.astype(int)
                 
-                        # If build_pitch_grids added indices, group by them
-                        if 'line_idx' in df_src.columns and 'length_idx' in df_src.columns:
-                            ctrl_raw = df_src.groupby(['line_idx', 'length_idx'])[not_in_control].mean() * 100
+                        # Try to use indices if they exist from build_pitch_grids
+                        line_idx_col = 'line_idx'  # adjust name if different
+                        length_idx_col = 'length_idx'  # adjust name if different
+                        if line_idx_col in df_src.columns and length_idx_col in df_src.columns:
+                            # Group by indices to get mean per cell
+                            ctrl_raw = df_src.groupby([line_idx_col, length_idx_col])[not_in_control].mean() * 100
+                            # Reshape to match grid shape (n_rows x n_cols)
                             false_shot_pct = ctrl_raw.unstack(fill_value=0).reindex(
                                 index=range(grids['n_rows']), columns=range(grids['n_cols']), fill_value=0
                             ).values
                         else:
-                            # Fallback to existing ctrl_pct if no indices
-                            false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
+                            # If no indices, compute overall % as fallback (not per cell, but better than nothing)
+                            overall_false = not_in_control.mean() * 100
+                            false_shot_pct.fill(overall_false)  # fill entire grid with overall
+                            st.warning("No 'line_idx'/'length_idx' columns found. Using overall False Shot % as fallback.")
                     else:
+                        # Fallback to existing ctrl_pct if 'control' column missing
                         false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
+                        st.warning("No 'control' column found. Using existing ctrl_pct as fallback.")
                 
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
