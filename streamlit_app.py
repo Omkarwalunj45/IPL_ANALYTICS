@@ -11304,6 +11304,46 @@ elif sidebar_option == "Strength vs Weakness":
                         )
                 
                 # ---------- When user selects a style ----------
+                # ============================================================================
+                # USAGE - HOW TO CALL THE FUNCTIONS
+                # ============================================================================
+                
+                # ---------- When user selects a kind ----------
+                if chosen_kind and chosen_kind != '-- none --':
+                    def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
+                        if col not in df.columns:
+                            return df.iloc[0:0]
+                        mask = df[col].astype(str).str.lower().str.contains(str(kind).lower(), na=False)
+                        if not mask.any():
+                            norm_kind = _norm_key(kind)
+                            mask = df[col].apply(lambda x: _norm_key(x) == norm_kind)
+                        return df[mask].copy()
+                
+                    # Filter player data (pf) for the kind
+                    sel_pf = filter_by_kind(pf)
+                    # Also filter benchmark for wagon wheels etc (this is fine)
+                    sel_bdf = filter_by_kind(bdf)
+                
+                    df_use = sel_pf if not sel_pf.empty else sel_bdf
+                    if df_use.empty:
+                        st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
+                    else:
+                        st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
+                        draw_wagon_if_available(df_use, player_selected)
+                
+                        st.markdown(f"#### {player_selected}'s Caught Dismissals")
+                        draw_caught_dismissals_wagon(df_use, player_selected)
+                
+                        # NEW CALL: Pass df_use for regular maps, bdf for RAA
+                        display_pitchmaps_from_df(
+                            df_src=df_use,              # Filtered player data for all panels
+                            title_prefix=f"vs Bowler Kind: {chosen_kind}",
+                            bdf=bdf,                    # FULL benchmark (unfiltered) - ONLY for RAA
+                            bowl_kind=chosen_kind,      # Filter to apply to bdf inside RAA
+                            bowl_style=None
+                        )
+                
+                # ---------- When user selects a style ----------
                 if chosen_style and chosen_style != '-- none --':
                     def filter_by_style(df, col='bowl_style', style=chosen_style):
                         if col not in df.columns:
