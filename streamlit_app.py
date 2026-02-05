@@ -11408,6 +11408,40 @@ elif sidebar_option == "Strength vs Weakness":
                 # ============================================================================
                 
                 # ---------- When user selects a kind ----------
+                # Session state keys to track selections
+                if 'bowl_kind' not in st.session_state:
+                    st.session_state.bowl_kind = '-- none --'
+                if 'bowl_style' not in st.session_state:
+                    st.session_state.bowl_style = '-- none --'
+                
+                # Callback when bowl_kind changes
+                def on_kind_change():
+                    if st.session_state.bowl_kind != '-- none --':
+                        st.session_state.bowl_style = '-- none --'  # Reset style
+                
+                # Callback when bowl_style changes
+                def on_style_change():
+                    if st.session_state.bowl_style != '-- none --':
+                        st.session_state.bowl_kind = '-- none --'  # Reset kind
+                
+                # Your selectboxes (update with these callbacks)
+                chosen_kind = st.selectbox(
+                    "Bowler Kind",
+                    options=['-- none --', 'pace bowler', 'spin bowler'],  # adjust your actual options
+                    index=0,
+                    key='bowl_kind',
+                    on_change=on_kind_change
+                )
+                
+                chosen_style = st.selectbox(
+                    "Bowler Style",
+                    options=['-- none --', 'leg spin', 'off spin', 'left arm orthodox', ...],  # your actual styles
+                    index=0,
+                    key='bowl_style',
+                    on_change=on_style_change
+                )
+                
+                # Your filtering and display logic (updated labels)
                 if chosen_kind and chosen_kind != '-- none --':
                     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
                         if col not in df.columns:
@@ -11418,28 +11452,29 @@ elif sidebar_option == "Strength vs Weakness":
                             mask = df[col].apply(lambda x: _norm_key(x) == norm_kind)
                         return df[mask].copy()
                 
-                    # Filter player data (pf) for the kind
                     sel_pf = filter_by_kind(pf)
-                    # Also filter benchmark for wagon wheels etc (this is fine)
                     sel_bdf = filter_by_kind(bdf)
                 
                     df_use = sel_pf if not sel_pf.empty else sel_bdf
                     if df_use.empty:
                         st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
                     else:
-                        st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
+                        # Cap first word only (e.g., "pace bowler" → "Pace")
+                        kind_first = chosen_kind.split()[0].capitalize()
+                
+                        st.markdown(f"### Detailed view — Bowler Kind: {kind_first}")
                         draw_wagon_if_available(df_use, player_selected)
-                    
+                
                         # Updated caught dismissals label
-                        label = f"#### {player_selected}'s Caught Dismissals against {chosen_kind}"
+                        label = f"#### {player_selected}'s Caught Dismissals against {kind_first}"
                         if chosen_phase != 'Overall':
                             label += f" in {chosen_phase}"
                         st.markdown(label)
-                    
-                        draw_caught_dismissals_wagon(df_use, player_selected)
-                        display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
                 
-                # ---------- When user selects a style ----------
+                        draw_caught_dismissals_wagon(df_use, player_selected)
+                        display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {kind_first}")
+                
+                # When bowl_style is chosen
                 if chosen_style and chosen_style != '-- none --':
                     def filter_by_style(df, col='bowl_style', style=chosen_style):
                         if col not in df.columns:
@@ -11450,26 +11485,27 @@ elif sidebar_option == "Strength vs Weakness":
                             mask = df[col].apply(lambda x: _norm_key(x) == norm_style)
                         return df[mask].copy()
                 
-                    # Filter player data (pf) for the style
                     sel_pf = filter_by_style(pf)
-                    # Also filter benchmark for wagon wheels etc (this is fine)
                     sel_bdf = filter_by_style(bdf)
                 
                     df_use = sel_pf if not sel_pf.empty else sel_bdf
                     if df_use.empty:
                         st.info(f"No deliveries found for bowler style '{chosen_style}'.")
                     else:
-                        st.markdown(f"### Detailed view — Bowler Style: {chosen_style}")
+                        # Optional: Cap first word for style too (if you want consistency)
+                        style_first = chosen_style.split()[0].capitalize()
+                
+                        st.markdown(f"### Detailed view — Bowler Style: {style_first}")
                         draw_wagon_if_available(df_use, player_selected)
-                    
+                
                         # Updated caught dismissals label
-                        label = f"#### {player_selected}'s Caught Dismissals against {chosen_style}"
+                        label = f"#### {player_selected}'s Caught Dismissals against {style_first}"
                         if chosen_phase != 'Overall':
                             label += f" in {chosen_phase}"
                         st.markdown(label)
-                    
+                
                         draw_caught_dismissals_wagon(df_use, player_selected)
-                        display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
+                        display_pitchmaps_from_df(df_use, f"vs Bowler Style: {style_first}")
                 # if chosen_kind and chosen_kind != '-- none --':
                 #     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
                 #         if col not in df.columns:
