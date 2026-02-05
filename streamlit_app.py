@@ -9737,282 +9737,8 @@ elif sidebar_option == "Strength vs Weakness":
                 import matplotlib.pyplot as plt
                 import matplotlib.colors as mcolors
                 import streamlit as st
-                
                                 
-                def display_pitchmaps_from_df(df_src, title_prefix, chosen_kind=None, chosen_style=None):
-                    """
-                    Display pitch maps with percentage-based metrics and RAA calculation.
-                    
-                    Args:
-                        df_src: The filtered dataframe for the selected player (pf filtered by bowl_kind/style)
-                        title_prefix: Title for the plots
-                        chosen_kind: Selected bowl_kind (if any)
-                        chosen_style: Selected bowl_style (if any)
-                    """
-                    if df_src is None or df_src.empty:
-                        st.info(f"No deliveries to show for {title_prefix}")
-                        return
-                    
-                    # Build the pitch grids
-                    grids = build_pitch_grids(df_src)
-                    
-                    # Determine if batter is left-handed
-                    bh_col_name = globals().get('bat_hand_col', 'bat_hand')
-                    is_lhb = False
-                    if bh_col_name in df_src.columns:
-                        hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
-                        if any(h.upper().startswith('L') for h in hands):
-                            is_lhb = True
-                    
-                    def maybe_flip(arr):
-                        return np.fliplr(arr) if is_lhb else arr.copy()
-                    
-                    # Get the basic grids
-                    count = maybe_flip(grids['count'])
-                    bounds = maybe_flip(grids['bounds'])
-                    dots = maybe_flip(grids['dots'])
-                    sr = maybe_flip(grids['sr'])
-                    ctrl = maybe_flip(grids['ctrl_pct'])
-                    wkt = maybe_flip(grids['wkt'])
-                    runs = maybe_flip(grids['runs'])
-                    
-                    # Calculate percentage grids for boundaries and dots
-                    bounds_pct = np.zeros_like(count, dtype=float)
-                    dots_pct = np.zeros_like(count, dtype=float)
-                    
-                    for i in range(count.shape[0]):
-                        for j in range(count.shape[1]):
-                            total_balls = count[i, j]
-                            if total_balls > 0:
-                                bounds_pct[i, j] = (bounds[i, j] / total_balls) * 100.0
-                                dots_pct[i, j] = (dots[i, j] / total_balls) * 100.0
-                    
-                    # Calculate RAA for each line-length combo
-                    raa_grid = calculate_raa_grid(df_src, grids, chosen_kind, chosen_style, is_lhb)
-                    
-                    # Setup ticks
-                    xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-                    xticks = xticks_base[::-1] if is_lhb else xticks_base
-                    
-                    n_rows = grids['n_rows']
-                    if n_rows >= 6:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-                    else:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
-                    
-                    # Create figure
-                    fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                    plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
-                    
-                    # Updated plot list with percentages and RAA
-                    plot_list = [
-                        (bounds_pct, 'Boundary % (per cell)', 'OrRd'),
-                        (dots_pct, 'Dot Ball % (per cell)', 'Blues'),
-                        (sr, 'SR (runs/100 balls)', 'Reds'),
-                        (ctrl, 'False Shot % (not in control)', 'PuBu'),
-                        (raa_grid, 'RAA (Runs Above Average)', 'RdYlGn'),  # Green=good, Red=bad
-                        (count, '# of balls (heat)', 'Blues')
-                    ]
-                    
-                    for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
-                        safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-                        flat = safe_arr.flatten()
-                        
-                        if np.all(flat == 0):
-                            vmin, vmax = 0, 1
-                        else:
-                            vmin = float(np.nanmin(flat))
-                            vmax = float(np.nanpercentile(flat, 95))
-                            if vmax <= vmin:
-                                vmax = vmin + 1.0
-                        
-                        # Special handling for RAA (centered at 0)
-                        if 'RAA' in ttl:
-                            max_abs = max(abs(vmin), abs(vmax))
-                            vmin, vmax = -max_abs, max_abs
-                        
-                        im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
-                        ax.set_title(ttl)
-                        ax.set_xticks(range(grids['n_cols']))
-                        ax.set_yticks(range(grids['n_rows']))
-                        ax.set_xticklabels(xticks, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
-                        ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
-                        ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
-                        ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
-                        ax.tick_params(which='minor', bottom=False, left=False)
-                        
-                        # Show wickets on the first plot
-                        if ax_idx == 0:
-                            for i in range(grids['n_rows']):
-                                for j in range(grids['n_cols']):
-                                    w_count = int(wkt[i, j])
-                                    if w_count > 0:
-                                        w_text = f"{w_count} W" if w_count > 1 else 'W'
-                                        ax.text(j, i, w_text, ha='center', va='center', 
-                                               fontsize=14, color='gold', weight='bold',
-                                               bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        
-                        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                    
-                    plt.tight_layout(rect=[0, 0.03, 1, 0.97])
-                    
-                    safe_fn = globals().get('safe_st_pyplot', None)
-                    try:
-                        if callable(safe_fn):
-                            safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                        else:
-                            st.pyplot(fig)
-                    except Exception:
-                        st.pyplot(fig)
-                    finally:
-                        plt.close(fig)
-                
-                
-                def calculate_raa_grid(df_src, grids, chosen_kind, chosen_style, is_lhb):
-                    """
-                    Calculate RAA (Runs Above Average) for each line-length combination.
-                    
-                    Args:
-                        df_src: Filtered player dataframe (pf)
-                        grids: Grid dictionary from build_pitch_grids
-                        chosen_kind: Selected bowl_kind
-                        chosen_style: Selected bowl_style
-                        is_lhb: Whether batter is left-handed
-                    
-                    Returns:
-                        RAA grid (numpy array)
-                    """
-                    # Get global variables
-                    runs_col = globals().get('runs_col', 'runs')
-                    COL_BAT = globals().get('COL_BAT', 'batter')
-                    
-                    # Initialize RAA grid
-                    n_rows = grids['n_rows']
-                    n_cols = grids['n_cols']
-                    raa_grid = np.zeros((n_rows, n_cols), dtype=float)
-                    
-                    # Get the bowl_kind or bowl_style from the filtered pf
-                    filter_col = None
-                    filter_value = None
-                    
-                    if chosen_kind and chosen_kind != '-- none --':
-                        filter_col = 'bowl_kind'
-                        filter_value = chosen_kind
-                    elif chosen_style and chosen_style != '-- none --':
-                        filter_col = 'bowl_style'
-                        filter_value = chosen_style
-                    
-                    if filter_col is None or filter_value is None:
-                        # No filter selected, return zeros
-                        return raa_grid
-                    
-                    # Filter bdf with the same bowl_kind/style
-                    bdf = globals().get('bdf', pd.DataFrame())
-                    if bdf.empty or filter_col not in bdf.columns:
-                        return raa_grid
-                    
-                    # Apply the same filter to bdf
-                    def filter_by_value(df, col, value):
-                        if col not in df.columns:
-                            return df.iloc[0:0]
-                        mask = df[col].astype(str).str.lower().str.contains(str(value).lower(), na=False)
-                        if not mask.any():
-                            # Try exact match with normalization
-                            norm_value = str(value).lower().strip()
-                            mask = df[col].astype(str).str.lower().str.strip() == norm_value
-                        return df[mask].copy()
-                    
-                    bdf_filtered = filter_by_value(bdf, filter_col, filter_value)
-                    
-                    if bdf_filtered.empty:
-                        return raa_grid
-                    
-                    # Get line and length columns
-                    line_col = globals().get('line_col', 'line')
-                    length_col = globals().get('length_col', 'length')
-                    
-                    if line_col not in bdf_filtered.columns or length_col not in bdf_filtered.columns:
-                        return raa_grid
-                    
-                    # Add a combined line_length column to bdf_filtered
-                    bdf_filtered = bdf_filtered.copy()
-                    bdf_filtered['line_length_combo'] = (
-                        bdf_filtered[line_col].astype(str).str.lower().str.strip() + 
-                        '_' + 
-                        bdf_filtered[length_col].astype(str).str.lower().str.strip()
-                    )
-                    
-                    # Also add to df_src (player's data)
-                    df_player = df_src.copy()
-                    if line_col in df_player.columns and length_col in df_player.columns:
-                        df_player['line_length_combo'] = (
-                            df_player[line_col].astype(str).str.lower().str.strip() + 
-                            '_' + 
-                            df_player[length_col].astype(str).str.lower().str.strip()
-                        )
-                    
-                    # Get line and length mappings from grids
-                    line_map = grids.get('line_map', {})
-                    length_map = grids.get('length_map', {})
-                    
-                    # For each cell, calculate RAA
-                    for line_name, line_idx in line_map.items():
-                        for length_name, length_idx in length_map.items():
-                            # Create the combo key
-                            combo_key = f"{line_name.lower().strip()}_{length_name.lower().strip()}"
-                            
-                            # Filter bdf for this specific line-length combo
-                            bdf_cell = bdf_filtered[bdf_filtered['line_length_combo'] == combo_key].copy()
-                            
-                            if bdf_cell.empty:
-                                continue
-                            
-                            # Calculate top 7 average SR for this cell using the RAA function logic
-                            # We'll use the existing RAA function by passing 'line_length_combo' as group_col
-                            
-                            # Temporarily store bdf_cell in globals for RAA function
-                            original_bdf = globals().get('bdf')
-                            globals()['bdf'] = bdf_cell
-                            
-                            # Filter player data for this cell
-                            df_player_cell = df_player[df_player['line_length_combo'] == combo_key].copy()
-                            
-                            if not df_player_cell.empty:
-                                # Temporarily store player data
-                                original_pf = globals().get('pf')
-                                globals()['pf'] = df_player_cell
-                                
-                                # Call RAA function
-                                try:
-                                    raa_result = compute_RAA_DAA_for_group_column('line_length_combo')
-                                    
-                                    # Extract RAA for this combo
-                                    if combo_key in raa_result:
-                                        raa_value = raa_result[combo_key].get('RAA', np.nan)
-                                    else:
-                                        raa_value = np.nan
-                                    
-                                    # Flip indices if left-handed
-                                    if is_lhb:
-                                        col_idx = n_cols - 1 - line_idx
-                                    else:
-                                        col_idx = line_idx
-                                    
-                                    raa_grid[length_idx, col_idx] = raa_value if not np.isnan(raa_value) else 0.0
-                                    
-                                except Exception as e:
-                                    print(f"Error calculating RAA for {combo_key}: {e}")
-                                    pass
-                                
-                                # Restore original pf
-                                globals()['pf'] = original_pf
-                            
-                            # Restore original bdf
-                            globals()['bdf'] = original_bdf
-                    
-                    return raa_grid
-                
+                                                
                 def build_pitch_grids(df_src):
                     """
                     Build pitch grids for visualization.
@@ -10090,8 +9816,400 @@ elif sidebar_option == "Strength vs Weakness":
                         'sr': sr,
                         'ctrl_pct': ctrl_pct,
                         'n_rows': n_rows,
-                        'n_cols': n_cols
+                        'n_cols': n_cols,
+                        'line_order': line_order,
+                        'length_order': length_order,
+                        'line_to_idx': line_to_idx,
+                        'length_to_idx': length_to_idx
                     }
+                
+                
+                def calculate_raa_grid(df_player, grids, chosen_kind, chosen_style):
+                    """
+                    Calculate RAA (Runs Above Average) for each line-length combination.
+                    
+                    Args:
+                        df_player: Filtered player dataframe (pf filtered by bowl_kind/style)
+                        grids: Grid dictionary from build_pitch_grids
+                        chosen_kind: Selected bowl_kind
+                        chosen_style: Selected bowl_style
+                    
+                    Returns:
+                        RAA grid (numpy array)
+                    """
+                    print(f"\n=== RAA CALCULATION DEBUG ===")
+                    print(f"chosen_kind: {chosen_kind}")
+                    print(f"chosen_style: {chosen_style}")
+                    print(f"df_player shape: {df_player.shape}")
+                    
+                    # Get global variables
+                    runs_col = globals().get('runs_col', 'runs')
+                    COL_BAT = globals().get('COL_BAT', 'batter')
+                    
+                    # Initialize RAA grid
+                    n_rows = grids['n_rows']
+                    n_cols = grids['n_cols']
+                    raa_grid = np.zeros((n_rows, n_cols), dtype=float)
+                    
+                    # Get the filter column and value
+                    filter_col = None
+                    filter_value = None
+                    
+                    if chosen_kind and chosen_kind != '-- none --':
+                        filter_col = 'bowl_kind'
+                        filter_value = chosen_kind
+                    elif chosen_style and chosen_style != '-- none --':
+                        filter_col = 'bowl_style'
+                        filter_value = chosen_style
+                    
+                    if filter_col is None or filter_value is None:
+                        print("No filter selected, returning zeros")
+                        return raa_grid
+                    
+                    print(f"Filter: {filter_col} = {filter_value}")
+                    
+                    # Get bdf from globals
+                    bdf = globals().get('bdf', pd.DataFrame())
+                    if bdf.empty:
+                        print("bdf is empty!")
+                        return raa_grid
+                    
+                    print(f"bdf shape before filter: {bdf.shape}")
+                    
+                    # Filter bdf with the same bowl_kind/style
+                    if filter_col not in bdf.columns:
+                        print(f"{filter_col} not in bdf columns!")
+                        return raa_grid
+                    
+                    bdf_filtered = bdf[
+                        bdf[filter_col].astype(str).str.lower().str.contains(str(filter_value).lower(), na=False)
+                    ].copy()
+                    
+                    print(f"bdf shape after filter: {bdf_filtered.shape}")
+                    
+                    if bdf_filtered.empty:
+                        print("bdf_filtered is empty!")
+                        return raa_grid
+                    
+                    # Get line and length from grids
+                    line_order = grids['line_order']
+                    length_order = grids['length_order']
+                    
+                    # Normalize line and length in bdf_filtered
+                    bdf_filtered['line_norm'] = bdf_filtered.get('line', '').astype(str).str.lower().str.strip()
+                    bdf_filtered['length_norm'] = bdf_filtered.get('length', '').astype(str).str.lower().str.strip()
+                    
+                    # Create line_length_combo column
+                    bdf_filtered['line_length_combo'] = (
+                        bdf_filtered['line_norm'] + '_' + bdf_filtered['length_norm']
+                    )
+                    
+                    # Normalize player data
+                    df_player = df_player.copy()
+                    df_player['line_norm'] = df_player.get('line', '').astype(str).str.lower().str.strip()
+                    df_player['length_norm'] = df_player.get('length', '').astype(str).str.lower().str.strip()
+                    df_player['line_length_combo'] = (
+                        df_player['line_norm'] + '_' + df_player['length_norm']
+                    )
+                    
+                    print(f"\nCalculating RAA for each cell...")
+                    
+                    # For each line-length combination
+                    for length_idx, length_name in enumerate(length_order):
+                        for line_idx, line_name in enumerate(line_order):
+                            combo_key = f"{line_name}_{length_name}"
+                            
+                            # Filter bdf for this cell
+                            bdf_cell = bdf_filtered[bdf_filtered['line_length_combo'] == combo_key].copy()
+                            
+                            # Filter player data for this cell
+                            df_player_cell = df_player[df_player['line_length_combo'] == combo_key].copy()
+                            
+                            if bdf_cell.empty:
+                                print(f"  {combo_key}: No data in bdf")
+                                continue
+                            
+                            if df_player_cell.empty:
+                                print(f"  {combo_key}: No data for player")
+                                continue
+                            
+                            print(f"  {combo_key}: bdf={len(bdf_cell)}, player={len(df_player_cell)}")
+                            
+                            # Add the combo column to bdf_cell for RAA function
+                            bdf_cell['line_length_combo'] = combo_key
+                            df_player_cell['line_length_combo'] = combo_key
+                            
+                            # Store original globals
+                            original_bdf = globals().get('bdf')
+                            original_pf = globals().get('pf')
+                            
+                            # Set globals for RAA function
+                            globals()['bdf'] = bdf_cell
+                            globals()['pf'] = df_player_cell
+                            
+                            try:
+                                # Call RAA function
+                                raa_result = compute_RAA_DAA_for_group_column('line_length_combo')
+                                
+                                # Extract RAA value
+                                if combo_key in raa_result:
+                                    raa_value = raa_result[combo_key].get('RAA', np.nan)
+                                    print(f"    RAA = {raa_value}")
+                                else:
+                                    raa_value = np.nan
+                                    print(f"    combo_key not in result")
+                                
+                                # Store in grid
+                                if not np.isnan(raa_value):
+                                    raa_grid[length_idx, line_idx] = raa_value
+                                
+                            except Exception as e:
+                                print(f"    ERROR: {e}")
+                                import traceback
+                                traceback.print_exc()
+                            finally:
+                                # Restore globals
+                                globals()['bdf'] = original_bdf
+                                globals()['pf'] = original_pf
+                    
+                    print(f"\nRAA grid calculated:")
+                    print(raa_grid)
+                    print("=== END RAA DEBUG ===\n")
+                    
+                    return raa_grid
+                
+                
+                def display_pitchmaps_from_df(df_src, title_prefix, chosen_kind=None, chosen_style=None):
+                    """
+                    Display pitch maps with percentage-based metrics and RAA calculation.
+                    """
+                    if df_src is None or df_src.empty:
+                        st.info(f"No deliveries to show for {title_prefix}")
+                        return
+                    
+                    print(f"\n=== PITCHMAP DEBUG ===")
+                    print(f"df_src shape: {df_src.shape}")
+                    print(f"title_prefix: {title_prefix}")
+                    
+                    # Build the pitch grids
+                    grids = build_pitch_grids(df_src)
+                    
+                    print(f"Grids built: count sum = {grids['count'].sum()}")
+                    
+                    # Determine if batter is left-handed
+                    bh_col_name = globals().get('bat_hand_col', 'bat_hand')
+                    is_lhb = False
+                    if bh_col_name in df_src.columns:
+                        hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
+                        if any(h.upper().startswith('L') for h in hands):
+                            is_lhb = True
+                    
+                    print(f"is_lhb: {is_lhb}")
+                    
+                    def maybe_flip(arr):
+                        return np.fliplr(arr) if is_lhb else arr.copy()
+                    
+                    # Get the basic grids
+                    count = maybe_flip(grids['count'])
+                    bounds = maybe_flip(grids['bounds'])
+                    dots = maybe_flip(grids['dots'])
+                    sr = maybe_flip(grids['sr'])
+                    ctrl = maybe_flip(grids['ctrl_pct'])
+                    wkt = maybe_flip(grids['wkt'])
+                    
+                    print(f"Count grid:\n{count}")
+                    print(f"Bounds grid:\n{bounds}")
+                    print(f"SR grid:\n{sr}")
+                    
+                    # Calculate percentage grids for boundaries and dots
+                    bounds_pct = np.zeros_like(count, dtype=float)
+                    dots_pct = np.zeros_like(count, dtype=float)
+                    
+                    for i in range(count.shape[0]):
+                        for j in range(count.shape[1]):
+                            total_balls = count[i, j]
+                            if total_balls > 0:
+                                bounds_pct[i, j] = (bounds[i, j] / total_balls) * 100.0
+                                dots_pct[i, j] = (dots[i, j] / total_balls) * 100.0
+                    
+                    print(f"Boundary % grid:\n{bounds_pct}")
+                    print(f"Dots % grid:\n{dots_pct}")
+                    
+                    # Calculate RAA for each line-length combo
+                    raa_grid = calculate_raa_grid(df_src, grids, chosen_kind, chosen_style)
+                    raa_grid = maybe_flip(raa_grid)
+                    
+                    print(f"RAA grid (after flip):\n{raa_grid}")
+                    
+                    # Setup ticks
+                    xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+                    xticks = xticks_base[::-1] if is_lhb else xticks_base
+                    
+                    n_rows = grids['n_rows']
+                    if n_rows >= 6:
+                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
+                    else:
+                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+                    
+                    # Create figure
+                    fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+                    player_selected = globals().get('player_selected', 'Player')
+                    plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
+                    
+                    # Updated plot list with percentages and RAA
+                    plot_list = [
+                        (bounds_pct, 'Boundary % (per cell)', 'OrRd'),
+                        (dots_pct, 'Dot Ball % (per cell)', 'Blues'),
+                        (sr, 'SR (runs/100 balls)', 'Reds'),
+                        (ctrl, 'False Shot % (not in control)', 'PuBu'),
+                        (raa_grid, 'RAA (Runs Above Average)', 'RdYlGn'),
+                        (count, '# of balls (heat)', 'Blues')
+                    ]
+                    
+                    for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+                        safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
+                        flat = safe_arr.flatten()
+                        
+                        print(f"\nPlot {ax_idx} ({ttl}):")
+                        print(f"  Array:\n{safe_arr}")
+                        print(f"  Min: {flat.min()}, Max: {flat.max()}, Mean: {flat.mean()}")
+                        
+                        if np.all(flat == 0):
+                            vmin, vmax = 0, 1
+                        else:
+                            vmin = float(np.nanmin(flat))
+                            vmax = float(np.nanpercentile(flat, 95))
+                            if vmax <= vmin:
+                                vmax = vmin + 1.0
+                        
+                        # Special handling for RAA (centered at 0)
+                        if 'RAA' in ttl:
+                            max_abs = max(abs(vmin), abs(vmax))
+                            if max_abs > 0:
+                                vmin, vmax = -max_abs, max_abs
+                            else:
+                                vmin, vmax = -1, 1
+                        
+                        print(f"  Color scale: vmin={vmin}, vmax={vmax}")
+                        
+                        im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                        ax.set_title(ttl)
+                        ax.set_xticks(range(grids['n_cols']))
+                        ax.set_yticks(range(grids['n_rows']))
+                        ax.set_xticklabels(xticks, rotation=45, ha='right')
+                        ax.set_yticklabels(yticklabels)
+                        ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
+                        ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
+                        ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
+                        ax.tick_params(which='minor', bottom=False, left=False)
+                        
+                        # Show wickets on the first plot
+                        if ax_idx == 0:
+                            for i in range(grids['n_rows']):
+                                for j in range(grids['n_cols']):
+                                    w_count = int(wkt[i, j])
+                                    if w_count > 0:
+                                        w_text = f"{w_count} W" if w_count > 1 else 'W'
+                                        ax.text(j, i, w_text, ha='center', va='center', 
+                                               fontsize=14, color='gold', weight='bold',
+                                               bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+                        
+                        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+                    
+                    plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+                    
+                    print("=== END PITCHMAP DEBUG ===\n")
+                    
+                    safe_fn = globals().get('safe_st_pyplot', None)
+                    try:
+                        if callable(safe_fn):
+                            safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+                        else:
+                            st.pyplot(fig)
+                    except Exception:
+                        st.pyplot(fig)
+                    finally:
+                        plt.close(fig)
+                
+                # def build_pitch_grids(df_src):
+                #     """
+                #     Build pitch grids for visualization.
+                #     Assumes df_src has 'line' and 'length' columns.
+                #     Returns dict with various aggregated grids.
+                #     """
+                #     # Define line and length categories
+                #     line_order = ['wide down leg', 'down leg', 'on stumps', 'outside off', 'wide out off']
+                #     length_order = ['short', 'back of length', 'good', 'full', 'yorker', 'full toss']
+                    
+                #     # Normalize line and length
+                #     df = df_src.copy()
+                #     df['line_norm'] = df.get('line', '').astype(str).str.lower().str.strip()
+                #     df['length_norm'] = df.get('length', '').astype(str).str.lower().str.strip()
+                    
+                #     # Filter valid lines and lengths
+                #     df = df[df['line_norm'].isin(line_order) & df['length_norm'].isin(length_order)]
+                    
+                #     n_cols = len(line_order)
+                #     n_rows = len(length_order)
+                    
+                #     # Initialize grids
+                #     count = np.zeros((n_rows, n_cols), dtype=int)
+                #     runs = np.zeros((n_rows, n_cols), dtype=int)
+                #     bounds = np.zeros((n_rows, n_cols), dtype=int)
+                #     dots = np.zeros((n_rows, n_cols), dtype=int)
+                #     wkt = np.zeros((n_rows, n_cols), dtype=int)
+                #     controlled = np.zeros((n_rows, n_cols), dtype=int)
+                    
+                #     # Map categories to indices
+                #     line_to_idx = {line: idx for idx, line in enumerate(line_order)}
+                #     length_to_idx = {length: idx for idx, length in enumerate(length_order)}
+                    
+                #     # Populate grids
+                #     for _, row in df.iterrows():
+                #         i = length_to_idx.get(row['length_norm'])
+                #         j = line_to_idx.get(row['line_norm'])
+                        
+                #         if i is None or j is None:
+                #             continue
+                        
+                #         count[i, j] += 1
+                #         runs[i, j] += int(row.get('runs', 0))
+                        
+                #         # Boundaries (4s and 6s)
+                #         if int(row.get('runs', 0)) in [4, 6]:
+                #             bounds[i, j] += 1
+                        
+                #         # Dots
+                #         if int(row.get('runs', 0)) == 0:
+                #             dots[i, j] += 1
+                        
+                #         # Wickets
+                #         if int(row.get('out', 0)) == 1:
+                #             wkt[i, j] += 1
+                        
+                #         # Control (shots played in control)
+                #         if row.get('control', '').lower() in ['yes', '1', 'true']:
+                #             controlled[i, j] += 1
+                    
+                #     # Calculate metrics
+                #     sr = np.zeros((n_rows, n_cols), dtype=float)
+                #     ctrl_pct = np.zeros((n_rows, n_cols), dtype=float)
+                    
+                #     mask = count > 0
+                #     sr[mask] = (runs[mask] / count[mask]) * 100.0
+                #     ctrl_pct[mask] = ((count[mask] - controlled[mask]) / count[mask]) * 100.0  # False shot %
+                    
+                #     return {
+                #         'count': count,
+                #         'runs': runs,
+                #         'bounds': bounds,
+                #         'dots': dots,
+                #         'wkt': wkt,
+                #         'sr': sr,
+                #         'ctrl_pct': ctrl_pct,
+                #         'n_rows': n_rows,
+                #         'n_cols': n_cols
+                #     }
                 
                 
                 # def display_pitchmaps_from_df(df_src, bdf_full, title_prefix, player_selected, runs_col, COL_BAT, 
@@ -11116,7 +11234,8 @@ elif sidebar_option == "Strength vs Weakness":
                 # ============================================================================
                 
                 # ---------- When user selects a kind ----------
-# When bowl_kind is chosen
+                # When bowl_kind is chosen
+                # When bowl_kind is chosen
                 if chosen_kind and chosen_kind != '-- none --':
                     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
                         if col not in df.columns:
@@ -11136,10 +11255,8 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
                         draw_wagon_if_available(df_use, player_selected)
-                
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
-                
                         display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}", 
                                                  chosen_kind=chosen_kind, chosen_style=None)
                 
@@ -11163,10 +11280,8 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.markdown(f"### Detailed view — Bowler Style: {chosen_style}")
                         draw_wagon_if_available(df_use, player_selected)
-                
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
-                
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}", 
                                                  chosen_kind=None, chosen_style=chosen_style)
             
