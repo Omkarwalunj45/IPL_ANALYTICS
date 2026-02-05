@@ -10193,7 +10193,7 @@ elif sidebar_option == "Strength vs Weakness":
                         (raa_grid, 'RAA', 'RdYlGn', True)
                     ]
                 
-                    for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+                    for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
                         flat = safe_arr.flatten()
                         if np.all(flat == 0):
