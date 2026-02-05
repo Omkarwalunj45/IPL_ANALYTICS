@@ -9728,6 +9728,126 @@ elif sidebar_option == "Strength vs Weakness":
                     }
             
                 # ---------- display utility ----------
+                def compute_RAA_for_pitchmap(df_src, bdf, runs_col, COL_BAT, group_col='line_length_combo'):
+                    """
+                    Adapted RAA calculation specifically for pitchmap: computes RAA for each line-length combo.
+                    Methodology same as original: weighted averages on top7, etc.
+                    Returns dict of combo_key: RAA value.
+                    """
+                    out = {}
+                    # Copy and prepare df_src (selected) and bdf (benchmark)
+                    selected = df_src.copy()
+                    benchmark = bdf.copy()
+                    
+                    # Create line_length_combo if not present
+                    if group_col == 'line_length_combo':
+                        for df in [selected, benchmark]:
+                            if 'line' in df.columns and 'length' in df.columns:
+                                df[group_col] = df['line'].astype(str).str.lower() + '_' + df['length'].astype(str).str.lower()
+                            else:
+                                return out  # Cannot proceed without line/length
+                    
+                    if group_col not in selected.columns or group_col not in benchmark.columns:
+                        return out
+                    
+                    # Normalize
+                    for df in [selected, benchmark]:
+                        df[group_col] = df[group_col].astype(str).str.lower().fillna('unknown')
+                        df[runs_col] = pd.to_numeric(df.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
+                        df['out_flag_tmp'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
+                        df['dismissal_clean_tmp'] = df.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
+                    
+                    # Wicket logic (same as original)
+                    WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw']
+                    def is_bowler_wicket_local(out_flag_val, dismissal_text):
+                        try:
+                            if int(out_flag_val) != 1:
+                                return False
+                        except:
+                            if not out_flag_val:
+                                return False
+                        if not dismissal_text or str(dismissal_text).strip() == '':
+                            return False
+                        dd = str(dismissal_text).lower()
+                        for token in WICKET_TYPES:
+                            if token in dd:
+                                return True
+                        return False
+                    
+                    for df in [selected, benchmark]:
+                        df['is_wkt_tmp'] = df.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, axis=1)
+                    
+                    # Get top7 from benchmark (same as original)
+                    top7 = benchmark[benchmark.get('top7_flag', 0) == 1].copy()
+                    if top7.empty:
+                        if 'p_bat' in benchmark.columns and pd.api.types.is_numeric_dtype(benchmark['p_bat']):
+                            top7 = benchmark[pd.to_numeric(benchmark['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
+                    if top7.empty:
+                        if all(c in benchmark.columns for c in ['p_match', 'inns', COL_BAT]):
+                            tmp = benchmark.dropna(subset=[COL_BAT, 'p_match', 'inns']).copy()
+                            order_col = 'ball_id' if 'ball_id' in tmp.columns else ('ball' if 'ball' in tmp.columns else tmp.columns[0])
+                            first_app = tmp.groupby(['p_match', 'inns', COL_BAT], as_index=False)[order_col].min().rename(columns={order_col: 'first_ball'})
+                            recs = []
+                            for (m, inn), grp in first_app.groupby(['p_match', 'inns']):
+                                top7_names = grp.sort_values('first_ball').head(7)[COL_BAT].tolist()
+                                for b in top7_names:
+                                    recs.append((m, inn, b))
+                            if recs:
+                                top7_df = pd.DataFrame(recs, columns=['p_match', 'inns', COL_BAT])
+                                top7_df['top7_flag'] = 1
+                                top7 = benchmark.merge(top7_df, how='inner', on=['p_match', 'inns', COL_BAT])
+                    if top7.empty:
+                        return out
+                    
+                    # Aggregate per match/batter/group for top7
+                    gb_keys = ['p_match', 'inns', COL_BAT, group_col] if all(c in top7.columns for c in ['p_match', 'inns']) else ['p_match', COL_BAT, group_col]
+                    per_mb = (top7.groupby(gb_keys, as_index=False)
+                              .agg(runs=(runs_col, 'sum'),
+                                   balls=(runs_col, 'count'),
+                                   dismissals=('is_wkt_tmp', 'sum')))
+                    
+                    per_mb['SR'] = per_mb.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
+                    
+                    # Aggregate per batter per group (keep runs for weighting)
+                    per_batter_group = per_mb.groupby([COL_BAT, group_col], as_index=False).agg(
+                        total_runs=('runs', 'sum'),
+                        mean_SR=('SR', 'mean')
+                    )
+                    
+                    # Weighted averages by group (weighted by runs scored)
+                    def weighted_avg(df, value_col):
+                        df_clean = df.dropna(subset=[value_col, 'total_runs'])
+                        if df_clean.empty or df_clean['total_runs'].sum() == 0:
+                            return np.nan
+                        return (df_clean['total_runs'] * df_clean[value_col]).sum() / df_clean['total_runs'].sum()
+                    
+                    avg_by_group = per_batter_group.groupby(group_col).apply(
+                        lambda g: pd.Series({
+                            'avg_SR_top7': weighted_avg(g, 'mean_SR')
+                        })
+                    ).reset_index()
+                    
+                    # Process selected data
+                    sel_grp = selected.groupby(group_col).agg(
+                        runs=(runs_col, 'sum'),
+                        balls=(runs_col, 'count')
+                    ).reset_index()
+                    
+                    sel_grp['SR'] = sel_grp.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
+                    
+                    # Merge with group averages and compute RAA
+                    merged = pd.merge(sel_grp, avg_by_group, how='left', on=group_col)
+                    merged['RAA'] = merged['SR'] - merged['avg_SR_top7']
+                    
+                    # Output dict (combo -> RAA)
+                    for _, row in merged.iterrows():
+                        g = row[group_col]
+                        out[str(g).lower()] = {
+                            'RAA': row['RAA']
+                        }
+                    
+                    return out
+                
                 def display_pitchmaps_from_df(df_src, title_prefix):
                     if df_src is None or df_src.empty:
                         st.info(f"No deliveries to show for {title_prefix}")
@@ -9756,70 +9876,27 @@ elif sidebar_option == "Strength vs Weakness":
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
                 
-                    xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-                    xticks = xticks_base[::-1] if is_lhb else xticks_base
-                
-                    n_rows = grids['n_rows']
-                    if n_rows >= 6:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-                    else:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
-                
-                    fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                    plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
-                
-                    # NEW: Boundary% (bounds in cell / balls in cell * 100)
+                    # NEW: Boundary% per cell (bounds / count in cell * 100)
                     bound_pct = np.zeros_like(bounds, dtype=float)
                     mask = count > 0
                     bound_pct[mask] = bounds[mask] / count[mask] * 100.0
                 
-                    # NEW: Dot% (dots in cell / balls in cell * 100)
+                    # NEW: Dot% per cell (dots / count in cell * 100)
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
                 
-                    # SR and False Shot % are already per-cell (keep as is)
+                    # SR and False Shot % already per-cell
                 
-                    # NEW: RAA per cell
+                    # NEW: RAA per cell (using new function)
                     raa_grid = np.full_like(runs, np.nan)
-                    if 'line' in df_src.columns and 'length' in df_src.columns:
-                        # Assume LINE_MAP and LENGTH_MAP are globals mapping strings to indices
-                        line_map = globals().get('LINE_MAP', {})
-                        length_map = globals().get('LENGTH_MAP', {})
-                       
-                        # Assume bdf is global all-data frame for benchmark
-                        if 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
-                            for i in range(n_rows):
-                                length_str = yticklabels[i]
-                                le_idx = length_map.get(length_str, None)
-                                if le_idx is None:
-                                    continue
-                                for j in range(grids['n_cols']):
-                                    line_str = xticks[j]
-                                    li_idx = line_map.get(line_str, None)
-                                    if li_idx is None:
-                                        continue
-                                   
-                                    # Filter df_src and bdf to this line-length combo
-                                    df_src_sub = df_src[(df_src['line'] == line_str) & (df_src['length'] == length_str)].copy()
-                                    bdf_sub = bdf[(bdf['line'] == line_str) & (bdf['length'] == length_str)].copy()
-                                   
-                                    if df_src_sub.empty or bdf_sub.empty:
-                                        continue
-                                   
-                                    # Add dummy group_col for single-value RAA
-                                    df_src_sub['dummy_group'] = 'all'
-                                    bdf_sub['dummy_group'] = 'all'
-                                   
-                                    # Call existing RAA function with dummy group_col
-                                    raa_dict = compute_RAA_DAA_for_group_column('dummy_group')
-                                   
-                                    # Get RAA for 'all'
-                                    raa_val = raa_dict.get('all', {}).get('RAA', np.nan)
-                                    raa_grid[i, j] = raa_val
-                        else:
-                            st.warning("Global 'bdf' not found for RAA benchmark. Skipping RAA map.")
-                    else:
-                        st.warning("Missing 'line' or 'length' columns for RAA calculation. Skipping RAA map.")
+                    raa_dict = compute_RAA_for_pitchmap(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)  # Assume runs_col and COL_BAT defined globally or pass them
+                    # Map dict to grid (using yticklabels and xticks for keys)
+                    for i in range(grids['n_rows']):
+                        length_str = yticklabels[i].lower()
+                        for j in range(grids['n_cols']):
+                            line_str = xticks[j].lower()
+                            combo = f"{line_str}_{length_str}"
+                            raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
                 
                     plot_list = [
                         (perc, '% of Balls (heat)', 'Blues'),
