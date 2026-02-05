@@ -10987,7 +10987,7 @@ elif sidebar_option == "Strength vs Weakness":
                             "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
                             "<extra></extra>"
                         ),
-                        name='Caught Dismissal Locations'
+                        name='Caught Dismissals'
                     ))
                 
                     # Layout & equal aspect scaling so mirror is obvious
@@ -11180,7 +11180,7 @@ elif sidebar_option == "Strength vs Weakness":
                 #             "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
                 #             "<extra></extra>"
                 #         ),
-                #         name='Caught Dismissal Locations'
+                #         name='Caught Dismissals'
                 #     ))
                 
                 #     # Layout & equal aspect scaling so mirror is obvious
@@ -11287,7 +11287,7 @@ elif sidebar_option == "Strength vs Weakness":
                 #         marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
                 #         customdata=caught_df[['bowler', 'bowl_style', 'line', 'length', 'shot']].values,  # Hover data
                 #         hovertemplate=hover_template,
-                #         name='Caught Dismissal Locations'
+                #         name='Caught Dismissals'
                 #     ))
                 
                 #     # Layout
@@ -11367,7 +11367,7 @@ elif sidebar_option == "Strength vs Weakness":
                 #     )
             
                 #     # Legend
-                #     ax.scatter([], [], color='red', s=150, label='Caught Dismissal Locations')
+                #     ax.scatter([], [], color='red', s=150, label='Caught Dismissals')
                 #     ax.legend(loc='upper right', fontsize=10, frameon=True)
             
                 #     # Limits
@@ -12429,7 +12429,7 @@ elif sidebar_option == "Strength vs Weakness":
                     "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
                     "<extra></extra>"
                 ),
-                name='Caught Dismissal Locations'
+                name='Caught Dismissals'
             ))
         
             # Layout & equal aspect scaling so mirror is obvious
@@ -12493,7 +12493,7 @@ elif sidebar_option == "Strength vs Weakness":
                     "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
                     "<extra></extra>"
                 ),
-                name='Caught Dismissal Locations'
+                name='Caught Dismissals'
             ))
         
             # Layout & equal aspect scaling so mirror is obvious
@@ -12557,7 +12557,7 @@ elif sidebar_option == "Strength vs Weakness":
                     "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
                     "<extra></extra>"
                 ),
-                name='Caught Dismissal Locations'
+                name='Caught Dismissals'
             ))
         
             # Layout & equal aspect scaling so mirror is obvious
@@ -12621,7 +12621,7 @@ elif sidebar_option == "Strength vs Weakness":
                     "<br>".join([f"<b>{col}:</b> %{customdata[{i}]}" for i, col in enumerate(customdata_cols)]) +
                     "<extra></extra>"
                 ),
-                name='Caught Dismissal Locations'
+                name='Caught Dismissals'
             ))
         
             # Layout & equal aspect scaling so mirror is obvious
@@ -13211,7 +13211,7 @@ elif sidebar_option == "Strength vs Weakness":
 #                     "<br>".join([f"<b>{col}:</b> %{{customdata[{i}]}}" for i, col in enumerate(customdata_cols)]) +
 #                     "<extra></extra>"
 #                 ),
-#                 name='Caught Dismissal Locations'
+#                 name='Caught Dismissals'
 #             ))
         
 #             # Layout & equal aspect scaling so mirror is obvious
@@ -13685,7 +13685,7 @@ elif sidebar_option == "Strength vs Weakness":
 #                 marker=dict(color='red', size=12, line=dict(color='black', width=1.5)),
 #                 customdata=customdata,
 #                 hovertemplate="<br>".join(hovertemplate_parts) + "<extra></extra>",
-#                 name='Caught Dismissal Locations'
+#                 name='Caught Dismissals'
 #             ))
             
 #             # Layout
@@ -13758,7 +13758,7 @@ elif sidebar_option == "Strength vs Weakness":
 #             wx = _pick_col(caught_df, ['wagonX','wagon_x','wagon_x_coord','x_coord','x'])
 #             wy = _pick_col(caught_df, ['wagonY','wagon_y','wagon_y_coord','y_coord','y'])
 #             if wx is None or wy is None:
-#                 st.warning("No wagon coordinate columns present; cannot draw caught dismissal locations.")
+#                 st.warning("No wagon coordinate columns present; cannot draw Caught Dismissals.")
 #                 return
         
 #             center_x, center_y, radius = 184.0, 184.0, 184.0
@@ -14024,7 +14024,7 @@ elif sidebar_option == "Strength vs Weakness":
 
 #         def draw_bowler_caught_dismissals_wagon(df_in, bowler_name):
 #             """
-#             Plot caught dismissal locations for a bowler (wagon-style field).
+#             Plot Caught Dismissals for a bowler (wagon-style field).
 #             Uses wagonX / wagonY like batter version.
 #             """
 #             if df_in.empty:
@@ -14097,7 +14097,7 @@ elif sidebar_option == "Strength vs Weakness":
 #             ))
         
 #             fig.update_layout(
-#                 title="Caught Dismissal Locations",
+#                 title="Caught Dismissals",
 #                 xaxis=dict(range=[-1.2, 1.2], visible=False),
 #                 yaxis=dict(range=[-1.2, 1.2], visible=False, scaleanchor="x"),
 #                 width=700, height=700,
