@@ -5168,7 +5168,25 @@ elif sidebar_option == "Matchup Analysis":
             except Exception:
                 continue
         return None
-   
+
+
+    def assign_phase(over):
+        if pd.isna(over):
+            return 'Unknown'
+        try:
+            over_int = int(float(over))  # Handle float/string
+            if 1 <= over_int <= 6:
+                return 'Powerplay'
+            elif 7 <= over_int <= 11:
+                return 'Middle 1'
+            elif 12 <= over_int <= 16:
+                return 'Middle 2'
+            elif 17 <= over_int <= 20:
+                return 'Death'
+            else:
+                return 'Unknown'
+        except:
+            return 'Unknown'  
     # ---------- grids builder ----------
     def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', runs_col_candidates=('batruns', 'score'),
                           control_col='control', dismissal_col='dismissal'):
@@ -5472,6 +5490,14 @@ elif sidebar_option == "Matchup Analysis":
     matchup_df = bdf[(bdf[batter_col] == batter_name) & (bdf[bowler_col] == bowler_name)].copy()
     # st.write(matchup_df.dismissal.unique())
     if chosen_phase != 'Overall':
+        # Ensure PHASE column exists (derive from 'over' if missing)
+        if 'PHASE' not in matchup_df.columns:
+            if 'over' in matchup_df.columns:
+                matchup_df['PHASE'] = matchup_df['over'].apply(assign_phase)
+            else:
+                matchup_df['PHASE'] = 'Unknown'  # Fallback if no 'over'
+        
+        # Now filter safely
         matchup_df = matchup_df[matchup_df['PHASE'] == chosen_phase].copy()
     if matchup_df.empty:
         st.warning("No data available for the selected matchup.")
