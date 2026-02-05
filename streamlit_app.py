@@ -10183,7 +10183,22 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
                     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
-                
+
+
+                        # Global total balls per cell (for threshold on all maps)
+                    total_grid = np.zeros((grids['n_rows'], grids['n_cols']), dtype=int)
+                    if 'line' in df_src.columns and 'length' in df_src.columns:
+                        for _, r in df_src.iterrows():
+                            if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
+                                continue
+                            if not _is_legal_row(r):
+                                continue
+                            li = LINE_MAP.get(r[COL_LINE], None)
+                            le = LENGTH_MAP.get(r[COL_LENGTH], None)
+                            if li is not None and le is not None:
+                                total_grid[le, li] += 1
+                    total_grid = maybe_flip(total_grid)
+
                     plot_list = [
                         (perc, '% of Balls (heat)', 'Blues', False),
                         (bound_pct, 'Boundary %', 'OrRd', False),
@@ -10195,7 +10210,10 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
+                        safe_arr[total_grid < 10] = np.nan
                         flat = safe_arr.flatten()
+                                # Mask low-sample cells (white/NaN)
+                      
                         if np.all(flat == 0):
                             vmin, vmax = 0, 1
                         else:
