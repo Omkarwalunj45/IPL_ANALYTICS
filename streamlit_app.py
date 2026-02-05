@@ -10183,14 +10183,15 @@ elif sidebar_option == "Strength vs Weakness":
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
                 
-                    # False Shot % — recompute from 'control' column
+                    # False Shot % — recompute from 'control' column per cell
                     false_shot_pct = np.zeros_like(count, dtype=float)
                     if 'control' in df_src.columns:
-                        # Assume 'control' is string/boolean; count 'not in control' or False
-                        df_src['not_in_control'] = df_src['control'].astype(str).str.lower().str.contains('not in control|not', na=False).astype(int)
-                        # If build_pitch_grids adds 'line_idx' and 'length_idx', use them
+                        # Mark 'not in control' (case-insensitive search for 'not')
+                        df_src['not_in_control'] = df_src['control'].astype(str).str.lower().str.contains('not', na=False).astype(int)
+                        # If build_pitch_grids added 'line_idx' and 'length_idx', use them
                         if 'line_idx' in df_src.columns and 'length_idx' in df_src.columns:
                             ctrl_raw = df_src.groupby(['line_idx', 'length_idx'])['not_in_control'].mean() * 100
+                            # Reshape to match grid shape
                             false_shot_pct = ctrl_raw.unstack(fill_value=0).reindex(
                                 index=range(grids['n_rows']), columns=range(grids['n_cols']), fill_value=0
                             ).values
@@ -10209,7 +10210,7 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # RAA per cell — using the working Claude function
+                    # RAA per cell — using your working compute_pitchmap_raa (no changes)
                     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
                     if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
                         raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
@@ -10257,7 +10258,7 @@ elif sidebar_option == "Strength vs Weakness":
                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                         ax.tick_params(which='minor', bottom=False, left=False)
                 
-                        # 'W' annotations ONLY on first map (% of Balls)
+                        # 'W' annotations ONLY on first map (% of Balls heat)
                         if ax_idx == 0:
                             for i in range(grids['n_rows']):
                                 for j in range(grids['n_cols']):
