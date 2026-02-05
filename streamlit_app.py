@@ -9630,11 +9630,43 @@ elif sidebar_option == "Strength vs Weakness":
                 # UI controls
                 st.markdown("## Batter — Bowler Kind / Style exploration")
                 st.write("Select a Bowler Kind (value as stored) or select a Bowler Style (value as stored).")
-                kind_opts = ['-- none --'] + bowl_kinds_present
-                style_opts = ['-- none --'] + bowl_styles_present
-            
-                chosen_kind = st.selectbox("Bowler Kind", options=kind_opts, index=0)
-                chosen_style = st.selectbox("Bowler Style", options=style_opts, index=0)
+                # ── At the top of your page / sidebar (where selectboxes are defined) ──
+                
+                # Initialize session state if not present
+                if 'bowl_kind' not in st.session_state:
+                    st.session_state.bowl_kind = '-- none --'
+                if 'bowl_style' not in st.session_state:
+                    st.session_state.bowl_style = '-- none --'
+                
+                # Callback for kind → reset style
+                def reset_style_on_kind_change():
+                    # This runs after kind is changed
+                    if st.session_state.bowl_kind != '-- none --':
+                        st.session_state.bowl_style = '-- none --'
+                        st.rerun()  # Force immediate rerun to show reset
+                
+                # Callback for style → reset kind
+                def reset_kind_on_style_change():
+                    if st.session_state.bowl_style != '-- none --':
+                        st.session_state.bowl_kind = '-- none --'
+                        st.rerun()  # Force immediate rerun
+                
+                # The selectboxes (only once!)
+                chosen_kind = st.selectbox(
+                    "Bowler Kind",
+                    options=['-- none --'] + bowl_kinds_present,
+                    index=0,
+                    key="bowl_kind",
+                    on_change=reset_style_on_kind_change
+                )
+                
+                chosen_style = st.selectbox(
+                    "Bowler Style",
+                    options=['-- none --'] + bowl_styles_present,
+                    index=0,
+                    key="bowl_style",
+                    on_change=reset_kind_on_style_change
+                )
             
                 # ---------- robust map-lookup helpers ----------
                 def _norm_key(s):
