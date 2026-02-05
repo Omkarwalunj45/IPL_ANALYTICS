@@ -11545,7 +11545,7 @@ elif sidebar_option == "Strength vs Weakness":
                       display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
               
               # When bowl_style is chosen
-              if chosen_style and chosen_style != '-- none --':
+                if chosen_style and chosen_style != '-- none --':
                   def filter_by_style(df, col='bowl_style', style=chosen_style):
                       if col not in df.columns:
                           return df.iloc[0:0]
