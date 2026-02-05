@@ -10014,7 +10014,7 @@ elif sidebar_option == "Strength vs Weakness":
                   return out
               
               
-              def display_pitchmaps_from_df(df_src, title_prefix):
+                def display_pitchmaps_from_df(df_src, title_prefix):
                   if df_src is None or df_src.empty:
                       st.info(f"No deliveries to show for {title_prefix}")
                       return
