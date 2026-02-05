@@ -9832,6 +9832,12 @@ elif sidebar_option == "Strength vs Weakness":
                     return out
                 
                 
+                import numpy as np
+                import matplotlib.pyplot as plt
+                import matplotlib.colors as mcolors
+                import streamlit as st
+                import pandas as pd
+                
                 def display_pitchmaps_from_df(df_src, title_prefix):
                     if df_src is None or df_src.empty:
                         st.info(f"No deliveries to show for {title_prefix}")
@@ -9860,16 +9866,14 @@ elif sidebar_option == "Strength vs Weakness":
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
                 
-                    # NEW: Boundary % = boundaries in cell / balls in cell × 100
+                    # Boundary % = boundaries in cell / balls in cell × 100
                     bound_pct = np.zeros_like(bounds, dtype=float)
                     mask = count > 0
                     bound_pct[mask] = bounds[mask] / count[mask] * 100.0
                 
-                    # NEW: Dot % = dots in cell / balls in cell × 100
+                    # Dot % = dots in cell / balls in cell × 100
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
-                
-                    # SR and False Shot % already per-cell → keep
                 
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
@@ -9880,7 +9884,7 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # NEW: RAA per cell
+                    # RAA per cell
                     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
                     if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
                         raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
@@ -9894,30 +9898,56 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.warning("Cannot compute RAA map: missing columns or global bdf.")
                 
+                    # ===== DEBUGGING OUTPUT =====
+                    st.write("### RAA Debug Info:")
+                    st.write(f"RAA grid shape: {raa_grid.shape}")
+                    st.write(f"Non-NaN RAA values: {np.sum(~np.isnan(raa_grid))}")
+                    st.write(f"RAA min: {np.nanmin(raa_grid):.2f}, max: {np.nanmax(raa_grid):.2f}, mean: {np.nanmean(raa_grid):.2f}")
+                    
+                    # Show RAA values in a table for debugging
+                    raa_df = pd.DataFrame(raa_grid, columns=xticks, index=yticklabels)
+                    st.write("RAA Values by cell:")
+                    st.dataframe(raa_df.style.format("{:.1f}"))
+                    # ============================
+                
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
                     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
                     plot_list = [
-                        (perc, '% of Balls (heat)', 'Blues'),
-                        (bound_pct, 'Boundary %', 'OrRd'),
-                        (dot_pct, 'Dot %', 'Blues'),
-                        (sr, 'SR (runs/100 balls)', 'Reds'),
-                        (ctrl, 'False Shot % (not in control)', 'PuBu'),
-                        (raa_grid, 'RAA', 'RdYlGn')  # Diverging: green positive, red negative
+                        (perc, '% of Balls (heat)', 'Blues', False),
+                        (bound_pct, 'Boundary %', 'OrRd', False),
+                        (dot_pct, 'Dot %', 'Blues', False),
+                        (sr, 'SR (runs/100 balls)', 'Reds', False),
+                        (ctrl, 'False Shot % (not in control)', 'PuBu', False),
+                        (raa_grid, 'RAA', 'RdYlGn', True)  # Added flag for diverging
                     ]
                 
-                    for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+                    for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
                         flat = safe_arr.flatten()
-                        if np.all(flat == 0):
-                            vmin, vmax = 0, 1
+                        
+                        # Different normalization for diverging vs sequential colormaps
+                        if is_diverging:
+                            # For RAA: center at 0, use symmetric range
+                            abs_max = np.nanmax(np.abs(raa_grid[~np.isnan(raa_grid)])) if np.any(~np.isnan(raa_grid)) else 1.0
+                            if abs_max == 0:
+                                abs_max = 1.0
+                            norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
+                            vmin, vmax = -abs_max, abs_max
+                            
+                            im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
                         else:
-                            vmin = float(np.nanmin(flat))
-                            vmax = float(np.nanpercentile(flat, 95))
-                            if vmax <= vmin:
-                                vmax = vmin + 1.0
-                
-                        im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                            # For other metrics: use standard normalization
+                            if np.all(flat == 0):
+                                vmin, vmax = 0, 1
+                            else:
+                                vmin = float(np.nanmin(flat))
+                                vmax = float(np.nanpercentile(flat, 95))
+                                if vmax <= vmin:
+                                    vmax = vmin + 1.0
+                            
+                            im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                        
                         ax.set_title(ttl)
                         ax.set_xticks(range(grids['n_cols']))
                         ax.set_yticks(range(grids['n_rows']))
@@ -9929,6 +9959,7 @@ elif sidebar_option == "Strength vs Weakness":
                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                         ax.tick_params(which='minor', bottom=False, left=False)
                 
+                        # Add wicket annotations to first plot
                         if ax_idx == 0:
                             for i in range(grids['n_rows']):
                                 for j in range(grids['n_cols']):
@@ -9937,6 +9968,17 @@ elif sidebar_option == "Strength vs Weakness":
                                         w_text = f"{w_count} W" if w_count > 1 else 'W'
                                         ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
                                                 bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+                        
+                        # Add RAA values as text annotations on RAA plot
+                        if is_diverging:
+                            for i in range(grids['n_rows']):
+                                for j in range(grids['n_cols']):
+                                    val = raa_grid[i, j]
+                                    if not np.isnan(val):
+                                        # Choose text color based on background
+                                        text_color = 'white' if abs(val) > abs_max * 0.5 else 'black'
+                                        ax.text(j, i, f'{val:.1f}', ha='center', va='center', 
+                                               fontsize=9, color=text_color, weight='bold')
                 
                         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
                 
