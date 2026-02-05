@@ -9756,44 +9756,6 @@ elif sidebar_option == "Strength vs Weakness":
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
                 
-                    # NEW: Boundary% (cell bounds / total bounds * 100)
-                    total_bounds = bounds.sum() if bounds.sum() > 0 else 1.0
-                    bound_pct = bounds.astype(float) / total_bounds * 100.0
-                
-                    # NEW: Dot% (cell dots / total dots * 100)
-                    total_dots = dots.sum() if dots.sum() > 0 else 1.0
-                    dot_pct = dots.astype(float) / total_dots * 100.0
-                
-                    # NEW: RAA per cell (using existing RAA function with line_length_combo as group_col)
-                    # Create temporary combo column for RAA calculation
-                    if 'line' in df_src.columns and 'length' in df_src.columns:
-                        df_src['line_length_combo'] = df_src['line'].astype(str) + '_' + df_src['length'].astype(str)
-                        # Assume bdf is the reference dataframe (top7 etc.); add combo to bdf too
-                        if 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
-                            bdf['line_length_combo'] = bdf['line'].astype(str) + '_' + bdf['length'].astype(str)
-                        else:
-                            st.warning("Reference 'bdf' not found for RAA calculation. Skipping RAA map.")
-                            raa_grid = np.full_like(runs, np.nan)  # Fallback empty grid
-                       
-                        # Call existing RAA function with group_col='line_length_combo'
-                        raa_dict = compute_RAA_DAA_for_group_column('line_length_combo')
-                       
-                        # Build RAA grid from dict (map combo keys to RAA values)
-                        raa_grid = np.full_like(runs, np.nan)
-                        combo_to_raa = {k: v.get('RAA', np.nan) for k, v in raa_dict.items()}
-                       
-                        # Map to grid cells (assuming your build_pitch_grids uses same line/length indices)
-                        for le in range(grids['n_rows']):
-                            for li in range(grids['n_cols']):
-                                # Reconstruct combo key (match your line_map/length_map logic)
-                                line_str = xticks_base[li] if not is_lhb else xticks_base[::-1][li]  # Adjust for flip
-                                length_str = yticklabels[le]
-                                combo_key = f"{line_str.lower()}_{length_str.lower()}"
-                                raa_grid[le, li] = combo_to_raa.get(combo_key, np.nan)
-                    else:
-                        st.warning("Missing 'line' or 'length' columns for RAA calculation. Skipping RAA map.")
-                        raa_grid = np.full_like(runs, np.nan)  # Fallback
-                
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
                 
@@ -9804,15 +9766,40 @@ elif sidebar_option == "Strength vs Weakness":
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                    plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
+                    plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
+                
+                    # Prepare for RAA: Create line_length_combo in df_src (pf) and bdf (assuming bdf is global all-data frame)
+                    if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
+                        df_src['line_length_combo'] = df_src['line'].astype(str).str.lower() + '_' + df_src['length'].astype(str).str.lower()
+                        bdf['line_length_combo'] = bdf['line'].astype(str).str.lower() + '_' + bdf['length'].astype(str).str.lower()
+                       
+                        # Call existing RAA function with group_col='line_length_combo' (data is already filtered for kind/style in df_use)
+                        raa_dict = compute_RAA_DAA_for_group_column('line_length_combo')
+                       
+                        # Build RAA grid (map combos to RAA values)
+                        raa_grid = np.full_like(runs, np.nan)
+                       
+                        # Map line/length to indices (based on your map globals - assume LINE_MAP and LENGTH_MAP exist)
+                        line_map_inv = {v: k.lower() for k, v in globals().get('LINE_MAP', {}).items()} if 'LINE_MAP' in globals() else {}
+                        length_map_inv = {v: k.lower() for k, v in globals().get('LENGTH_MAP', {}).items()} if 'LENGTH_MAP' in globals() else {}
+                       
+                        for i in range(n_rows):
+                            length_str = yticklabels[i].lower()
+                            for j in range(grids['n_cols']):
+                                line_str = xticks[j].lower()
+                                combo = f"{line_str}_{length_str}"
+                                raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
+                    else:
+                        raa_grid = np.full_like(runs, np.nan)
+                        st.warning("Missing 'line' or 'length' columns or 'bdf' not available. Using placeholder for RAA map.")
                 
                     plot_list = [
-                        (perc, '% of balls (heat)', 'Blues'),
-                        (bound_pct, 'Boundary %', 'OrRd'),
-                        (dot_pct, 'Dot %', 'Blues'),
+                        (perc, '% of Balls (heat)', 'Blues'),
+                        (bounds, 'Boundaries (count)', 'OrRd'),
+                        (dots, 'Dot balls (count)', 'Blues'),
                         (sr, 'SR (runs/100 balls)', 'Reds'),
                         (ctrl, 'False Shot % (not in control)', 'PuBu'),
-                        (raa_grid, 'RAA (per combo)', 'RdYlGn')  # NEW: RAA with diverging cmap (green positive, red negative)
+                        (raa_grid, 'RAA', 'Reds')
                     ]
                 
                     for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
@@ -9828,8 +9815,7 @@ elif sidebar_option == "Strength vs Weakness":
                 
                         im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
                         ax.set_title(ttl)
-                        ax.set_xticks(range(grids['n_cols']))
-                        ax.set_yticks(range(grids['n_rows']))
+                        ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
                         ax.set_xticklabels(xticks, rotation=45, ha='right')
                         ax.set_yticklabels(yticklabels)
                 
@@ -9861,7 +9847,7 @@ elif sidebar_option == "Strength vs Weakness":
                         st.pyplot(fig)
                     finally:
                         plt.close(fig)
-            
+                            
                 # ---------- Wagon chart (existing - runs) ----------
                 # def draw_wagon_if_available(df_wagon, batter_name):
                 #     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
