@@ -9923,7 +9923,7 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
-                
+                    st.write("Got inside")
                     # Boundary % = boundaries in cell / balls in cell × 100
                     bound_pct = np.zeros_like(bounds, dtype=float)
                     mask = count > 0
@@ -10140,199 +10140,199 @@ elif sidebar_option == "Strength vs Weakness":
                     }
                 
                 
-                def display_pitchmaps_from_df(df_src, bdf_full, title_prefix, player_selected, runs_col, COL_BAT, 
-                                                bowl_kind=None, bowl_style=None):
-                    """
-                    Display pitch maps with 6 panels including RAA.
+                # def display_pitchmaps_from_df(df_src, bdf_full, title_prefix, player_selected, runs_col, COL_BAT, 
+                #                                 bowl_kind=None, bowl_style=None):
+                #     """
+                #     Display pitch maps with 6 panels including RAA.
                     
-                    Parameters:
-                    -----------
-                    df_src : DataFrame
-                        Filtered data for the selected player
-                    bdf_full : DataFrame
-                        Full benchmark dataset with ALL batters
-                    title_prefix : str
-                        Title for the visualization
-                    player_selected : str
-                        Name of player being analyzed
-                    runs_col : str
-                        Column name for runs
-                    COL_BAT : str
-                        Column name for batter identifier
-                    bowl_kind : str, optional
-                        Bowling kind filter applied to df_src
-                    bowl_style : str, optional
-                        Bowling style filter applied to df_src
-                    """
-                    if df_src is None or df_src.empty:
-                        st.info(f"No deliveries to show for {title_prefix}")
-                        return
+                #     Parameters:
+                #     -----------
+                #     df_src : DataFrame
+                #         Filtered data for the selected player
+                #     bdf_full : DataFrame
+                #         Full benchmark dataset with ALL batters
+                #     title_prefix : str
+                #         Title for the visualization
+                #     player_selected : str
+                #         Name of player being analyzed
+                #     runs_col : str
+                #         Column name for runs
+                #     COL_BAT : str
+                #         Column name for batter identifier
+                #     bowl_kind : str, optional
+                #         Bowling kind filter applied to df_src
+                #     bowl_style : str, optional
+                #         Bowling style filter applied to df_src
+                #     """
+                #     if df_src is None or df_src.empty:
+                #         st.info(f"No deliveries to show for {title_prefix}")
+                #         return
                 
-                    grids = build_pitch_grids(df_src)
+                #     grids = build_pitch_grids(df_src)
                 
-                    bh_col_name = 'bat_hand'  # Adjust if different
-                    is_lhb = False
-                    if bh_col_name in df_src.columns:
-                        hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
-                        if any(h.upper().startswith('L') for h in hands):
-                            is_lhb = True
+                #     bh_col_name = 'bat_hand'  # Adjust if different
+                #     is_lhb = False
+                #     if bh_col_name in df_src.columns:
+                #         hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
+                #         if any(h.upper().startswith('L') for h in hands):
+                #             is_lhb = True
                 
-                    def maybe_flip(arr):
-                        return np.fliplr(arr) if is_lhb else arr.copy()
+                #     def maybe_flip(arr):
+                #         return np.fliplr(arr) if is_lhb else arr.copy()
                 
-                    count = maybe_flip(grids['count'])
-                    bounds = maybe_flip(grids['bounds'])
-                    dots = maybe_flip(grids['dots'])
-                    sr = maybe_flip(grids['sr'])
-                    ctrl = maybe_flip(grids['ctrl_pct'])
-                    wkt = maybe_flip(grids['wkt'])
-                    runs = maybe_flip(grids['runs'])
+                #     count = maybe_flip(grids['count'])
+                #     bounds = maybe_flip(grids['bounds'])
+                #     dots = maybe_flip(grids['dots'])
+                #     sr = maybe_flip(grids['sr'])
+                #     ctrl = maybe_flip(grids['ctrl_pct'])
+                #     wkt = maybe_flip(grids['wkt'])
+                #     runs = maybe_flip(grids['runs'])
                 
-                    total = count.sum() if count.sum() > 0 else 1.0
-                    perc = count.astype(float) / total * 100.0
+                #     total = count.sum() if count.sum() > 0 else 1.0
+                #     perc = count.astype(float) / total * 100.0
                 
-                    # Boundary % = boundaries in cell / balls in cell × 100
-                    bound_pct = np.zeros_like(bounds, dtype=float)
-                    mask = count > 0
-                    bound_pct[mask] = bounds[mask] / count[mask] * 100.0
+                #     # Boundary % = boundaries in cell / balls in cell × 100
+                #     bound_pct = np.zeros_like(bounds, dtype=float)
+                #     mask = count > 0
+                #     bound_pct[mask] = bounds[mask] / count[mask] * 100.0
                 
-                    # Dot % = dots in cell / balls in cell × 100
-                    dot_pct = np.zeros_like(dots, dtype=float)
-                    dot_pct[mask] = dots[mask] / count[mask] * 100.0
+                #     # Dot % = dots in cell / balls in cell × 100
+                #     dot_pct = np.zeros_like(dots, dtype=float)
+                #     dot_pct[mask] = dots[mask] / count[mask] * 100.0
                 
-                    xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-                    xticks = xticks_base[::-1] if is_lhb else xticks_base
+                #     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+                #     xticks = xticks_base[::-1] if is_lhb else xticks_base
                 
-                    n_rows = grids['n_rows']
-                    if n_rows >= 6:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-                    else:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+                #     n_rows = grids['n_rows']
+                #     if n_rows >= 6:
+                #         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
+                #     else:
+                #         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # RAA per cell - NOW USING FULL BENCHMARK
-                    raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
+                #     # RAA per cell - NOW USING FULL BENCHMARK
+                #     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
                     
-                    if 'line' in df_src.columns and 'length' in df_src.columns and bdf_full is not None and isinstance(bdf_full, pd.DataFrame):
-                        # Pass the FULL benchmark dataset and the filters
-                        raa_dict = compute_pitchmap_raa(df_src, bdf_full, runs_col=runs_col, COL_BAT=COL_BAT, 
-                                                        bowl_kind=bowl_kind, bowl_style=bowl_style)
+                #     if 'line' in df_src.columns and 'length' in df_src.columns and bdf_full is not None and isinstance(bdf_full, pd.DataFrame):
+                #         # Pass the FULL benchmark dataset and the filters
+                #         raa_dict = compute_pitchmap_raa(df_src, bdf_full, runs_col=runs_col, COL_BAT=COL_BAT, 
+                #                                         bowl_kind=bowl_kind, bowl_style=bowl_style)
                 
-                        for i in range(n_rows):
-                            length_str = yticklabels[i].lower().strip()
-                            for j in range(grids['n_cols']):
-                                line_str = xticks[j].lower().strip()
-                                combo = f"{line_str}_{length_str}"
-                                raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
+                #         for i in range(n_rows):
+                #             length_str = yticklabels[i].lower().strip()
+                #             for j in range(grids['n_cols']):
+                #                 line_str = xticks[j].lower().strip()
+                #                 combo = f"{line_str}_{length_str}"
+                #                 raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
                         
-                        # Debugging output
-                        st.write("### RAA Debug Info:")
-                        st.write(f"Player: {player_selected}")
-                        st.write(f"Filters applied: bowl_kind={bowl_kind}, bowl_style={bowl_style}")
-                        st.write(f"RAA grid shape: {raa_grid.shape}")
-                        st.write(f"Non-NaN RAA values: {np.sum(~np.isnan(raa_grid))}")
-                        if np.any(~np.isnan(raa_grid)):
-                            st.write(f"RAA min: {np.nanmin(raa_grid):.2f}, max: {np.nanmax(raa_grid):.2f}, mean: {np.nanmean(raa_grid):.2f}")
+                #         # Debugging output
+                #         st.write("### RAA Debug Info:")
+                #         st.write(f"Player: {player_selected}")
+                #         st.write(f"Filters applied: bowl_kind={bowl_kind}, bowl_style={bowl_style}")
+                #         st.write(f"RAA grid shape: {raa_grid.shape}")
+                #         st.write(f"Non-NaN RAA values: {np.sum(~np.isnan(raa_grid))}")
+                #         if np.any(~np.isnan(raa_grid)):
+                #             st.write(f"RAA min: {np.nanmin(raa_grid):.2f}, max: {np.nanmax(raa_grid):.2f}, mean: {np.nanmean(raa_grid):.2f}")
                         
-                        # Show RAA values in a table
-                        raa_df = pd.DataFrame(raa_grid, columns=xticks, index=yticklabels)
-                        st.write("RAA Values by cell:")
-                        st.dataframe(raa_df.style.format("{:.1f}"))
+                #         # Show RAA values in a table
+                #         raa_df = pd.DataFrame(raa_grid, columns=xticks, index=yticklabels)
+                #         st.write("RAA Values by cell:")
+                #         st.dataframe(raa_df.style.format("{:.1f}"))
                         
-                        # Show some combo details
-                        st.write("Sample combo details:")
-                        sample_combos = list(raa_dict.items())[:5]
-                        for combo, data in sample_combos:
-                            st.write(f"  {combo}: RAA={data['RAA']:.1f}, Player SR={data['player_SR']:.1f}, Benchmark SR={data['benchmark_SR']:.1f}")
-                    else:
-                        st.warning("Cannot compute RAA map: missing columns or benchmark data.")
+                #         # Show some combo details
+                #         st.write("Sample combo details:")
+                #         sample_combos = list(raa_dict.items())[:5]
+                #         for combo, data in sample_combos:
+                #             st.write(f"  {combo}: RAA={data['RAA']:.1f}, Player SR={data['player_SR']:.1f}, Benchmark SR={data['benchmark_SR']:.1f}")
+                #     else:
+                #         st.warning("Cannot compute RAA map: missing columns or benchmark data.")
                 
-                    fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                    plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
+                #     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+                #     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
-                    plot_list = [
-                        (perc, '% of Balls (heat)', 'Blues', False),
-                        (bound_pct, 'Boundary %', 'OrRd', False),
-                        (dot_pct, 'Dot %', 'Blues', False),
-                        (sr, 'SR (runs/100 balls)', 'Reds', False),
-                        (ctrl, 'False Shot % (not in control)', 'PuBu', False),
-                        (raa_grid, 'RAA (vs Top7 Avg)', 'RdYlGn', True)  # Diverging colormap
-                    ]
+                #     plot_list = [
+                #         (perc, '% of Balls (heat)', 'Blues', False),
+                #         (bound_pct, 'Boundary %', 'OrRd', False),
+                #         (dot_pct, 'Dot %', 'Blues', False),
+                #         (sr, 'SR (runs/100 balls)', 'Reds', False),
+                #         (ctrl, 'False Shot % (not in control)', 'PuBu', False),
+                #         (raa_grid, 'RAA (vs Top7 Avg)', 'RdYlGn', True)  # Diverging colormap
+                #     ]
                 
-                    for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
-                        safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-                        flat = safe_arr.flatten()
+                #     for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
+                #         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
+                #         flat = safe_arr.flatten()
                         
-                        # Different normalization for diverging vs sequential colormaps
-                        if is_diverging:
-                            # For RAA: center at 0, use symmetric range
-                            non_nan_vals = raa_grid[~np.isnan(raa_grid)]
-                            if len(non_nan_vals) > 0:
-                                abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
-                                if abs_max == 0:
-                                    abs_max = 10.0  # Default range if all zeros
-                            else:
-                                abs_max = 10.0
+                #         # Different normalization for diverging vs sequential colormaps
+                #         if is_diverging:
+                #             # For RAA: center at 0, use symmetric range
+                #             non_nan_vals = raa_grid[~np.isnan(raa_grid)]
+                #             if len(non_nan_vals) > 0:
+                #                 abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
+                #                 if abs_max == 0:
+                #                     abs_max = 10.0  # Default range if all zeros
+                #             else:
+                #                 abs_max = 10.0
                             
-                            norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
-                            im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
-                        else:
-                            # For other metrics: use standard normalization
-                            if np.all(flat == 0):
-                                vmin, vmax = 0, 1
-                            else:
-                                vmin = float(np.nanmin(flat))
-                                vmax = float(np.nanpercentile(flat, 95))
-                                if vmax <= vmin:
-                                    vmax = vmin + 1.0
+                #             norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
+                #             im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
+                #         else:
+                #             # For other metrics: use standard normalization
+                #             if np.all(flat == 0):
+                #                 vmin, vmax = 0, 1
+                #             else:
+                #                 vmin = float(np.nanmin(flat))
+                #                 vmax = float(np.nanpercentile(flat, 95))
+                #                 if vmax <= vmin:
+                #                     vmax = vmin + 1.0
                             
-                            im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                #             im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
                         
-                        ax.set_title(ttl, fontsize=12, weight='bold')
-                        ax.set_xticks(range(grids['n_cols']))
-                        ax.set_yticks(range(grids['n_rows']))
-                        ax.set_xticklabels(xticks, rotation=45, ha='right', fontsize=9)
-                        ax.set_yticklabels(yticklabels, fontsize=9)
+                #         ax.set_title(ttl, fontsize=12, weight='bold')
+                #         ax.set_xticks(range(grids['n_cols']))
+                #         ax.set_yticks(range(grids['n_rows']))
+                #         ax.set_xticklabels(xticks, rotation=45, ha='right', fontsize=9)
+                #         ax.set_yticklabels(yticklabels, fontsize=9)
                 
-                        ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
-                        ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
-                        ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
-                        ax.tick_params(which='minor', bottom=False, left=False)
+                #         ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
+                #         ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
+                #         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
+                #         ax.tick_params(which='minor', bottom=False, left=False)
                 
-                        # Add wicket annotations to first plot
-                        if ax_idx == 0:
-                            for i in range(grids['n_rows']):
-                                for j in range(grids['n_cols']):
-                                    w_count = int(wkt[i, j])
-                                    if w_count > 0:
-                                        w_text = f"{w_count} W" if w_count > 1 else 'W'
-                                        ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                                bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+                #         # Add wicket annotations to first plot
+                #         if ax_idx == 0:
+                #             for i in range(grids['n_rows']):
+                #                 for j in range(grids['n_cols']):
+                #                     w_count = int(wkt[i, j])
+                #                     if w_count > 0:
+                #                         w_text = f"{w_count} W" if w_count > 1 else 'W'
+                #                         ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
+                #                                 bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
                         
-                        # Add RAA values as text annotations on RAA plot
-                        if is_diverging:
-                            for i in range(grids['n_rows']):
-                                for j in range(grids['n_cols']):
-                                    val = raa_grid[i, j]
-                                    if not np.isnan(val) and count[i, j] > 0:  # Only show if there were balls
-                                        # Choose text color based on value
-                                        if abs(val) > abs_max * 0.5:
-                                            text_color = 'white'
-                                        else:
-                                            text_color = 'black'
-                                        ax.text(j, i, f'{val:.1f}', ha='center', va='center', 
-                                               fontsize=8, color=text_color, weight='bold')
+                #         # Add RAA values as text annotations on RAA plot
+                #         if is_diverging:
+                #             for i in range(grids['n_rows']):
+                #                 for j in range(grids['n_cols']):
+                #                     val = raa_grid[i, j]
+                #                     if not np.isnan(val) and count[i, j] > 0:  # Only show if there were balls
+                #                         # Choose text color based on value
+                #                         if abs(val) > abs_max * 0.5:
+                #                             text_color = 'white'
+                #                         else:
+                #                             text_color = 'black'
+                #                         ax.text(j, i, f'{val:.1f}', ha='center', va='center', 
+                #                                fontsize=8, color=text_color, weight='bold')
                 
-                        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+                #         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
                 
-                    plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+                #     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
                 
-                    # Display using Streamlit
-                    try:
-                        st.pyplot(fig)
-                    except Exception as e:
-                        st.error(f"Error displaying plot: {e}")
-                    finally:
-                        plt.close(fig)
+                #     # Display using Streamlit
+                #     try:
+                #         st.pyplot(fig)
+                #     except Exception as e:
+                #         st.error(f"Error displaying plot: {e}")
+                #     finally:
+                #         plt.close(fig)
                 
                 
                 # Example usage:
