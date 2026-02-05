@@ -9739,81 +9739,153 @@ elif sidebar_option == "Strength vs Weakness":
                 import streamlit as st
                                 
                                                 
-                def build_pitch_grids(df_src):
+                # =======================================================================================
+                # ACTUALLY FIXED PITCH MAP FUNCTIONS - USES CORRECT LINE_MAP AND LENGTH_MAP
+                # =======================================================================================
+                
+                def get_map_index(mapping_dict, key_val):
+                    """Helper to get index from LINE_MAP or LENGTH_MAP, handles None and normalization"""
+                    if key_val is None or mapping_dict is None:
+                        return None
+                    key_str = str(key_val).strip().upper()
+                    return mapping_dict.get(key_str, None)
+                
+                
+                def build_pitch_grids(df_in):
                     """
-                    Build pitch grids for visualization.
-                    Uses CORRECT column names from globals: COL_LINE, COL_LENGTH, COL_RUNS
-                    Returns dict with various aggregated grids.
+                    Build pitch grids using LINE_MAP and LENGTH_MAP from globals.
+                    Uses runs_col from globals for correct runs column.
                     """
-                    # Get column names from globals
+                    # Get from globals
+                    LINE_MAP = globals().get('LINE_MAP', {})
+                    LENGTH_MAP = globals().get('LENGTH_MAP', {})
+                    runs_col = globals().get('runs_col', 'batruns')
                     COL_LINE = globals().get('COL_LINE', 'line')
                     COL_LENGTH = globals().get('COL_LENGTH', 'length')
-                    COL_RUNS = globals().get('COL_RUNS', 'batruns')  # THIS WAS THE BIG ISSUE!
                     COL_OUT = globals().get('COL_OUT', 'out')
                     
-                    # Define line and length categories
-                    line_order = ['wide down leg', 'down leg', 'on stumps', 'outside off', 'wide out off']
-                    length_order = ['short', 'back of length', 'good', 'full', 'yorker', 'full toss']
+                    print(f"\n[build_pitch_grids] DEBUG:")
+                    print(f"  runs_col = {runs_col}")
+                    print(f"  COL_LINE = {COL_LINE}")
+                    print(f"  COL_LENGTH = {COL_LENGTH}")
+                    print(f"  df_in shape = {df_in.shape}")
+                    print(f"  df_in columns = {df_in.columns.tolist()}")
+                    print(f"  LINE_MAP = {LINE_MAP}")
+                    print(f"  LENGTH_MAP = {LENGTH_MAP}")
                     
-                    # Normalize line and length
-                    df = df_src.copy()
-                    df['line_norm'] = df.get(COL_LINE, '').astype(str).str.lower().str.strip()
-                    df['length_norm'] = df.get(COL_LENGTH, '').astype(str).str.lower().str.strip()
+                    if LINE_MAP is None or len(LINE_MAP) == 0:
+                        print("  ERROR: LINE_MAP not found in globals!")
+                        return {
+                            'count': np.zeros((6, 5)), 'bounds': np.zeros((6, 5)), 'dots': np.zeros((6, 5)),
+                            'runs': np.zeros((6, 5)), 'sr': np.zeros((6, 5)), 'ctrl_pct': np.zeros((6, 5)),
+                            'wkt': np.zeros((6, 5)), 'n_rows': 6, 'n_cols': 5
+                        }
                     
-                    # DEBUG
-                    print(f"[build_pitch_grids] Using columns: LINE={COL_LINE}, LENGTH={COL_LENGTH}, RUNS={COL_RUNS}")
-                    print(f"[build_pitch_grids] Input df shape: {df.shape}")
-                    print(f"[build_pitch_grids] Unique line values: {df['line_norm'].unique()}")
-                    print(f"[build_pitch_grids] Unique length values: {df['length_norm'].unique()}")
+                    if LENGTH_MAP is None or len(LENGTH_MAP) == 0:
+                        print("  ERROR: LENGTH_MAP not found in globals!")
+                        return {
+                            'count': np.zeros((6, 5)), 'bounds': np.zeros((6, 5)), 'dots': np.zeros((6, 5)),
+                            'runs': np.zeros((6, 5)), 'sr': np.zeros((6, 5)), 'ctrl_pct': np.zeros((6, 5)),
+                            'wkt': np.zeros((6, 5)), 'n_rows': 6, 'n_cols': 5
+                        }
                     
-                    # Filter valid lines and lengths
-                    df = df[df['line_norm'].isin(line_order) & df['length_norm'].isin(length_order)]
-                    print(f"[build_pitch_grids] After filtering shape: {df.shape}")
+                    # Determine dimensions
+                    try:
+                        max_length_idx = max(int(v) for v in LENGTH_MAP.values())
+                        n_rows = max(5, max_length_idx + 1)
+                    except:
+                        n_rows = 6
                     
-                    n_cols = len(line_order)
-                    n_rows = len(length_order)
+                    try:
+                        max_line_idx = max(int(v) for v in LINE_MAP.values())
+                        n_cols = max(5, max_line_idx + 1)
+                    except:
+                        n_cols = 5
+                    
+                    print(f"  Grid dimensions: {n_rows} rows x {n_cols} cols")
                     
                     # Initialize grids
                     count = np.zeros((n_rows, n_cols), dtype=int)
-                    runs = np.zeros((n_rows, n_cols), dtype=int)
+                    runs = np.zeros((n_rows, n_cols), dtype=float)
                     bounds = np.zeros((n_rows, n_cols), dtype=int)
                     dots = np.zeros((n_rows, n_cols), dtype=int)
                     wkt = np.zeros((n_rows, n_cols), dtype=int)
                     controlled = np.zeros((n_rows, n_cols), dtype=int)
                     
-                    # Map categories to indices
-                    line_to_idx = {line: idx for idx, line in enumerate(line_order)}
-                    length_to_idx = {length: idx for idx, length in enumerate(length_order)}
+                    # Wicket tokens
+                    wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw', 'leg before wicket', 'hit wicket'}
+                    
+                    # Sample some line/length values to debug
+                    if COL_LINE in df_in.columns:
+                        sample_lines = df_in[COL_LINE].dropna().head(10).tolist()
+                        print(f"  Sample line values: {sample_lines}")
+                    if COL_LENGTH in df_in.columns:
+                        sample_lengths = df_in[COL_LENGTH].dropna().head(10).tolist()
+                        print(f"  Sample length values: {sample_lengths}")
                     
                     # Populate grids
-                    for _, row in df.iterrows():
-                        i = length_to_idx.get(row['length_norm'])
-                        j = line_to_idx.get(row['line_norm'])
+                    rows_processed = 0
+                    rows_with_valid_line_length = 0
+                    
+                    for _, row in df_in.iterrows():
+                        rows_processed += 1
                         
-                        if i is None or j is None:
+                        # Get line and length indices using the map
+                        li = get_map_index(LINE_MAP, row.get(COL_LINE, None))
+                        le = get_map_index(LENGTH_MAP, row.get(COL_LENGTH, None))
+                        
+                        if li is None or le is None:
                             continue
                         
-                        count[i, j] += 1
+                        if not (0 <= le < n_rows and 0 <= li < n_cols):
+                            continue
                         
-                        # USE CORRECT COLUMN NAME FOR RUNS
-                        run_value = int(pd.to_numeric(row.get(COL_RUNS, 0), errors='coerce') or 0)
-                        runs[i, j] += run_value
+                        rows_with_valid_line_length += 1
+                        count[le, li] += 1
                         
-                        # Boundaries (4s and 6s)
-                        if run_value in [4, 6]:
-                            bounds[i, j] += 1
+                        # Get runs value
+                        rv = 0
+                        if runs_col and runs_col in row.index:
+                            try:
+                                rv = int(pd.to_numeric(row.get(runs_col, 0), errors='coerce') or 0)
+                            except:
+                                rv = 0
+                        runs[le, li] += rv
+                        
+                        # Boundaries
+                        if rv >= 4:
+                            bounds[le, li] += 1
                         
                         # Dots
-                        if run_value == 0:
-                            dots[i, j] += 1
+                        if rv == 0:
+                            dots[le, li] += 1
                         
                         # Wickets
-                        if int(pd.to_numeric(row.get(COL_OUT, 0), errors='coerce') or 0) == 1:
-                            wkt[i, j] += 1
+                        if COL_OUT in row.index:
+                            try:
+                                if int(pd.to_numeric(row.get(COL_OUT, 0), errors='coerce') or 0) == 1:
+                                    wkt[le, li] += 1
+                            except:
+                                pass
                         
-                        # Control (shots played in control)
-                        if str(row.get('control', '')).lower() in ['yes', '1', 'true']:
-                            controlled[i, j] += 1
+                        # Check dismissal column for wicket tokens
+                        if 'dismissal' in row.index:
+                            dval = str(row.get('dismissal', '') or '').lower()
+                            if any(tok in dval for tok in wkt_tokens):
+                                # Already counted above if out flag was set
+                                pass
+                        
+                        # Control
+                        if 'control' in row.index:
+                            cval = str(row.get('control', '')).lower()
+                            if cval in ['yes', '1', 'true']:
+                                controlled[le, li] += 1
+                    
+                    print(f"  Rows processed: {rows_processed}")
+                    print(f"  Rows with valid line/length: {rows_with_valid_line_length}")
+                    print(f"  Total count: {count.sum()}")
+                    print(f"  Total runs: {runs.sum()}")
+                    print(f"  Count grid:\n{count}")
                     
                     # Calculate metrics
                     sr = np.zeros((n_rows, n_cols), dtype=float)
@@ -9821,9 +9893,7 @@ elif sidebar_option == "Strength vs Weakness":
                     
                     mask = count > 0
                     sr[mask] = (runs[mask] / count[mask]) * 100.0
-                    ctrl_pct[mask] = ((count[mask] - controlled[mask]) / count[mask]) * 100.0  # False shot %
-                    
-                    print(f"[build_pitch_grids] Total count: {count.sum()}, Total runs: {runs.sum()}")
+                    ctrl_pct[mask] = ((count[mask] - controlled[mask]) / count[mask]) * 100.0
                     
                     return {
                         'count': count,
@@ -9835,36 +9905,25 @@ elif sidebar_option == "Strength vs Weakness":
                         'ctrl_pct': ctrl_pct,
                         'n_rows': n_rows,
                         'n_cols': n_cols,
-                        'line_order': line_order,
-                        'length_order': length_order,
-                        'line_to_idx': line_to_idx,
-                        'length_to_idx': length_to_idx
+                        'LINE_MAP': LINE_MAP,
+                        'LENGTH_MAP': LENGTH_MAP
                     }
                 
                 
                 def calculate_raa_grid(df_player, grids, chosen_kind, chosen_style):
                     """
                     Calculate RAA (Runs Above Average) for each line-length combination.
-                    
-                    Args:
-                        df_player: Filtered player dataframe (pf filtered by bowl_kind/style)
-                        grids: Grid dictionary from build_pitch_grids
-                        chosen_kind: Selected bowl_kind
-                        chosen_style: Selected bowl_style
-                    
-                    Returns:
-                        RAA grid (numpy array)
                     """
                     print(f"\n=== RAA CALCULATION DEBUG ===")
                     print(f"chosen_kind: {chosen_kind}")
                     print(f"chosen_style: {chosen_style}")
                     print(f"df_player shape: {df_player.shape}")
                     
-                    # Get global variables - USE CORRECT NAMES
+                    # Get from globals
+                    LINE_MAP = grids.get('LINE_MAP', globals().get('LINE_MAP', {}))
+                    LENGTH_MAP = grids.get('LENGTH_MAP', globals().get('LENGTH_MAP', {}))
                     COL_LINE = globals().get('COL_LINE', 'line')
                     COL_LENGTH = globals().get('COL_LENGTH', 'length')
-                    COL_RUNS = globals().get('COL_RUNS', 'batruns')
-                    COL_BAT = globals().get('COL_BAT', 'bat')
                     COL_BOWL_KIND = globals().get('COL_BOWL_KIND', 'bowl_kind')
                     COL_BOWL_STYLE = globals().get('COL_BOWL_STYLE', 'bowl_style')
                     
@@ -9901,7 +9960,6 @@ elif sidebar_option == "Strength vs Weakness":
                     # Filter bdf with the same bowl_kind/style
                     if filter_col not in bdf.columns:
                         print(f"{filter_col} not in bdf columns!")
-                        print(f"Available columns: {bdf.columns.tolist()}")
                         return raa_grid
                     
                     bdf_filtered = bdf[
@@ -9914,34 +9972,27 @@ elif sidebar_option == "Strength vs Weakness":
                         print("bdf_filtered is empty!")
                         return raa_grid
                     
-                    # Get line and length from grids
-                    line_order = grids['line_order']
-                    length_order = grids['length_order']
+                    # Create line_length_combo column using the maps
+                    def make_combo_key(row):
+                        li = get_map_index(LINE_MAP, row.get(COL_LINE, None))
+                        le = get_map_index(LENGTH_MAP, row.get(COL_LENGTH, None))
+                        if li is None or le is None:
+                            return None
+                        return f"line{li}_length{le}"
                     
-                    # Normalize line and length in bdf_filtered - USE CORRECT COLUMN NAMES
-                    bdf_filtered['line_norm'] = bdf_filtered.get(COL_LINE, '').astype(str).str.lower().str.strip()
-                    bdf_filtered['length_norm'] = bdf_filtered.get(COL_LENGTH, '').astype(str).str.lower().str.strip()
-                    
-                    # Create line_length_combo column
-                    bdf_filtered['line_length_combo'] = (
-                        bdf_filtered['line_norm'] + '_' + bdf_filtered['length_norm']
-                    )
-                    
-                    # Normalize player data - USE CORRECT COLUMN NAMES
+                    bdf_filtered['line_length_combo'] = bdf_filtered.apply(make_combo_key, axis=1)
                     df_player = df_player.copy()
-                    df_player['line_norm'] = df_player.get(COL_LINE, '').astype(str).str.lower().str.strip()
-                    df_player['length_norm'] = df_player.get(COL_LENGTH, '').astype(str).str.lower().str.strip()
-                    df_player['line_length_combo'] = (
-                        df_player['line_norm'] + '_' + df_player['length_norm']
-                    )
+                    df_player['line_length_combo'] = df_player.apply(make_combo_key, axis=1)
                     
                     print(f"\nCalculating RAA for each cell...")
-                    print(f"Using LINE={COL_LINE}, LENGTH={COL_LENGTH}, RUNS={COL_RUNS}")
                     
                     # For each line-length combination
-                    for length_idx, length_name in enumerate(length_order):
-                        for line_idx, line_name in enumerate(line_order):
-                            combo_key = f"{line_name}_{length_name}"
+                    for line_key, line_idx in LINE_MAP.items():
+                        for length_key, length_idx in LENGTH_MAP.items():
+                            if length_idx >= n_rows or line_idx >= n_cols:
+                                continue
+                            
+                            combo_key = f"line{line_idx}_length{length_idx}"
                             
                             # Filter bdf for this cell
                             bdf_cell = bdf_filtered[bdf_filtered['line_length_combo'] == combo_key].copy()
@@ -9950,18 +10001,12 @@ elif sidebar_option == "Strength vs Weakness":
                             df_player_cell = df_player[df_player['line_length_combo'] == combo_key].copy()
                             
                             if bdf_cell.empty:
-                                # print(f"  {combo_key}: No data in bdf")
                                 continue
                             
                             if df_player_cell.empty:
-                                # print(f"  {combo_key}: No data for player")
                                 continue
                             
-                            print(f"  {combo_key}: bdf={len(bdf_cell)}, player={len(df_player_cell)}")
-                            
-                            # Add the combo column to bdf_cell for RAA function
-                            bdf_cell['line_length_combo'] = combo_key
-                            df_player_cell['line_length_combo'] = combo_key
+                            print(f"  {line_key}/{length_key} ({combo_key}): bdf={len(bdf_cell)}, player={len(df_player_cell)}")
                             
                             # Store original globals
                             original_bdf = globals().get('bdf')
@@ -9979,13 +10024,10 @@ elif sidebar_option == "Strength vs Weakness":
                                 if combo_key in raa_result:
                                     raa_value = raa_result[combo_key].get('RAA', np.nan)
                                     print(f"    RAA = {raa_value}")
+                                    if not np.isnan(raa_value):
+                                        raa_grid[length_idx, line_idx] = raa_value
                                 else:
-                                    raa_value = np.nan
-                                    print(f"    combo_key '{combo_key}' not in result keys: {list(raa_result.keys())}")
-                                
-                                # Store in grid
-                                if not np.isnan(raa_value):
-                                    raa_grid[length_idx, line_idx] = raa_value
+                                    print(f"    combo_key not in result, keys: {list(raa_result.keys())}")
                                 
                             except Exception as e:
                                 print(f"    ERROR: {e}")
@@ -9996,7 +10038,7 @@ elif sidebar_option == "Strength vs Weakness":
                                 globals()['bdf'] = original_bdf
                                 globals()['pf'] = original_pf
                     
-                    print(f"\nRAA grid calculated:")
+                    print(f"\nRAA grid:")
                     print(raa_grid)
                     print("=== END RAA DEBUG ===\n")
                     
@@ -10011,10 +10053,9 @@ elif sidebar_option == "Strength vs Weakness":
                         st.info(f"No deliveries to show for {title_prefix}")
                         return
                     
-                    print(f"\n=== PITCHMAP DEBUG ===")
+                    print(f"\n=== PITCHMAP DISPLAY DEBUG ===")
                     print(f"df_src shape: {df_src.shape}")
                     print(f"title_prefix: {title_prefix}")
-                    print(f"df_src columns: {df_src.columns.tolist()}")
                     
                     # Build the pitch grids
                     grids = build_pitch_grids(df_src)
@@ -10042,10 +10083,6 @@ elif sidebar_option == "Strength vs Weakness":
                     ctrl = maybe_flip(grids['ctrl_pct'])
                     wkt = maybe_flip(grids['wkt'])
                     
-                    print(f"Count grid:\n{count}")
-                    print(f"Bounds grid:\n{bounds}")
-                    print(f"SR grid:\n{sr}")
-                    
                     # Calculate percentage grids for boundaries and dots
                     bounds_pct = np.zeros_like(count, dtype=float)
                     dots_pct = np.zeros_like(count, dtype=float)
@@ -10057,24 +10094,25 @@ elif sidebar_option == "Strength vs Weakness":
                                 bounds_pct[i, j] = (bounds[i, j] / total_balls) * 100.0
                                 dots_pct[i, j] = (dots[i, j] / total_balls) * 100.0
                     
-                    print(f"Boundary % grid:\n{bounds_pct}")
-                    print(f"Dots % grid:\n{dots_pct}")
+                    print(f"Boundary % grid (non-zero cells): {np.count_nonzero(bounds_pct)}")
+                    print(f"Dots % grid (non-zero cells): {np.count_nonzero(dots_pct)}")
                     
                     # Calculate RAA for each line-length combo
                     raa_grid = calculate_raa_grid(df_src, grids, chosen_kind, chosen_style)
                     raa_grid = maybe_flip(raa_grid)
                     
-                    print(f"RAA grid (after flip):\n{raa_grid}")
+                    # Setup ticks - use the actual LINE_MAP and LENGTH_MAP keys
+                    LINE_MAP = grids.get('LINE_MAP', {})
+                    LENGTH_MAP = grids.get('LENGTH_MAP', {})
                     
-                    # Setup ticks
-                    xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+                    # Create x-tick labels from LINE_MAP (sorted by index)
+                    line_labels_dict = {v: k for k, v in LINE_MAP.items()}
+                    xticks_base = [line_labels_dict.get(i, f"Line{i}").replace('_', ' ').title() for i in range(grids['n_cols'])]
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
                     
-                    n_rows = grids['n_rows']
-                    if n_rows >= 6:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-                    else:
-                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+                    # Create y-tick labels from LENGTH_MAP (sorted by index)
+                    length_labels_dict = {v: k for k, v in LENGTH_MAP.items()}
+                    yticklabels = [length_labels_dict.get(i, f"Length{i}").replace('_', ' ').title() for i in range(grids['n_rows'])]
                     
                     # Create figure
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
@@ -10095,9 +10133,6 @@ elif sidebar_option == "Strength vs Weakness":
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
                         flat = safe_arr.flatten()
                         
-                        print(f"\nPlot {ax_idx} ({ttl}):")
-                        print(f"  Min: {flat.min()}, Max: {flat.max()}, Mean: {flat.mean()}")
-                        
                         if np.all(flat == 0):
                             vmin, vmax = 0, 1
                         else:
@@ -10114,14 +10149,12 @@ elif sidebar_option == "Strength vs Weakness":
                             else:
                                 vmin, vmax = -1, 1
                         
-                        print(f"  Color scale: vmin={vmin}, vmax={vmax}")
-                        
                         im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
                         ax.set_title(ttl)
                         ax.set_xticks(range(grids['n_cols']))
                         ax.set_yticks(range(grids['n_rows']))
-                        ax.set_xticklabels(xticks, rotation=45, ha='right')
-                        ax.set_yticklabels(yticklabels)
+                        ax.set_xticklabels(xticks, rotation=45, ha='right', fontsize=8)
+                        ax.set_yticklabels(yticklabels, fontsize=8)
                         ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
                         ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
