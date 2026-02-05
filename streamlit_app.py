@@ -9742,20 +9742,33 @@ elif sidebar_option == "Strength vs Weakness":
                 def build_pitch_grids(df_src):
                     """
                     Build pitch grids for visualization.
-                    Assumes df_src has 'line' and 'length' columns.
+                    Uses CORRECT column names from globals: COL_LINE, COL_LENGTH, COL_RUNS
                     Returns dict with various aggregated grids.
                     """
+                    # Get column names from globals
+                    COL_LINE = globals().get('COL_LINE', 'line')
+                    COL_LENGTH = globals().get('COL_LENGTH', 'length')
+                    COL_RUNS = globals().get('COL_RUNS', 'batruns')  # THIS WAS THE BIG ISSUE!
+                    COL_OUT = globals().get('COL_OUT', 'out')
+                    
                     # Define line and length categories
                     line_order = ['wide down leg', 'down leg', 'on stumps', 'outside off', 'wide out off']
                     length_order = ['short', 'back of length', 'good', 'full', 'yorker', 'full toss']
                     
                     # Normalize line and length
                     df = df_src.copy()
-                    df['line_norm'] = df.get('line', '').astype(str).str.lower().str.strip()
-                    df['length_norm'] = df.get('length', '').astype(str).str.lower().str.strip()
+                    df['line_norm'] = df.get(COL_LINE, '').astype(str).str.lower().str.strip()
+                    df['length_norm'] = df.get(COL_LENGTH, '').astype(str).str.lower().str.strip()
+                    
+                    # DEBUG
+                    print(f"[build_pitch_grids] Using columns: LINE={COL_LINE}, LENGTH={COL_LENGTH}, RUNS={COL_RUNS}")
+                    print(f"[build_pitch_grids] Input df shape: {df.shape}")
+                    print(f"[build_pitch_grids] Unique line values: {df['line_norm'].unique()}")
+                    print(f"[build_pitch_grids] Unique length values: {df['length_norm'].unique()}")
                     
                     # Filter valid lines and lengths
                     df = df[df['line_norm'].isin(line_order) & df['length_norm'].isin(length_order)]
+                    print(f"[build_pitch_grids] After filtering shape: {df.shape}")
                     
                     n_cols = len(line_order)
                     n_rows = len(length_order)
@@ -9781,22 +9794,25 @@ elif sidebar_option == "Strength vs Weakness":
                             continue
                         
                         count[i, j] += 1
-                        runs[i, j] += int(row.get('runs', 0))
+                        
+                        # USE CORRECT COLUMN NAME FOR RUNS
+                        run_value = int(pd.to_numeric(row.get(COL_RUNS, 0), errors='coerce') or 0)
+                        runs[i, j] += run_value
                         
                         # Boundaries (4s and 6s)
-                        if int(row.get('runs', 0)) in [4, 6]:
+                        if run_value in [4, 6]:
                             bounds[i, j] += 1
                         
                         # Dots
-                        if int(row.get('runs', 0)) == 0:
+                        if run_value == 0:
                             dots[i, j] += 1
                         
                         # Wickets
-                        if int(row.get('out', 0)) == 1:
+                        if int(pd.to_numeric(row.get(COL_OUT, 0), errors='coerce') or 0) == 1:
                             wkt[i, j] += 1
                         
                         # Control (shots played in control)
-                        if row.get('control', '').lower() in ['yes', '1', 'true']:
+                        if str(row.get('control', '')).lower() in ['yes', '1', 'true']:
                             controlled[i, j] += 1
                     
                     # Calculate metrics
@@ -9806,6 +9822,8 @@ elif sidebar_option == "Strength vs Weakness":
                     mask = count > 0
                     sr[mask] = (runs[mask] / count[mask]) * 100.0
                     ctrl_pct[mask] = ((count[mask] - controlled[mask]) / count[mask]) * 100.0  # False shot %
+                    
+                    print(f"[build_pitch_grids] Total count: {count.sum()}, Total runs: {runs.sum()}")
                     
                     return {
                         'count': count,
@@ -9842,9 +9860,13 @@ elif sidebar_option == "Strength vs Weakness":
                     print(f"chosen_style: {chosen_style}")
                     print(f"df_player shape: {df_player.shape}")
                     
-                    # Get global variables
-                    runs_col = globals().get('runs_col', 'runs')
-                    COL_BAT = globals().get('COL_BAT', 'batter')
+                    # Get global variables - USE CORRECT NAMES
+                    COL_LINE = globals().get('COL_LINE', 'line')
+                    COL_LENGTH = globals().get('COL_LENGTH', 'length')
+                    COL_RUNS = globals().get('COL_RUNS', 'batruns')
+                    COL_BAT = globals().get('COL_BAT', 'bat')
+                    COL_BOWL_KIND = globals().get('COL_BOWL_KIND', 'bowl_kind')
+                    COL_BOWL_STYLE = globals().get('COL_BOWL_STYLE', 'bowl_style')
                     
                     # Initialize RAA grid
                     n_rows = grids['n_rows']
@@ -9856,10 +9878,10 @@ elif sidebar_option == "Strength vs Weakness":
                     filter_value = None
                     
                     if chosen_kind and chosen_kind != '-- none --':
-                        filter_col = 'bowl_kind'
+                        filter_col = COL_BOWL_KIND
                         filter_value = chosen_kind
                     elif chosen_style and chosen_style != '-- none --':
-                        filter_col = 'bowl_style'
+                        filter_col = COL_BOWL_STYLE
                         filter_value = chosen_style
                     
                     if filter_col is None or filter_value is None:
@@ -9879,6 +9901,7 @@ elif sidebar_option == "Strength vs Weakness":
                     # Filter bdf with the same bowl_kind/style
                     if filter_col not in bdf.columns:
                         print(f"{filter_col} not in bdf columns!")
+                        print(f"Available columns: {bdf.columns.tolist()}")
                         return raa_grid
                     
                     bdf_filtered = bdf[
@@ -9895,24 +9918,25 @@ elif sidebar_option == "Strength vs Weakness":
                     line_order = grids['line_order']
                     length_order = grids['length_order']
                     
-                    # Normalize line and length in bdf_filtered
-                    bdf_filtered['line_norm'] = bdf_filtered.get('line', '').astype(str).str.lower().str.strip()
-                    bdf_filtered['length_norm'] = bdf_filtered.get('length', '').astype(str).str.lower().str.strip()
+                    # Normalize line and length in bdf_filtered - USE CORRECT COLUMN NAMES
+                    bdf_filtered['line_norm'] = bdf_filtered.get(COL_LINE, '').astype(str).str.lower().str.strip()
+                    bdf_filtered['length_norm'] = bdf_filtered.get(COL_LENGTH, '').astype(str).str.lower().str.strip()
                     
                     # Create line_length_combo column
                     bdf_filtered['line_length_combo'] = (
                         bdf_filtered['line_norm'] + '_' + bdf_filtered['length_norm']
                     )
                     
-                    # Normalize player data
+                    # Normalize player data - USE CORRECT COLUMN NAMES
                     df_player = df_player.copy()
-                    df_player['line_norm'] = df_player.get('line', '').astype(str).str.lower().str.strip()
-                    df_player['length_norm'] = df_player.get('length', '').astype(str).str.lower().str.strip()
+                    df_player['line_norm'] = df_player.get(COL_LINE, '').astype(str).str.lower().str.strip()
+                    df_player['length_norm'] = df_player.get(COL_LENGTH, '').astype(str).str.lower().str.strip()
                     df_player['line_length_combo'] = (
                         df_player['line_norm'] + '_' + df_player['length_norm']
                     )
                     
                     print(f"\nCalculating RAA for each cell...")
+                    print(f"Using LINE={COL_LINE}, LENGTH={COL_LENGTH}, RUNS={COL_RUNS}")
                     
                     # For each line-length combination
                     for length_idx, length_name in enumerate(length_order):
@@ -9926,11 +9950,11 @@ elif sidebar_option == "Strength vs Weakness":
                             df_player_cell = df_player[df_player['line_length_combo'] == combo_key].copy()
                             
                             if bdf_cell.empty:
-                                print(f"  {combo_key}: No data in bdf")
+                                # print(f"  {combo_key}: No data in bdf")
                                 continue
                             
                             if df_player_cell.empty:
-                                print(f"  {combo_key}: No data for player")
+                                # print(f"  {combo_key}: No data for player")
                                 continue
                             
                             print(f"  {combo_key}: bdf={len(bdf_cell)}, player={len(df_player_cell)}")
@@ -9957,7 +9981,7 @@ elif sidebar_option == "Strength vs Weakness":
                                     print(f"    RAA = {raa_value}")
                                 else:
                                     raa_value = np.nan
-                                    print(f"    combo_key not in result")
+                                    print(f"    combo_key '{combo_key}' not in result keys: {list(raa_result.keys())}")
                                 
                                 # Store in grid
                                 if not np.isnan(raa_value):
@@ -9990,6 +10014,7 @@ elif sidebar_option == "Strength vs Weakness":
                     print(f"\n=== PITCHMAP DEBUG ===")
                     print(f"df_src shape: {df_src.shape}")
                     print(f"title_prefix: {title_prefix}")
+                    print(f"df_src columns: {df_src.columns.tolist()}")
                     
                     # Build the pitch grids
                     grids = build_pitch_grids(df_src)
@@ -9997,10 +10022,10 @@ elif sidebar_option == "Strength vs Weakness":
                     print(f"Grids built: count sum = {grids['count'].sum()}")
                     
                     # Determine if batter is left-handed
-                    bh_col_name = globals().get('bat_hand_col', 'bat_hand')
+                    COL_BAT_HAND = globals().get('COL_BAT_HAND', 'bat_hand')
                     is_lhb = False
-                    if bh_col_name in df_src.columns:
-                        hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
+                    if COL_BAT_HAND in df_src.columns:
+                        hands = df_src[COL_BAT_HAND].dropna().astype(str).str.strip().unique()
                         if any(h.upper().startswith('L') for h in hands):
                             is_lhb = True
                     
@@ -10071,7 +10096,6 @@ elif sidebar_option == "Strength vs Weakness":
                         flat = safe_arr.flatten()
                         
                         print(f"\nPlot {ax_idx} ({ttl}):")
-                        print(f"  Array:\n{safe_arr}")
                         print(f"  Min: {flat.min()}, Max: {flat.max()}, Mean: {flat.mean()}")
                         
                         if np.all(flat == 0):
