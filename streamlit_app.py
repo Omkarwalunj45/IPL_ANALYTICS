@@ -337,10 +337,10 @@ def display_pitchmaps_from_df(df_src, title_prefix):
     # plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
 
     # plot_list = [
-    #     (perc, '% of balls (heat)', 'Blues'),
+    #     (perc, 'Balls Bowled', 'Blues'),
     #     (bounds, 'Boundaries (count)', 'OrRd'),
     #     (dots, 'Dot balls (count)', 'Blues'),
-    #     (sr, 'SR (runs/100 balls)', 'Reds'),
+    #     (sr, 'SR', 'Reds'),
     #     (ctrl, 'False Shot % (not in control)', 'PuBu'),
     #     (runs, 'Runs (sum)', 'Reds')
     # ]
@@ -5318,10 +5318,10 @@ elif sidebar_option == "Matchup Analysis":
           plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
     
           plot_list = [
-              (perc, '% of balls (heat)', 'Blues'),
+              (perc, 'Balls Bowled', 'Blues'),
               (bound_pct, 'Boundary %', 'OrRd'),
               (dot_pct, 'Dot %', 'Blues'),
-              (sr, 'SR (runs/100 balls)', 'Reds'),
+              (sr, 'SR', 'Reds'),
               (ctrl, 'False Shot % (not in control)', 'PuBu'),
               (runs_pct, 'Runs Scored %', 'Reds')
           ]
@@ -5425,10 +5425,10 @@ elif sidebar_option == "Matchup Analysis":
       #     plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
      
       #     plot_list = [
-      #         (perc, '% of balls (heat)', 'Blues'),
+      #         (perc, 'Balls Bowled', 'Blues'),
       #         (bounds, 'Boundaries (count)', 'OrRd'),
       #         (dots, 'Dot balls (count)', 'Blues'),
-      #         (sr, 'SR (runs/100 balls)', 'Reds'),
+      #         (sr, 'SR', 'Reds'),
       #         (ctrl, 'False Shot % (not in control)', 'PuBu'),
       #         (runs, 'Runs (sum)', 'Reds')
       #     ]
@@ -10200,10 +10200,10 @@ elif sidebar_option == "Strength vs Weakness":
                     total_grid = maybe_flip(total_grid)
 
                     plot_list = [
-                        (perc, '% of Balls (heat)', 'Blues', False),
+                        (perc, 'Balls Bowled', 'Blues', False),
                         (bound_pct, 'Boundary %', 'OrRd', False),
                         (dot_pct, 'Dot %', 'Blues', False),
-                        (sr, 'SR (runs/100 balls)', 'Reds', False),
+                        (sr, 'SR', 'Reds', False),
                         (false_shot_pct, 'False Shot %', cmap_false, False),  # <-- Use custom cmap_false here
                         (raa_grid, 'RAA', 'RdYlGn', True)
                     ]
@@ -10449,10 +10449,10 @@ elif sidebar_option == "Strength vs Weakness":
                 #     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
                 #     plot_list = [
-                #         (perc, '% of Balls (heat)', 'Blues', False),
+                #         (perc, 'Balls Bowled', 'Blues', False),
                 #         (bound_pct, 'Boundary %', 'OrRd', False),
                 #         (dot_pct, 'Dot %', 'Blues', False),
-                #         (sr, 'SR (runs/100 balls)', 'Reds', False),
+                #         (sr, 'SR', 'Reds', False),
                 #         (ctrl, 'False Shot % (not in control)', 'PuBu', False),
                 #         (raa_grid, 'RAA (vs Top7 Avg)', 'RdYlGn', True)  # Diverging colormap
                 #     ]
@@ -12852,7 +12852,7 @@ elif sidebar_option == "Strength vs Weakness":
             plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
         
             plot_list = [
-                (perc, '% of balls (heat)', 'Blues'),
+                (perc, 'Balls Bowled', 'Blues'),
                 (bounds, 'Boundaries conceded (count)', 'OrRd'),
                 (dots, 'Dot balls (count)', 'Blues'),
                 (econ, 'Econ (runs/6 balls)', 'Reds'),
@@ -14215,7 +14215,7 @@ elif sidebar_option == "Strength vs Weakness":
 #             plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
     
 #             plot_list = [
-#                 (perc, '% of balls (heat)', 'Blues'),
+#                 (perc, 'Balls Bowled', 'Blues'),
 #                 (bounds, 'Boundaries conceded (count)', 'OrRd'),
 #                 (dots, 'Dot balls (count)', 'Blues'),
 #                 (econ, 'Econ (runs/6 balls)', 'Reds'),
