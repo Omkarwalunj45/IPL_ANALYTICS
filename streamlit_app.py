@@ -10099,31 +10099,33 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     # FIXED False Shot % — handles BOTH formats of 'control' column
                     # FIXED False Shot % — handles 0/1 column correctly
+                    # FIXED False Shot % — opposite of Control %, using same logic as your working Control % code
                     false_shot_pct = np.zeros_like(count, dtype=float)
                     if 'control' in df_src.columns:
                         ctrl_col = df_src['control']
                 
-                        # Create not_in_control mask (0 = not in control, 1 = in control)
-                        not_in_control = (ctrl_col == 0) | ctrl_col.isna()  # NaN → treat as not in control (conservative)
-                        not_in_control = not_in_control.astype(int)
+                        # Since control is always 0 or 1: 0 = not in control (False Shot), 1 = in control
+                        false_shot_mask = (ctrl_col == 0) | ctrl_col.isna()  # NaN → False Shot (conservative)
+                        false_shot_mask = false_shot_mask.astype(int)
                 
-                        # Try to use indices if they exist from build_pitch_grids
-                        line_idx_col = 'line_idx'  # adjust name if different
-                        length_idx_col = 'length_idx'  # adjust name if different
+                        # Use same index columns as your working Control % code
+                        line_idx_col = 'line_idx'   # adjust if named differently
+                        length_idx_col = 'length_idx'  # adjust if named differently
+                
                         if line_idx_col in df_src.columns and length_idx_col in df_src.columns:
-                            # Group by indices to get mean per cell
-                            ctrl_raw = df_src.groupby([line_idx_col, length_idx_col])[not_in_control].mean() * 100
-                            # Reshape to match grid shape (n_rows x n_cols)
-                            false_shot_pct = ctrl_raw.unstack(fill_value=0).reindex(
+                            # Group by indices (exact same as your working code)
+                            false_raw = df_src.groupby([line_idx_col, length_idx_col])[false_shot_mask].mean() * 100
+                            # Reshape to match grid (n_rows x n_cols)
+                            false_shot_pct = false_raw.unstack(fill_value=0).reindex(
                                 index=range(grids['n_rows']), columns=range(grids['n_cols']), fill_value=0
                             ).values
                         else:
-                            # If no indices, compute overall % as fallback (not per cell, but better than nothing)
-                            overall_false = not_in_control.mean() * 100
-                            false_shot_pct.fill(overall_false)  # fill entire grid with overall
-                            st.warning("No 'line_idx'/'length_idx' columns found. Using overall False Shot % as fallback.")
+                            # Fallback: overall False Shot % across all deliveries (better than zero grid)
+                            overall_false = false_shot_mask.mean() * 100
+                            false_shot_pct.fill(overall_false)
+                            st.warning("No 'line_idx'/'length_idx' columns found in df_src. Using overall False Shot % as fallback.")
                     else:
-                        # Fallback to existing ctrl_pct if 'control' column missing
+                        # Ultimate fallback if no 'control' column
                         false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
                         st.warning("No 'control' column found. Using existing ctrl_pct as fallback.")
                 
