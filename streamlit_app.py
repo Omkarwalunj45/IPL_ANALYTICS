@@ -9739,54 +9739,20 @@ elif sidebar_option == "Strength vs Weakness":
                 import streamlit as st
                 
                 
-                def compute_pitchmap_raa(df_src, bdf, runs_col, COL_BAT, bowl_kind=None, bowl_style=None):
+                def compute_pitchmap_raa(df_src, bdf, runs_col, COL_BAT):
                     """
                     Dedicated RAA calculation for pitchmap.
                     Computes RAA for each unique line-length combo.
-                    
-                    Parameters:
-                    -----------
-                    df_src : DataFrame
-                        Filtered data for the selected player
-                    bdf : DataFrame
-                        Full benchmark dataset with ALL batters
-                    runs_col : str
-                        Column name for runs
-                    COL_BAT : str
-                        Column name for batter
-                    bowl_kind : str, optional
-                        Bowling kind to filter benchmark
-                    bowl_style : str, optional
-                        Bowling style to filter benchmark
-                    
-                    Returns:
-                    --------
-                    dict: {'line_lower_length_lower': {'RAA': value}, ...}
+                    Uses same methodology as your main RAA function but tailored for per-combo.
+                    Returns dict: {'line_lower_length_lower': {'RAA': value}, ...}
                     """
                     out = {}
                     if df_src.empty or bdf.empty:
                         return out
                 
-                    # Prepare selected (filtered) player data
+                    # Prepare selected (filtered) and benchmark data
                     selected = df_src.copy()
-                    
-                    # Prepare benchmark - use FULL bdf, apply bowling filters only
-                    benchmark = bdf.copy()
-                    
-                    # Apply bowl_kind filter if specified
-                    if bowl_kind is not None and 'bowl_kind' in benchmark.columns:
-                        benchmark = benchmark[
-                            benchmark['bowl_kind'].astype(str).str.lower().str.strip() == str(bowl_kind).lower().strip()
-                        ].copy()
-                    
-                    # Apply bowl_style filter if specified
-                    if bowl_style is not None and 'bowl_style' in benchmark.columns:
-                        benchmark = benchmark[
-                            benchmark['bowl_style'].astype(str).str.lower().str.strip() == str(bowl_style).lower().strip()
-                        ].copy()
-                    
-                    if benchmark.empty:
-                        return out
+                    benchmark = bdf.copy()  # This is the FULL bdf now
                 
                     # Create normalized combo key
                     for df in [selected, benchmark]:
@@ -9801,14 +9767,13 @@ elif sidebar_option == "Strength vs Weakness":
                     if selected.empty or benchmark.empty:
                         return out
                 
-                    # Prepare data
+                    # Prepare data (same as your original)
                     for df in [selected, benchmark]:
                         df[runs_col] = pd.to_numeric(df.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
                         df['out_flag_tmp'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
                         df['dismissal_clean_tmp'] = df.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
                 
                     WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw']
-                    
                     def is_bowler_wicket_local(out_flag_val, dismissal_text):
                         try:
                             if int(out_flag_val) != 1:
@@ -9836,7 +9801,7 @@ elif sidebar_option == "Strength vs Weakness":
                         if 'p_bat' in benchmark.columns and pd.api.types.is_numeric_dtype(benchmark['p_bat']):
                             top7 = benchmark[pd.to_numeric(benchmark['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
                     if top7.empty:
-                        # If still empty, just use all benchmark data
+                        # Use all benchmark data if no top7 flag
                         top7 = benchmark.copy()
                 
                     # Aggregate per combo for top7
@@ -9879,28 +9844,11 @@ elif sidebar_option == "Strength vs Weakness":
                     return out
                 
                 
-                def display_pitchmaps_from_df(df_src, title_prefix, bdf=None, bowl_kind=None, bowl_style=None):
-                    """
-                    Display pitch maps with 6 panels.
-                    
-                    Parameters:
-                    -----------
-                    df_src : DataFrame
-                        Filtered data for display (player data - used for all panels except RAA)
-                    title_prefix : str
-                        Title for the plot
-                    bdf : DataFrame, optional
-                        Full benchmark data (all batters) - ONLY used for RAA calculation
-                    bowl_kind : str, optional
-                        Bowling kind filter to apply to benchmark for RAA
-                    bowl_style : str, optional
-                        Bowling style filter to apply to benchmark for RAA
-                    """
+                def display_pitchmaps_from_df(df_src, title_prefix):
                     if df_src is None or df_src.empty:
                         st.info(f"No deliveries to show for {title_prefix}")
                         return
                 
-                    # Use df_src for building grids (this was working fine before)
                     grids = build_pitch_grids(df_src)
                 
                     bh_col_name = globals().get('bat_hand_col', 'bat_hand')
@@ -9923,7 +9871,7 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
-                    st.write("Got inside")
+                
                     # Boundary % = boundaries in cell / balls in cell × 100
                     bound_pct = np.zeros_like(bounds, dtype=float)
                     mask = count > 0
@@ -9942,23 +9890,10 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # RAA per cell - ONLY uses bdf (full benchmark)
+                    # NEW: RAA per cell - use FULL bdf from globals
                     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
-                    
-                    if bdf is not None and not bdf.empty and 'line' in df_src.columns and 'length' in df_src.columns:
-                        # Get necessary variables from globals
-                        runs_col = globals().get('runs_col', 'runs')
-                        COL_BAT = globals().get('COL_BAT', 'batter')
-                        
-                        # Compute RAA using df_src (player) vs bdf (all batters)
-                        raa_dict = compute_pitchmap_raa(
-                            df_src=df_src,
-                            bdf=bdf,
-                            runs_col=runs_col,
-                            COL_BAT=COL_BAT,
-                            bowl_kind=bowl_kind,
-                            bowl_style=bowl_style
-                        )
+                    if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
+                        raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
                 
                         for i in range(n_rows):
                             length_str = yticklabels[i].lower().strip()
@@ -9967,10 +9902,7 @@ elif sidebar_option == "Strength vs Weakness":
                                 combo = f"{line_str}_{length_str}"
                                 raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
                     else:
-                        st.warning("RAA calculation skipped: bdf not provided or missing columns.")
-                
-                    # Get player name for title
-                    player_selected = globals().get('player_selected', 'Player')
+                        st.warning("Cannot compute RAA map: missing columns or global bdf.")
                 
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
                     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
@@ -9981,14 +9913,13 @@ elif sidebar_option == "Strength vs Weakness":
                         (dot_pct, 'Dot %', 'Blues', False),
                         (sr, 'SR (runs/100 balls)', 'Reds', False),
                         (ctrl, 'False Shot % (not in control)', 'PuBu', False),
-                        (raa_grid, 'RAA (vs Top7 Avg)', 'RdYlGn', True)  # Diverging
+                        (raa_grid, 'RAA', 'RdYlGn', True)  # Diverging: green positive, red negative
                     ]
                 
                     for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
                         flat = safe_arr.flatten()
                         
-                        # Different normalization for diverging vs sequential colormaps
                         if is_diverging:
                             # For RAA: center at 0, use symmetric range
                             non_nan_vals = raa_grid[~np.isnan(raa_grid)]
@@ -10012,19 +9943,18 @@ elif sidebar_option == "Strength vs Weakness":
                                     vmax = vmin + 1.0
                             
                             im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
-                        
-                        ax.set_title(ttl, fontsize=12, weight='bold')
+                
+                        ax.set_title(ttl)
                         ax.set_xticks(range(grids['n_cols']))
                         ax.set_yticks(range(grids['n_rows']))
-                        ax.set_xticklabels(xticks, rotation=45, ha='right', fontsize=9)
-                        ax.set_yticklabels(yticklabels, fontsize=9)
+                        ax.set_xticklabels(xticks, rotation=45, ha='right')
+                        ax.set_yticklabels(yticklabels)
                 
                         ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
                         ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                         ax.tick_params(which='minor', bottom=False, left=False)
                 
-                        # Add wicket annotations to first plot
                         if ax_idx == 0:
                             for i in range(grids['n_rows']):
                                 for j in range(grids['n_cols']):
@@ -10034,7 +9964,7 @@ elif sidebar_option == "Strength vs Weakness":
                                         ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
                                                 bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
                         
-                        # Add RAA values as text annotations on RAA plot
+                        # Add RAA values as text on the RAA plot
                         if is_diverging:
                             for i in range(grids['n_rows']):
                                 for j in range(grids['n_cols']):
