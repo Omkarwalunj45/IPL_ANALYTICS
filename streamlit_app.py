@@ -11292,7 +11292,6 @@ elif sidebar_option == "Strength vs Weakness":
                 # ---------- When user selects a kind ----------
                 # When bowl_kind is chosen
                 # When bowl_kind is chosen
-
                 if chosen_kind and chosen_kind != '-- none --':
                     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
                         if col not in df.columns:
@@ -11312,10 +11311,12 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
                         draw_wagon_if_available(df_use, player_selected)
+                
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
-                        display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}", 
-                                                 chosen_kind=chosen_kind, chosen_style=None)
+                
+                        # Updated call: no extra params needed
+                        display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
                 
                 # When bowl_style is chosen
                 if chosen_style and chosen_style != '-- none --':
@@ -11337,10 +11338,60 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         st.markdown(f"### Detailed view — Bowler Style: {chosen_style}")
                         draw_wagon_if_available(df_use, player_selected)
+                
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
-                        display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}", 
-                                                 chosen_kind=None, chosen_style=chosen_style)
+                
+                        # Updated call: no extra params needed
+                        display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
+                # if chosen_kind and chosen_kind != '-- none --':
+                #     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
+                #         if col not in df.columns:
+                #             return df.iloc[0:0]
+                #         mask = df[col].astype(str).str.lower().str.contains(str(kind).lower(), na=False)
+                #         if not mask.any():
+                #             norm_kind = _norm_key(kind)
+                #             mask = df[col].apply(lambda x: _norm_key(x) == norm_kind)
+                #         return df[mask].copy()
+                
+                #     sel_pf = filter_by_kind(pf)
+                #     sel_bdf = filter_by_kind(bdf)
+                
+                #     df_use = sel_pf if not sel_pf.empty else sel_bdf
+                #     if df_use.empty:
+                #         st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
+                #     else:
+                #         st.markdown(f"### Detailed view — Bowler Kind: {chosen_kind}")
+                #         draw_wagon_if_available(df_use, player_selected)
+                #         st.markdown(f"#### {player_selected}'s Caught Dismissals")
+                #         draw_caught_dismissals_wagon(df_use, player_selected)
+                #         display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}", 
+                #                                  chosen_kind=chosen_kind, chosen_style=None)
+                
+                # # When bowl_style is chosen
+                # if chosen_style and chosen_style != '-- none --':
+                #     def filter_by_style(df, col='bowl_style', style=chosen_style):
+                #         if col not in df.columns:
+                #             return df.iloc[0:0]
+                #         mask = df[col].astype(str).str.lower().str.contains(str(style).lower(), na=False)
+                #         if not mask.any():
+                #             norm_style = _norm_key(style)
+                #             mask = df[col].apply(lambda x: _norm_key(x) == norm_style)
+                #         return df[mask].copy()
+                
+                #     sel_pf = filter_by_style(pf)
+                #     sel_bdf = filter_by_style(bdf)
+                
+                #     df_use = sel_pf if not sel_pf.empty else sel_bdf
+                #     if df_use.empty:
+                #         st.info(f"No deliveries found for bowler style '{chosen_style}'.")
+                #     else:
+                #         st.markdown(f"### Detailed view — Bowler Style: {chosen_style}")
+                #         draw_wagon_if_available(df_use, player_selected)
+                #         st.markdown(f"#### {player_selected}'s Caught Dismissals")
+                #         draw_caught_dismissals_wagon(df_use, player_selected)
+                #         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}", 
+                #                                  chosen_kind=None, chosen_style=chosen_style)
             
                    
         # The rest of the code (wagon wheels, pitchmaps, shot productivity, etc.) will now use the phase-filtered pf/bdf automatically
