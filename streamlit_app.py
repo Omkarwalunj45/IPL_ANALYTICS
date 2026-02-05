@@ -9732,19 +9732,19 @@ elif sidebar_option == "Strength vs Weakness":
                     if df_src is None or df_src.empty:
                         st.info(f"No deliveries to show for {title_prefix}")
                         return
-            
+                
                     grids = build_pitch_grids(df_src)
-            
+                
                     bh_col_name = globals().get('bat_hand_col', 'bat_hand')
                     is_lhb = False
                     if bh_col_name in df_src.columns:
                         hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
                         if any(h.upper().startswith('L') for h in hands):
                             is_lhb = True
-            
+                
                     def maybe_flip(arr):
                         return np.fliplr(arr) if is_lhb else arr.copy()
-            
+                
                     count = maybe_flip(grids['count'])
                     bounds = maybe_flip(grids['bounds'])
                     dots = maybe_flip(grids['dots'])
@@ -9752,31 +9752,69 @@ elif sidebar_option == "Strength vs Weakness":
                     ctrl = maybe_flip(grids['ctrl_pct'])
                     wkt = maybe_flip(grids['wkt'])
                     runs = maybe_flip(grids['runs'])
-            
+                
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
-            
+                
+                    # NEW: Boundary% (cell bounds / total bounds * 100)
+                    total_bounds = bounds.sum() if bounds.sum() > 0 else 1.0
+                    bound_pct = bounds.astype(float) / total_bounds * 100.0
+                
+                    # NEW: Dot% (cell dots / total dots * 100)
+                    total_dots = dots.sum() if dots.sum() > 0 else 1.0
+                    dot_pct = dots.astype(float) / total_dots * 100.0
+                
+                    # NEW: RAA per cell (using existing RAA function with line_length_combo as group_col)
+                    # Create temporary combo column for RAA calculation
+                    if 'line' in df_src.columns and 'length' in df_src.columns:
+                        df_src['line_length_combo'] = df_src['line'].astype(str) + '_' + df_src['length'].astype(str)
+                        # Assume bdf is the reference dataframe (top7 etc.); add combo to bdf too
+                        if 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
+                            bdf['line_length_combo'] = bdf['line'].astype(str) + '_' + bdf['length'].astype(str)
+                        else:
+                            st.warning("Reference 'bdf' not found for RAA calculation. Skipping RAA map.")
+                            raa_grid = np.full_like(runs, np.nan)  # Fallback empty grid
+                       
+                        # Call existing RAA function with group_col='line_length_combo'
+                        raa_dict = compute_RAA_DAA_for_group_column('line_length_combo')
+                       
+                        # Build RAA grid from dict (map combo keys to RAA values)
+                        raa_grid = np.full_like(runs, np.nan)
+                        combo_to_raa = {k: v.get('RAA', np.nan) for k, v in raa_dict.items()}
+                       
+                        # Map to grid cells (assuming your build_pitch_grids uses same line/length indices)
+                        for le in range(grids['n_rows']):
+                            for li in range(grids['n_cols']):
+                                # Reconstruct combo key (match your line_map/length_map logic)
+                                line_str = xticks_base[li] if not is_lhb else xticks_base[::-1][li]  # Adjust for flip
+                                length_str = yticklabels[le]
+                                combo_key = f"{line_str.lower()}_{length_str.lower()}"
+                                raa_grid[le, li] = combo_to_raa.get(combo_key, np.nan)
+                    else:
+                        st.warning("Missing 'line' or 'length' columns for RAA calculation. Skipping RAA map.")
+                        raa_grid = np.full_like(runs, np.nan)  # Fallback
+                
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
-            
+                
                     n_rows = grids['n_rows']
                     if n_rows >= 6:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
-            
+                
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
                     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
-            
+                
                     plot_list = [
                         (perc, '% of balls (heat)', 'Blues'),
-                        (bounds, 'Boundaries (count)', 'OrRd'),
-                        (dots, 'Dot balls (count)', 'Blues'),
+                        (bound_pct, 'Boundary %', 'OrRd'),
+                        (dot_pct, 'Dot %', 'Blues'),
                         (sr, 'SR (runs/100 balls)', 'Reds'),
                         (ctrl, 'False Shot % (not in control)', 'PuBu'),
-                        (runs, 'Runs (sum)', 'Reds')
+                        (raa_grid, 'RAA (per combo)', 'RdYlGn')  # NEW: RAA with diverging cmap (green positive, red negative)
                     ]
-            
+                
                     for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
                         flat = safe_arr.flatten()
@@ -9787,19 +9825,19 @@ elif sidebar_option == "Strength vs Weakness":
                             vmax = float(np.nanpercentile(flat, 95))
                             if vmax <= vmin:
                                 vmax = vmin + 1.0
-            
+                
                         im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
                         ax.set_title(ttl)
                         ax.set_xticks(range(grids['n_cols']))
                         ax.set_yticks(range(grids['n_rows']))
                         ax.set_xticklabels(xticks, rotation=45, ha='right')
                         ax.set_yticklabels(yticklabels)
-            
+                
                         ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
                         ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                         ax.tick_params(which='minor', bottom=False, left=False)
-            
+                
                         if ax_idx == 0:
                             for i in range(grids['n_rows']):
                                 for j in range(grids['n_cols']):
@@ -9808,11 +9846,11 @@ elif sidebar_option == "Strength vs Weakness":
                                         w_text = f"{w_count} W" if w_count > 1 else 'W'
                                         ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
                                                 bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-            
+                
                         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-            
+                
                     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
-            
+                
                     safe_fn = globals().get('safe_st_pyplot', None)
                     try:
                         if callable(safe_fn):
