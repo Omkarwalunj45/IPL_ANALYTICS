@@ -9728,36 +9728,40 @@ elif sidebar_option == "Strength vs Weakness":
                     }
             
                 # ---------- display utility ----------
-                def compute_RAA_for_pitchmap(df_src, bdf, runs_col, COL_BAT, group_col='line_length_combo'):
+                def compute_pitchmap_raa(df_src, bdf, runs_col, COL_BAT):
                     """
-                    Adapted RAA calculation specifically for pitchmap: computes RAA for each line-length combo.
-                    Methodology same as original: weighted averages on top7, etc.
-                    Returns dict of combo_key: RAA value.
+                    Dedicated RAA calculation for pitchmap.
+                    Computes RAA for each unique line-length combo.
+                    Uses same methodology as your main RAA function but tailored for per-combo.
+                    Returns dict: {'line_lower_length_lower': {'RAA': value}, ...}
                     """
                     out = {}
-                    # Copy and prepare df_src (selected) and bdf (benchmark)
+                    if df_src.empty or bdf.empty:
+                        return out
+                
+                    # Prepare selected (filtered) and benchmark data
                     selected = df_src.copy()
                     benchmark = bdf.copy()
-                    
-                    # Create line_length_combo if not present
-                    if group_col == 'line_length_combo':
-                        for df in [selected, benchmark]:
-                            if 'line' in df.columns and 'length' in df.columns:
-                                df[group_col] = df['line'].astype(str).str.lower() + '_' + df['length'].astype(str).str.lower()
-                            else:
-                                return out  # Cannot proceed without line/length
-                    
-                    if group_col not in selected.columns or group_col not in benchmark.columns:
-                        return out
-                    
-                    # Normalize
+                
+                    # Create normalized combo key
                     for df in [selected, benchmark]:
-                        df[group_col] = df[group_col].astype(str).str.lower().fillna('unknown')
+                        df['line_norm'] = df.get('line', '').astype(str).str.lower().str.strip()
+                        df['length_norm'] = df.get('length', '').astype(str).str.lower().str.strip()
+                        df['line_length_combo'] = df['line_norm'] + '_' + df['length_norm']
+                
+                    # Remove empty combos
+                    selected = selected[selected['line_length_combo'] != '_']
+                    benchmark = benchmark[benchmark['line_length_combo'] != '_']
+                
+                    if selected.empty or benchmark.empty:
+                        return out
+                
+                    # Prepare data (same as your original)
+                    for df in [selected, benchmark]:
                         df[runs_col] = pd.to_numeric(df.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
                         df['out_flag_tmp'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
                         df['dismissal_clean_tmp'] = df.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
-                    
-                    # Wicket logic (same as original)
+                
                     WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw']
                     def is_bowler_wicket_local(out_flag_val, dismissal_text):
                         try:
@@ -9773,80 +9777,60 @@ elif sidebar_option == "Strength vs Weakness":
                             if token in dd:
                                 return True
                         return False
-                    
+                
                     for df in [selected, benchmark]:
-                        df['is_wkt_tmp'] = df.apply(lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0, axis=1)
-                    
-                    # Get top7 from benchmark (same as original)
+                        df['is_wkt_tmp'] = df.apply(
+                            lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0,
+                            axis=1
+                        )
+                
+                    # Top7 from benchmark
                     top7 = benchmark[benchmark.get('top7_flag', 0) == 1].copy()
                     if top7.empty:
                         if 'p_bat' in benchmark.columns and pd.api.types.is_numeric_dtype(benchmark['p_bat']):
                             top7 = benchmark[pd.to_numeric(benchmark['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
                     if top7.empty:
-                        if all(c in benchmark.columns for c in ['p_match', 'inns', COL_BAT]):
-                            tmp = benchmark.dropna(subset=[COL_BAT, 'p_match', 'inns']).copy()
-                            order_col = 'ball_id' if 'ball_id' in tmp.columns else ('ball' if 'ball' in tmp.columns else tmp.columns[0])
-                            first_app = tmp.groupby(['p_match', 'inns', COL_BAT], as_index=False)[order_col].min().rename(columns={order_col: 'first_ball'})
-                            recs = []
-                            for (m, inn), grp in first_app.groupby(['p_match', 'inns']):
-                                top7_names = grp.sort_values('first_ball').head(7)[COL_BAT].tolist()
-                                for b in top7_names:
-                                    recs.append((m, inn, b))
-                            if recs:
-                                top7_df = pd.DataFrame(recs, columns=['p_match', 'inns', COL_BAT])
-                                top7_df['top7_flag'] = 1
-                                top7 = benchmark.merge(top7_df, how='inner', on=['p_match', 'inns', COL_BAT])
-                    if top7.empty:
-                        return out
-                    
-                    # Aggregate per match/batter/group for top7
-                    gb_keys = ['p_match', 'inns', COL_BAT, group_col] if all(c in top7.columns for c in ['p_match', 'inns']) else ['p_match', COL_BAT, group_col]
-                    per_mb = (top7.groupby(gb_keys, as_index=False)
-                              .agg(runs=(runs_col, 'sum'),
-                                   balls=(runs_col, 'count'),
-                                   dismissals=('is_wkt_tmp', 'sum')))
-                    
-                    per_mb['SR'] = per_mb.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
-                    
-                    # Aggregate per batter per group (keep runs for weighting)
-                    per_batter_group = per_mb.groupby([COL_BAT, group_col], as_index=False).agg(
-                        total_runs=('runs', 'sum'),
-                        mean_SR=('SR', 'mean')
+                        return out  # No benchmark → no RAA
+                
+                    # Aggregate per combo for top7
+                    per_combo_top7 = top7.groupby('line_length_combo', as_index=False).agg(
+                        runs=(runs_col, 'sum'),
+                        balls=(runs_col, 'count'),
+                        dismissals=('is_wkt_tmp', 'sum')
                     )
-                    
-                    # Weighted averages by group (weighted by runs scored)
-                    def weighted_avg(df, value_col):
-                        df_clean = df.dropna(subset=[value_col, 'total_runs'])
-                        if df_clean.empty or df_clean['total_runs'].sum() == 0:
+                
+                    per_combo_top7['SR'] = per_combo_top7.apply(
+                        lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1
+                    )
+                
+                    # Weighted average SR per combo (weighted by runs)
+                    def weighted_sr(g):
+                        if g['runs'].sum() == 0:
                             return np.nan
-                        return (df_clean['total_runs'] * df_clean[value_col]).sum() / df_clean['total_runs'].sum()
-                    
-                    avg_by_group = per_batter_group.groupby(group_col).apply(
-                        lambda g: pd.Series({
-                            'avg_SR_top7': weighted_avg(g, 'mean_SR')
-                        })
-                    ).reset_index()
-                    
-                    # Process selected data
-                    sel_grp = selected.groupby(group_col).agg(
+                        return (g['runs'] * g['SR']).sum() / g['runs'].sum()
+                
+                    avg_sr_by_combo = per_combo_top7.groupby('line_length_combo').apply(weighted_sr).to_dict()
+                
+                    # Selected player SR per combo
+                    sel_per_combo = selected.groupby('line_length_combo', as_index=False).agg(
                         runs=(runs_col, 'sum'),
                         balls=(runs_col, 'count')
-                    ).reset_index()
-                    
-                    sel_grp['SR'] = sel_grp.apply(lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1)
-                    
-                    # Merge with group averages and compute RAA
-                    merged = pd.merge(sel_grp, avg_by_group, how='left', on=group_col)
-                    merged['RAA'] = merged['SR'] - merged['avg_SR_top7']
-                    
-                    # Output dict (combo -> RAA)
-                    for _, row in merged.iterrows():
-                        g = row[group_col]
-                        out[str(g).lower()] = {
-                            'RAA': row['RAA']
-                        }
-                    
+                    )
+                
+                    sel_per_combo['SR'] = sel_per_combo.apply(
+                        lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1
+                    )
+                
+                    # Compute RAA = selected SR - benchmark weighted SR
+                    for _, row in sel_per_combo.iterrows():
+                        combo = row['line_length_combo']
+                        sel_sr = row['SR']
+                        bench_sr = avg_sr_by_combo.get(combo, np.nan)
+                        raa = sel_sr - bench_sr if not np.isnan(sel_sr) and not np.isnan(bench_sr) else np.nan
+                        out[combo] = {'RAA': raa}
+                
                     return out
+                
                 
                 def display_pitchmaps_from_df(df_src, title_prefix):
                     if df_src is None or df_src.empty:
@@ -9876,14 +9860,16 @@ elif sidebar_option == "Strength vs Weakness":
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
                 
-                    # NEW: Boundary % (boundaries / balls in cell * 100)
+                    # NEW: Boundary % = boundaries in cell / balls in cell × 100
                     bound_pct = np.zeros_like(bounds, dtype=float)
                     mask = count > 0
                     bound_pct[mask] = bounds[mask] / count[mask] * 100.0
                 
-                    # NEW: Dot % (dots / balls in cell * 100)
+                    # NEW: Dot % = dots in cell / balls in cell × 100
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
+                
+                    # SR and False Shot % already per-cell → keep
                 
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
@@ -9894,25 +9880,22 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # NEW: RAA per cell (using adapted function)
+                    # NEW: RAA per cell
                     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
                     if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
-                        # Add combo to both selected and benchmark
-                        df_src['line_length_combo'] = df_src['line'].astype(str).str.lower() + '_' + df_src['length'].astype(str).str.lower()
-                        bdf['line_length_combo'] = bdf['line'].astype(str).str.lower() + '_' + bdf['length'].astype(str).str.lower()
-                       
-                        # Call adapted RAA function
-                        raa_dict = compute_RAA_for_pitchmap(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
-                       
-                        # Map to grid using yticklabels and xticks
+                        raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
+                
                         for i in range(n_rows):
-                            length_str = yticklabels[i].lower()
+                            length_str = yticklabels[i].lower().strip()
                             for j in range(grids['n_cols']):
-                                line_str = xticks[j].lower()
+                                line_str = xticks[j].lower().strip()
                                 combo = f"{line_str}_{length_str}"
                                 raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
                     else:
-                        st.warning("Cannot compute RAA map: missing 'line'/'length' columns or 'bdf' not available.")
+                        st.warning("Cannot compute RAA map: missing columns or global bdf.")
+                
+                    fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+                    plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
                     plot_list = [
                         (perc, '% of Balls (heat)', 'Blues'),
@@ -9922,9 +9905,6 @@ elif sidebar_option == "Strength vs Weakness":
                         (ctrl, 'False Shot % (not in control)', 'PuBu'),
                         (raa_grid, 'RAA', 'RdYlGn')  # Diverging: green positive, red negative
                     ]
-                
-                    fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                    plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
                     for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
@@ -9972,7 +9952,7 @@ elif sidebar_option == "Strength vs Weakness":
                         st.pyplot(fig)
                     finally:
                         plt.close(fig)
-                            
+                                            
                 # ---------- Wagon chart (existing - runs) ----------
                 # def draw_wagon_if_available(df_wagon, batter_name):
                 #     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
