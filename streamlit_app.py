@@ -11572,198 +11572,198 @@ elif sidebar_option == "Strength vs Weakness":
        
         # ... (continue with the rest of your original code from here, like st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'> Wagon wheels — Pace & Spin</div>", unsafe_allow_html=True) and so on)
             
-            st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'> Wagon wheels — Pace & Spin</div>", unsafe_allow_html=True)
-            if COL_BOWL_KIND in pf.columns:
-                pf_pace = pf[pf[COL_BOWL_KIND].str.contains('pace', na=False)].copy()
-                pf_spin = pf[pf[COL_BOWL_KIND].str.contains('spin', na=False)].copy()
-            else:
-                pf_pace = pf.iloc[0:0].copy()
-                pf_spin = pf.iloc[0:0].copy()
+            # st.markdown("<div style='font-weight:800; font-size:16px; margin-top:8px;'> Wagon wheels — Pace & Spin</div>", unsafe_allow_html=True)
+            # if COL_BOWL_KIND in pf.columns:
+            #     pf_pace = pf[pf[COL_BOWL_KIND].str.contains('pace', na=False)].copy()
+            #     pf_spin = pf[pf[COL_BOWL_KIND].str.contains('spin', na=False)].copy()
+            # else:
+            #     pf_pace = pf.iloc[0:0].copy()
+            #     pf_spin = pf.iloc[0:0].copy()
             
-            c1, c2 = st.columns([1,1], gap="large")
-            with c1:
-                st.markdown(f"<div style='font-size:14px; font-weight:800;'> {player_selected} — vs Pace (Wagon)</div>", unsafe_allow_html=True)
-                fig_p = draw_wagon(pf_pace, f"{player_selected} — vs Pace", is_lhb)
-                display_figure_fixed_height_html(fig_p, height_px=HEIGHT_WAGON_PX, margin_px=0)
-            with c2:
-                st.markdown(f"<div style='font-size:14px; font-weight:800;'> {player_selected} — vs Spin (Wagon)</div>", unsafe_allow_html=True)
-                fig_s = draw_wagon(pf_spin, f"{player_selected} — vs Spin", is_lhb)
-                display_figure_fixed_height_html(fig_s, height_px=HEIGHT_WAGON_PX, margin_px=0)
+            # c1, c2 = st.columns([1,1], gap="large")
+            # with c1:
+            #     st.markdown(f"<div style='font-size:14px; font-weight:800;'> {player_selected} — vs Pace (Wagon)</div>", unsafe_allow_html=True)
+            #     fig_p = draw_wagon(pf_pace, f"{player_selected} — vs Pace", is_lhb)
+            #     display_figure_fixed_height_html(fig_p, height_px=HEIGHT_WAGON_PX, margin_px=0)
+            # with c2:
+            #     st.markdown(f"<div style='font-size:14px; font-weight:800;'> {player_selected} — vs Spin (Wagon)</div>", unsafe_allow_html=True)
+            #     fig_s = draw_wagon(pf_spin, f"{player_selected} — vs Spin", is_lhb)
+            #     display_figure_fixed_height_html(fig_s, height_px=HEIGHT_WAGON_PX, margin_px=0)
             
-            # -------------------------------------------------------------------------
-            # Pitchmaps — Boundaries, Dismissals, and Dot Balls (Pace vs Spin)
-            # use improved readable annotation style (same as bowling)
-            # -------------------------------------------------------------------------
-            st.markdown("<div style='font-size:16px; font-weight:800; margin-top:6px;'> Pitchmaps — Boundaries, Dismissals & Dot %</div>", unsafe_allow_html=True)
+            # # -------------------------------------------------------------------------
+            # # Pitchmaps — Boundaries, Dismissals, and Dot Balls (Pace vs Spin)
+            # # use improved readable annotation style (same as bowling)
+            # # -------------------------------------------------------------------------
+            # st.markdown("<div style='font-size:16px; font-weight:800; margin-top:6px;'> Pitchmaps — Boundaries, Dismissals & Dot %</div>", unsafe_allow_html=True)
             
-            # small consistent LINE/LENGTH maps used across app
-            LINE_MAP = {
-                'WIDE_OUTSIDE_OFFSTUMP': 0,
-                'OUTSIDE_OFFSTUMP': 1,
-                'ON_THE_STUMPS': 2,
-                'DOWN_LEG': 3,
-                'WIDE_DOWN_LEG': 4
-            }
-            LENGTH_MAP = {
-                'SHORT': 0,
-                'SHORT_OF_A_GOOD_LENGTH': 1,
-                'GOOD_LENGTH': 2,
-                'FULL': 3,
-                'YORKER': 4,
-                'FULL_TOSS': 4
-            }
+            # # small consistent LINE/LENGTH maps used across app
+            # LINE_MAP = {
+            #     'WIDE_OUTSIDE_OFFSTUMP': 0,
+            #     'OUTSIDE_OFFSTUMP': 1,
+            #     'ON_THE_STUMPS': 2,
+            #     'DOWN_LEG': 3,
+            #     'WIDE_DOWN_LEG': 4
+            # }
+            # LENGTH_MAP = {
+            #     'SHORT': 0,
+            #     'SHORT_OF_A_GOOD_LENGTH': 1,
+            #     'GOOD_LENGTH': 2,
+            #     'FULL': 3,
+            #     'YORKER': 4,
+            #     'FULL_TOSS': 4
+            # }
             
-            # plotting helper (same readable style as bowling)
-            import matplotlib.patheffects as mpatheffects
-            def plot_grid_with_readable_labels(grid, title, cmap='Oranges', mirror=False, fmt='int', vmax=None):
-                disp = np.fliplr(grid) if mirror else grid.copy()
-                xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
-                xticks = list(reversed(xticks_base)) if mirror else xticks_base
-                real_vmax = float(np.nanmax(disp)) if (not np.all(np.isnan(disp)) and np.nanmax(disp) > 0) else 1.0
-                vmax_use = float(vmax) if (vmax is not None and vmax > 0) else real_vmax
+            # # plotting helper (same readable style as bowling)
+            # import matplotlib.patheffects as mpatheffects
+            # def plot_grid_with_readable_labels(grid, title, cmap='Oranges', mirror=False, fmt='int', vmax=None):
+            #     disp = np.fliplr(grid) if mirror else grid.copy()
+            #     xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
+            #     xticks = list(reversed(xticks_base)) if mirror else xticks_base
+            #     real_vmax = float(np.nanmax(disp)) if (not np.all(np.isnan(disp)) and np.nanmax(disp) > 0) else 1.0
+            #     vmax_use = float(vmax) if (vmax is not None and vmax > 0) else real_vmax
                 
-                fig, ax = plt.subplots(figsize=(6,9), dpi=150)
-                im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
-                ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                ax.set_xticklabels(xticks, rotation=40, ha='right')
-                ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                for i in range(5):
-                    for j in range(5):
-                        val = disp[i,j]
-                        if fmt == 'pct':
-                            lab = f"{val:.2f}%" if (not np.isnan(val)) else "0.00%"
-                        elif fmt == 'float':
-                            lab = f"{val:.2f}"
-                        else:
-                            try:
-                                lab = f"{int(val)}"
-                            except:
-                                lab = f"{val}"
-                        try:
-                            intensity = float(val) / float(vmax_use) if vmax_use > 0 else 0.0
-                        except:
-                            intensity = 0.0
-                        txt_color = 'white' if intensity > 0.55 else 'black'
-                        txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
-                        txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground='white' if txt_color=='black' else 'black'),
-                                              mpatheffects.Normal()])
-                fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                plt.title(title, pad=6, fontsize=12)
-                plt.tight_layout(pad=0)
-                fig.subplots_adjust(top=0.99, bottom=0.01, left=0.06, right=0.99)
-                return fig
+            #     fig, ax = plt.subplots(figsize=(6,9), dpi=150)
+            #     im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
+            #     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+            #     ax.set_xticklabels(xticks, rotation=40, ha='right')
+            #     ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+            #     for i in range(5):
+            #         for j in range(5):
+            #             val = disp[i,j]
+            #             if fmt == 'pct':
+            #                 lab = f"{val:.2f}%" if (not np.isnan(val)) else "0.00%"
+            #             elif fmt == 'float':
+            #                 lab = f"{val:.2f}"
+            #             else:
+            #                 try:
+            #                     lab = f"{int(val)}"
+            #                 except:
+            #                     lab = f"{val}"
+            #             try:
+            #                 intensity = float(val) / float(vmax_use) if vmax_use > 0 else 0.0
+            #             except:
+            #                 intensity = 0.0
+            #             txt_color = 'white' if intensity > 0.55 else 'black'
+            #             txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
+            #             txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground='white' if txt_color=='black' else 'black'),
+            #                                   mpatheffects.Normal()])
+            #     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+            #     plt.title(title, pad=6, fontsize=12)
+            #     plt.tight_layout(pad=0)
+            #     fig.subplots_adjust(top=0.99, bottom=0.01, left=0.06, right=0.99)
+            #     return fig
             
-            # helper builders
-            def build_boundaries_grid_local(df_local):
-                grid = np.zeros((5,5), dtype=int)
-                if df_local.shape[0] == 0: return grid
-                if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns or COL_RUNS not in df_local.columns:
-                    return grid
-                plot_df = df_local[[COL_LINE, COL_LENGTH, COL_RUNS]].dropna(subset=[COL_LINE, COL_LENGTH])
-                for _, r in plot_df.iterrows():
-                    li = LINE_MAP.get(r[COL_LINE], None)
-                    le = LENGTH_MAP.get(r[COL_LENGTH], None)
-                    if li is None or le is None: continue
-                    try:
-                        runs_here = int(r[COL_RUNS])
-                    except:
-                        runs_here = 0
-                    if runs_here in (4,6):
-                        grid[le, li] += 1
-                return grid
+            # # helper builders
+            # def build_boundaries_grid_local(df_local):
+            #     grid = np.zeros((5,5), dtype=int)
+            #     if df_local.shape[0] == 0: return grid
+            #     if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns or COL_RUNS not in df_local.columns:
+            #         return grid
+            #     plot_df = df_local[[COL_LINE, COL_LENGTH, COL_RUNS]].dropna(subset=[COL_LINE, COL_LENGTH])
+            #     for _, r in plot_df.iterrows():
+            #         li = LINE_MAP.get(r[COL_LINE], None)
+            #         le = LENGTH_MAP.get(r[COL_LENGTH], None)
+            #         if li is None or le is None: continue
+            #         try:
+            #             runs_here = int(r[COL_RUNS])
+            #         except:
+            #             runs_here = 0
+            #         if runs_here in (4,6):
+            #             grid[le, li] += 1
+            #     return grid
             
-            def build_dismissals_grid_local(df_local):
-                grid = np.zeros((5,5), dtype=int)
-                if df_local.shape[0] == 0: return grid
-                if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns:
-                    return grid
-                # create is_wkt in local frame similar to your rules
-                df_local['dismissal_clean'] = df_local.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
-                df_local['out_flag'] = pd.to_numeric(df_local.get('out',0), errors='coerce').fillna(0).astype(int)
-                special_runout_types = set(['run out','runout','retired','retired not out','retired out','obstructing the field'])
-                df_local['is_wkt'] = df_local.apply(
-                    lambda r: 1 if (int(r.get('out_flag',0)) == 1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip() != '') else 0,
-                    axis=1
-                )
-                plot_df = df_local[[COL_LINE, COL_LENGTH, 'is_wkt']].dropna(subset=[COL_LINE, COL_LENGTH])
-                for _, r in plot_df.iterrows():
-                    li = LINE_MAP.get(r[COL_LINE], None)
-                    le = LENGTH_MAP.get(r[COL_LENGTH], None)
-                    if li is None or le is None: continue
-                    if int(r.get('is_wkt', 0)) == 1:
-                        grid[le, li] += 1
-                return grid
+            # def build_dismissals_grid_local(df_local):
+            #     grid = np.zeros((5,5), dtype=int)
+            #     if df_local.shape[0] == 0: return grid
+            #     if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns:
+            #         return grid
+            #     # create is_wkt in local frame similar to your rules
+            #     df_local['dismissal_clean'] = df_local.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
+            #     df_local['out_flag'] = pd.to_numeric(df_local.get('out',0), errors='coerce').fillna(0).astype(int)
+            #     special_runout_types = set(['run out','runout','retired','retired not out','retired out','obstructing the field'])
+            #     df_local['is_wkt'] = df_local.apply(
+            #         lambda r: 1 if (int(r.get('out_flag',0)) == 1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip() != '') else 0,
+            #         axis=1
+            #     )
+            #     plot_df = df_local[[COL_LINE, COL_LENGTH, 'is_wkt']].dropna(subset=[COL_LINE, COL_LENGTH])
+            #     for _, r in plot_df.iterrows():
+            #         li = LINE_MAP.get(r[COL_LINE], None)
+            #         le = LENGTH_MAP.get(r[COL_LENGTH], None)
+            #         if li is None or le is None: continue
+            #         if int(r.get('is_wkt', 0)) == 1:
+            #             grid[le, li] += 1
+            #     return grid
             
-            def build_dot_grid_local(df_local):
-                grid = np.zeros((5,5), dtype=int)
-                if df_local.shape[0] == 0: return grid
-                if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns or COL_RUNS not in df_local.columns:
-                    return grid
-                nob_col = 'noball' if 'noball' in df_local.columns else None
-                wide_col = 'wide' if 'wide' in df_local.columns else None
-                pl = [COL_LINE, COL_LENGTH, COL_RUNS]
-                if nob_col: pl.append(nob_col)
-                if wide_col: pl.append(wide_col)
-                plot_df = df_local[pl].dropna(subset=[COL_LINE, COL_LENGTH])
-                for _, r in plot_df.iterrows():
-                    if nob_col and int(r.get(nob_col,0)) != 0: continue
-                    if wide_col and int(r.get(wide_col,0)) != 0: continue
-                    li = LINE_MAP.get(r[COL_LINE], None)
-                    le = LENGTH_MAP.get(r[COL_LENGTH], None)
-                    if li is None or le is None: continue
-                    try:
-                        runs_here = int(r[COL_RUNS])
-                    except:
-                        runs_here = 0
-                    if runs_here == 0:
-                        grid[le, li] += 1
-                return grid
+            # def build_dot_grid_local(df_local):
+            #     grid = np.zeros((5,5), dtype=int)
+            #     if df_local.shape[0] == 0: return grid
+            #     if COL_LINE not in df_local.columns or COL_LENGTH not in df_local.columns or COL_RUNS not in df_local.columns:
+            #         return grid
+            #     nob_col = 'noball' if 'noball' in df_local.columns else None
+            #     wide_col = 'wide' if 'wide' in df_local.columns else None
+            #     pl = [COL_LINE, COL_LENGTH, COL_RUNS]
+            #     if nob_col: pl.append(nob_col)
+            #     if wide_col: pl.append(wide_col)
+            #     plot_df = df_local[pl].dropna(subset=[COL_LINE, COL_LENGTH])
+            #     for _, r in plot_df.iterrows():
+            #         if nob_col and int(r.get(nob_col,0)) != 0: continue
+            #         if wide_col and int(r.get(wide_col,0)) != 0: continue
+            #         li = LINE_MAP.get(r[COL_LINE], None)
+            #         le = LENGTH_MAP.get(r[COL_LENGTH], None)
+            #         if li is None or le is None: continue
+            #         try:
+            #             runs_here = int(r[COL_RUNS])
+            #         except:
+            #             runs_here = 0
+            #         if runs_here == 0:
+            #             grid[le, li] += 1
+            #     return grid
             
-            # build grids for pace/spin
-            grid_pace_bound = build_boundaries_grid_local(pf_pace)
-            grid_spin_bound = build_boundaries_grid_local(pf_spin)
-            grid_pace_wkt = build_dismissals_grid_local(pf_pace)
-            grid_spin_wkt = build_dismissals_grid_local(pf_spin)
-            grid_pace_dot = build_dot_grid_local(pf_pace)
-            grid_spin_dot = build_dot_grid_local(pf_spin)
+            # # build grids for pace/spin
+            # grid_pace_bound = build_boundaries_grid_local(pf_pace)
+            # grid_spin_bound = build_boundaries_grid_local(pf_spin)
+            # grid_pace_wkt = build_dismissals_grid_local(pf_pace)
+            # grid_spin_wkt = build_dismissals_grid_local(pf_spin)
+            # grid_pace_dot = build_dot_grid_local(pf_pace)
+            # grid_spin_dot = build_dot_grid_local(pf_spin)
             
-            # determine sensible vmax values so annotation contrast uses consistent scale
-            vmax_bound = max(np.max(grid_pace_bound), np.max(grid_spin_bound), 1)
-            vmax_wkt = max(np.max(grid_pace_wkt), np.max(grid_spin_wkt), 1)
-            vmax_dot = max(np.max(grid_pace_dot), np.max(grid_spin_dot), 1)
+            # # determine sensible vmax values so annotation contrast uses consistent scale
+            # vmax_bound = max(np.max(grid_pace_bound), np.max(grid_spin_bound), 1)
+            # vmax_wkt = max(np.max(grid_pace_wkt), np.max(grid_spin_wkt), 1)
+            # vmax_dot = max(np.max(grid_pace_dot), np.max(grid_spin_dot), 1)
             
-            # display Boundaries row
-            c1, c2 = st.columns([1,1], gap="large")
-            with c1:
-                st.markdown(f"<div style='font-weight:800;'> Boundaries — Pace</div>", unsafe_allow_html=True)
-                fig_b1 = plot_grid_with_readable_labels(grid_pace_bound, f"{player_selected} — Boundaries vs Pace", cmap='Oranges', mirror=is_lhb, fmt='int', vmax=vmax_bound)
-                display_figure_fixed_height_html(fig_b1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            with c2:
-                st.markdown(f"<div style='font-weight:800;'> Boundaries — Spin</div>", unsafe_allow_html=True)
-                fig_b2 = plot_grid_with_readable_labels(grid_spin_bound, f"{player_selected} — Boundaries vs Spin", cmap='Oranges', mirror=is_lhb, fmt='int', vmax=vmax_bound)
-                display_figure_fixed_height_html(fig_b2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # # display Boundaries row
+            # c1, c2 = st.columns([1,1], gap="large")
+            # with c1:
+            #     st.markdown(f"<div style='font-weight:800;'> Boundaries — Pace</div>", unsafe_allow_html=True)
+            #     fig_b1 = plot_grid_with_readable_labels(grid_pace_bound, f"{player_selected} — Boundaries vs Pace", cmap='Oranges', mirror=is_lhb, fmt='int', vmax=vmax_bound)
+            #     display_figure_fixed_height_html(fig_b1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # with c2:
+            #     st.markdown(f"<div style='font-weight:800;'> Boundaries — Spin</div>", unsafe_allow_html=True)
+            #     fig_b2 = plot_grid_with_readable_labels(grid_spin_bound, f"{player_selected} — Boundaries vs Spin", cmap='Oranges', mirror=is_lhb, fmt='int', vmax=vmax_bound)
+            #     display_figure_fixed_height_html(fig_b2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
             
-            # display Dismissals row
-            c3, c4 = st.columns([1,1], gap="large")
-            with c3:
-                st.markdown(f"<div style='font-weight:800;'> Dismissals — Pace</div>", unsafe_allow_html=True)
-                fig_w1 = plot_grid_with_readable_labels(grid_pace_wkt, f"{player_selected} — Dismissals vs Pace", cmap='Reds', mirror=is_lhb, fmt='int', vmax=vmax_wkt)
-                display_figure_fixed_height_html(fig_w1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            with c4:
-                st.markdown(f"<div style='font-weight:800;'> Dismissals — Spin</div>", unsafe_allow_html=True)
-                fig_w2 = plot_grid_with_readable_labels(grid_spin_wkt, f"{player_selected} — Dismissals vs Spin", cmap='Reds', mirror=is_lhb, fmt='int', vmax=vmax_wkt)
-                display_figure_fixed_height_html(fig_w2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # # display Dismissals row
+            # c3, c4 = st.columns([1,1], gap="large")
+            # with c3:
+            #     st.markdown(f"<div style='font-weight:800;'> Dismissals — Pace</div>", unsafe_allow_html=True)
+            #     fig_w1 = plot_grid_with_readable_labels(grid_pace_wkt, f"{player_selected} — Dismissals vs Pace", cmap='Reds', mirror=is_lhb, fmt='int', vmax=vmax_wkt)
+            #     display_figure_fixed_height_html(fig_w1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # with c4:
+            #     st.markdown(f"<div style='font-weight:800;'> Dismissals — Spin</div>", unsafe_allow_html=True)
+            #     fig_w2 = plot_grid_with_readable_labels(grid_spin_wkt, f"{player_selected} — Dismissals vs Spin", cmap='Reds', mirror=is_lhb, fmt='int', vmax=vmax_wkt)
+            #     display_figure_fixed_height_html(fig_w2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
             
-            # display Dot Balls row (as counts)
-            c5, c6 = st.columns([1,1], gap="large")
-            with c5:
-                st.markdown(f"<div style='font-weight:800;'> Dot Balls — Pace</div>", unsafe_allow_html=True)
-                fig_d1 = plot_grid_with_readable_labels(grid_pace_dot, f"{player_selected} — Dot Balls vs Pace", cmap='Blues', mirror=is_lhb, fmt='int', vmax=vmax_dot)
-                display_figure_fixed_height_html(fig_d1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            with c6:
-                st.markdown(f"<div style='font-weight:800;'> Dot Balls — Spin</div>", unsafe_allow_html=True)
-                fig_d2 = plot_grid_with_readable_labels(grid_spin_dot, f"{player_selected} — Dot Balls vs Spin", cmap='Blues', mirror=is_lhb, fmt='int', vmax=vmax_dot)
-                display_figure_fixed_height_html(fig_d2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # # display Dot Balls row (as counts)
+            # c5, c6 = st.columns([1,1], gap="large")
+            # with c5:
+            #     st.markdown(f"<div style='font-weight:800;'> Dot Balls — Pace</div>", unsafe_allow_html=True)
+            #     fig_d1 = plot_grid_with_readable_labels(grid_pace_dot, f"{player_selected} — Dot Balls vs Pace", cmap='Blues', mirror=is_lhb, fmt='int', vmax=vmax_dot)
+            #     display_figure_fixed_height_html(fig_d1, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # with c6:
+            #     st.markdown(f"<div style='font-weight:800;'> Dot Balls — Spin</div>", unsafe_allow_html=True)
+            #     fig_d2 = plot_grid_with_readable_labels(grid_spin_dot, f"{player_selected} — Dot Balls vs Spin", cmap='Blues', mirror=is_lhb, fmt='int', vmax=vmax_dot)
+            #     display_figure_fixed_height_html(fig_d2, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
             
             # -------------------- Shot productivity & control for selected batter (pf) --------------------
             # ---------- Shot productivity + SR + Dismissals + BallsPerDismissal (for selected batter only) ----------
@@ -11956,226 +11956,226 @@ elif sidebar_option == "Strength vs Weakness":
             # -------------------- 4 pitchmaps: SR and Control % (Pace vs Spin) --------------------
             # ---------------- Improved pitchmaps: nicer colors + show '-' for empty cells ----------------
             # ---------------- Light-colour pitchmaps (SR & Control) ----------------
-            import numpy as np
-            import matplotlib.pyplot as plt
-            import matplotlib.patheffects as mpatheffects
-            from matplotlib.colors import LinearSegmentedColormap
-            import pandas as pd
+            # import numpy as np
+            # import matplotlib.pyplot as plt
+            # import matplotlib.patheffects as mpatheffects
+            # from matplotlib.colors import LinearSegmentedColormap
+            # import pandas as pd
             
-            # Defensive existence / fallbacks
-            if 'pf_pace' not in globals() or 'pf_spin' not in globals():
-                if 'pf' in globals() and 'COL_BOWL_KIND' in globals():
-                    pf_pace = pf[pf[COL_BOWL_KIND].astype(str).str.contains('pace', na=False)].copy()
-                    pf_spin = pf[pf[COL_BOWL_KIND].astype(str).str.contains('spin', na=False)].copy()
-                else:
-                    pf_pace = pd.DataFrame()
-                    pf_spin = pd.DataFrame()
+            # # Defensive existence / fallbacks
+            # if 'pf_pace' not in globals() or 'pf_spin' not in globals():
+            #     if 'pf' in globals() and 'COL_BOWL_KIND' in globals():
+            #         pf_pace = pf[pf[COL_BOWL_KIND].astype(str).str.contains('pace', na=False)].copy()
+            #         pf_spin = pf[pf[COL_BOWL_KIND].astype(str).str.contains('spin', na=False)].copy()
+            #     else:
+            #         pf_pace = pd.DataFrame()
+            #         pf_spin = pd.DataFrame()
             
-            # column names / maps (use your app's names if different)
-            COL_LINE = globals().get('COL_LINE', 'line')
-            COL_LENGTH = globals().get('COL_LENGTH', 'length')
-            COL_RUNS = globals().get('COL_RUNS', 'batruns')
-            NOBALL_COL = 'noball'
-            WIDE_COL = 'wide'
-            CONTROL_COL = 'control'
+            # # column names / maps (use your app's names if different)
+            # COL_LINE = globals().get('COL_LINE', 'line')
+            # COL_LENGTH = globals().get('COL_LENGTH', 'length')
+            # COL_RUNS = globals().get('COL_RUNS', 'batruns')
+            # NOBALL_COL = 'noball'
+            # WIDE_COL = 'wide'
+            # CONTROL_COL = 'control'
             
-            LINE_MAP = globals().get('LINE_MAP', {
-                'WIDE_OUTSIDE_OFFSTUMP': 0, 'OUTSIDE_OFFSTUMP': 1, 'ON_THE_STUMPS': 2, 'DOWN_LEG': 3, 'WIDE_DOWN_LEG': 4
-            })
-            LENGTH_MAP = globals().get('LENGTH_MAP', {
-                'SHORT': 0, 'SHORT_OF_A_GOOD_LENGTH': 1, 'GOOD_LENGTH': 2, 'FULL': 3, 'YORKER': 4, 'FULL_TOSS': 4
-            })
+            # LINE_MAP = globals().get('LINE_MAP', {
+            #     'WIDE_OUTSIDE_OFFSTUMP': 0, 'OUTSIDE_OFFSTUMP': 1, 'ON_THE_STUMPS': 2, 'DOWN_LEG': 3, 'WIDE_DOWN_LEG': 4
+            # })
+            # LENGTH_MAP = globals().get('LENGTH_MAP', {
+            #     'SHORT': 0, 'SHORT_OF_A_GOOD_LENGTH': 1, 'GOOD_LENGTH': 2, 'FULL': 3, 'YORKER': 4, 'FULL_TOSS': 4
+            # })
             
-            def _is_legal_row(r):
-                try:
-                    if NOBALL_COL in r.index and int(r.get(NOBALL_COL, 0)) != 0:
-                        return False
-                except Exception:
-                    pass
-                try:
-                    if WIDE_COL in r.index and int(r.get(WIDE_COL, 0)) != 0:
-                        return False
-                except Exception:
-                    pass
-                return True
+            # def _is_legal_row(r):
+            #     try:
+            #         if NOBALL_COL in r.index and int(r.get(NOBALL_COL, 0)) != 0:
+            #             return False
+            #     except Exception:
+            #         pass
+            #     try:
+            #         if WIDE_COL in r.index and int(r.get(WIDE_COL, 0)) != 0:
+            #             return False
+            #     except Exception:
+            #         pass
+            #     return True
             
-            def build_sr_and_counts(df_local):
-                sr_grid = np.full((5,5), np.nan, dtype=float)
-                runs_grid = np.zeros((5,5), dtype=float)
-                balls_grid = np.zeros((5,5), dtype=int)
-                if df_local is None or df_local.shape[0] == 0:
-                    return sr_grid, balls_grid
-                if any(c not in df_local.columns for c in [COL_LINE, COL_LENGTH, COL_RUNS]):
-                    return sr_grid, balls_grid
+            # def build_sr_and_counts(df_local):
+            #     sr_grid = np.full((5,5), np.nan, dtype=float)
+            #     runs_grid = np.zeros((5,5), dtype=float)
+            #     balls_grid = np.zeros((5,5), dtype=int)
+            #     if df_local is None or df_local.shape[0] == 0:
+            #         return sr_grid, balls_grid
+            #     if any(c not in df_local.columns for c in [COL_LINE, COL_LENGTH, COL_RUNS]):
+            #         return sr_grid, balls_grid
                 
-                cols = [COL_LINE, COL_LENGTH, COL_RUNS]
-                if NOBALL_COL in df_local.columns: cols.append(NOBALL_COL)
-                if WIDE_COL in df_local.columns: cols.append(WIDE_COL)
-                plot_df = df_local[cols].copy()
+            #     cols = [COL_LINE, COL_LENGTH, COL_RUNS]
+            #     if NOBALL_COL in df_local.columns: cols.append(NOBALL_COL)
+            #     if WIDE_COL in df_local.columns: cols.append(WIDE_COL)
+            #     plot_df = df_local[cols].copy()
                 
-                for _, r in plot_df.iterrows():
-                    if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
-                        continue
-                    if not _is_legal_row(r):
-                        continue
-                    li = LINE_MAP.get(r[COL_LINE], None)
-                    le = LENGTH_MAP.get(r[COL_LENGTH], None)
-                    if li is None or le is None:
-                        continue
-                    try:
-                        runs_here = float(r.get(COL_RUNS, 0) or 0)
-                    except:
-                        runs_here = 0.0
-                    runs_grid[le, li] += runs_here
-                    balls_grid[le, li] += 1
+            #     for _, r in plot_df.iterrows():
+            #         if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
+            #             continue
+            #         if not _is_legal_row(r):
+            #             continue
+            #         li = LINE_MAP.get(r[COL_LINE], None)
+            #         le = LENGTH_MAP.get(r[COL_LENGTH], None)
+            #         if li is None or le is None:
+            #             continue
+            #         try:
+            #             runs_here = float(r.get(COL_RUNS, 0) or 0)
+            #         except:
+            #             runs_here = 0.0
+            #         runs_grid[le, li] += runs_here
+            #         balls_grid[le, li] += 1
                 
-                mask = balls_grid > 0
-                sr_grid[mask] = (runs_grid[mask] / balls_grid[mask]) * 100.0
-                sr_grid[mask] = np.round(sr_grid[mask], 2)
-                return sr_grid, balls_grid
+            #     mask = balls_grid > 0
+            #     sr_grid[mask] = (runs_grid[mask] / balls_grid[mask]) * 100.0
+            #     sr_grid[mask] = np.round(sr_grid[mask], 2)
+            #     return sr_grid, balls_grid
             
-            def _to_control_num(x):
-                if pd.isna(x):
-                    return 0
-                try:
-                    n = float(x)
-                    if np.isfinite(n):
-                        return 1 if int(n) != 0 else 0
-                except:
-                    pass
-                s = str(x).strip().lower()
-                if s in ('1','true','t','y','yes','controlled','c','ok'):
-                    return 1
-                if s in ('0','false','f','n','no','uncontrolled','u'):
-                    return 0
-                return 1 if s != '' else 0
+            # def _to_control_num(x):
+            #     if pd.isna(x):
+            #         return 0
+            #     try:
+            #         n = float(x)
+            #         if np.isfinite(n):
+            #             return 1 if int(n) != 0 else 0
+            #     except:
+            #         pass
+            #     s = str(x).strip().lower()
+            #     if s in ('1','true','t','y','yes','controlled','c','ok'):
+            #         return 1
+            #     if s in ('0','false','f','n','no','uncontrolled','u'):
+            #         return 0
+            #     return 1 if s != '' else 0
             
-            def build_control_and_counts(df_local):
-                ctrl_grid = np.full((5,5), np.nan, dtype=float)
-                total_grid = np.zeros((5,5), dtype=int)
-                controlled_grid = np.zeros((5,5), dtype=int)
-                if df_local is None or df_local.shape[0] == 0:
-                    return ctrl_grid, total_grid
-                if any(c not in df_local.columns for c in [COL_LINE, COL_LENGTH]):
-                    return ctrl_grid, total_grid
+            # def build_control_and_counts(df_local):
+            #     ctrl_grid = np.full((5,5), np.nan, dtype=float)
+            #     total_grid = np.zeros((5,5), dtype=int)
+            #     controlled_grid = np.zeros((5,5), dtype=int)
+            #     if df_local is None or df_local.shape[0] == 0:
+            #         return ctrl_grid, total_grid
+            #     if any(c not in df_local.columns for c in [COL_LINE, COL_LENGTH]):
+            #         return ctrl_grid, total_grid
                 
-                cols = [COL_LINE, COL_LENGTH]
-                if CONTROL_COL in df_local.columns: cols.append(CONTROL_COL)
-                if NOBALL_COL in df_local.columns: cols.append(NOBALL_COL)
-                if WIDE_COL in df_local.columns: cols.append(WIDE_COL)
-                plot_df = df_local[cols].copy()
+            #     cols = [COL_LINE, COL_LENGTH]
+            #     if CONTROL_COL in df_local.columns: cols.append(CONTROL_COL)
+            #     if NOBALL_COL in df_local.columns: cols.append(NOBALL_COL)
+            #     if WIDE_COL in df_local.columns: cols.append(WIDE_COL)
+            #     plot_df = df_local[cols].copy()
                 
-                if CONTROL_COL in plot_df.columns:
-                    plot_df[CONTROL_COL] = plot_df[CONTROL_COL].apply(_to_control_num).astype(int)
+            #     if CONTROL_COL in plot_df.columns:
+            #         plot_df[CONTROL_COL] = plot_df[CONTROL_COL].apply(_to_control_num).astype(int)
                 
-                for _, r in plot_df.iterrows():
-                    if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
-                        continue
-                    if not _is_legal_row(r):
-                        continue
-                    li = LINE_MAP.get(r[COL_LINE], None)
-                    le = LENGTH_MAP.get(r[COL_LENGTH], None)
-                    if li is None or le is None:
-                        continue
-                    total_grid[le, li] += 1
-                    if CONTROL_COL in plot_df.columns and int(r.get(CONTROL_COL, 0)) == 1:
-                        controlled_grid[le, li] += 1
+            #     for _, r in plot_df.iterrows():
+            #         if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
+            #             continue
+            #         if not _is_legal_row(r):
+            #             continue
+            #         li = LINE_MAP.get(r[COL_LINE], None)
+            #         le = LENGTH_MAP.get(r[COL_LENGTH], None)
+            #         if li is None or le is None:
+            #             continue
+            #         total_grid[le, li] += 1
+            #         if CONTROL_COL in plot_df.columns and int(r.get(CONTROL_COL, 0)) == 1:
+            #             controlled_grid[le, li] += 1
                 
-                mask = total_grid > 0
-                ctrl_grid[mask] = (controlled_grid[mask] / total_grid[mask]) * 100.0
-                ctrl_grid[mask] = np.round(ctrl_grid[mask], 2)
-                return ctrl_grid, total_grid
+            #     mask = total_grid > 0
+            #     ctrl_grid[mask] = (controlled_grid[mask] / total_grid[mask]) * 100.0
+            #     ctrl_grid[mask] = np.round(ctrl_grid[mask], 2)
+            #     return ctrl_grid, total_grid
             
-            # Create soft/light colormaps
-            def make_light_cmap(name, colors):
-                return LinearSegmentedColormap.from_list(name, colors)
+            # # Create soft/light colormaps
+            # def make_light_cmap(name, colors):
+            #     return LinearSegmentedColormap.from_list(name, colors)
             
-            # light skin / pink for SR, light blue for Control
-            cmap_sr_light = make_light_cmap('sr_light', ['#fff3e6', '#ffd6b3', '#ffc2a8']) # soft skin / peach tones
-            cmap_ctrl_light = make_light_cmap('ctrl_light', ['#f0f8ff', '#d9efff', '#bfe6ff']) # very light blues
+            # # light skin / pink for SR, light blue for Control
+            # cmap_sr_light = make_light_cmap('sr_light', ['#fff3e6', '#ffd6b3', '#ffc2a8']) # soft skin / peach tones
+            # cmap_ctrl_light = make_light_cmap('ctrl_light', ['#f0f8ff', '#d9efff', '#bfe6ff']) # very light blues
             
-            def plot_grid_light(grid, counts_grid, title, cmap, mirror=False, fmt='float', vmax=None):
-                disp = np.fliplr(grid) if mirror else grid.copy()
-                counts_disp = np.fliplr(counts_grid) if mirror else counts_grid.copy()
+            # def plot_grid_light(grid, counts_grid, title, cmap, mirror=False, fmt='float', vmax=None):
+            #     disp = np.fliplr(grid) if mirror else grid.copy()
+            #     counts_disp = np.fliplr(counts_grid) if mirror else counts_grid.copy()
                 
-                # set NaNs as light gray
-                cmap = cmap.copy()
-                cmap.set_bad('#f7f7f7')
+            #     # set NaNs as light gray
+            #     cmap = cmap.copy()
+            #     cmap.set_bad('#f7f7f7')
                 
-                finite_vals = disp[np.isfinite(disp)]
-                real_vmax = float(np.nanmax(finite_vals)) if finite_vals.size>0 else (vmax if vmax is not None else 1.0)
-                vmax_use = float(vmax) if (vmax is not None and vmax>0) else (real_vmax if real_vmax>0 else 1.0)
+            #     finite_vals = disp[np.isfinite(disp)]
+            #     real_vmax = float(np.nanmax(finite_vals)) if finite_vals.size>0 else (vmax if vmax is not None else 1.0)
+            #     vmax_use = float(vmax) if (vmax is not None and vmax>0) else (real_vmax if real_vmax>0 else 1.0)
                 
-                fig, ax = plt.subplots(figsize=(6,9), dpi=150)
-                im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
-                ax.set_xticks(range(5)); ax.set_yticks(range(5))
-                xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
-                xticks = list(reversed(xticks_base)) if mirror else xticks_base
-                ax.set_xticklabels(xticks, rotation=36, ha='right')
-                ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
+            #     fig, ax = plt.subplots(figsize=(6,9), dpi=150)
+            #     im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
+            #     ax.set_xticks(range(5)); ax.set_yticks(range(5))
+            #     xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
+            #     xticks = list(reversed(xticks_base)) if mirror else xticks_base
+            #     ax.set_xticklabels(xticks, rotation=36, ha='right')
+            #     ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
                 
-                for i in range(5):
-                    for j in range(5):
-                        val = disp[i,j]
-                        cnt = int(counts_disp[i,j]) if not np.isnan(counts_disp[i,j]) else 0
-                        if cnt == 0 or not np.isfinite(val):
-                            lab = '-' # no deliveries
-                            txt_color = 'black'
-                        else:
-                            if fmt == 'pct':
-                                lab = f"{val:.2f}%"
-                            elif fmt == 'int':
-                                lab = f"{int(val)}"
-                            else:
-                                lab = f"{val:.2f}"
-                            try:
-                                intensity = float(val) / float(vmax_use) if vmax_use > 0 else 0.0
-                            except:
-                                intensity = 0.0
-                            txt_color = 'black' if intensity < 0.6 else 'white'
-                        txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
-                        stroke_col = 'white' if txt_color=='black' else 'black'
-                        txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground=stroke_col), mpatheffects.Normal()])
+            #     for i in range(5):
+            #         for j in range(5):
+            #             val = disp[i,j]
+            #             cnt = int(counts_disp[i,j]) if not np.isnan(counts_disp[i,j]) else 0
+            #             if cnt == 0 or not np.isfinite(val):
+            #                 lab = '-' # no deliveries
+            #                 txt_color = 'black'
+            #             else:
+            #                 if fmt == 'pct':
+            #                     lab = f"{val:.2f}%"
+            #                 elif fmt == 'int':
+            #                     lab = f"{int(val)}"
+            #                 else:
+            #                     lab = f"{val:.2f}"
+            #                 try:
+            #                     intensity = float(val) / float(vmax_use) if vmax_use > 0 else 0.0
+            #                 except:
+            #                     intensity = 0.0
+            #                 txt_color = 'black' if intensity < 0.6 else 'white'
+            #             txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
+            #             stroke_col = 'white' if txt_color=='black' else 'black'
+            #             txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground=stroke_col), mpatheffects.Normal()])
                 
-                cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                cbar.ax.tick_params(labelsize=9)
-                plt.title(title, pad=6, fontsize=12)
-                plt.tight_layout(pad=0)
-                fig.subplots_adjust(top=0.95, bottom=0.02, left=0.06, right=0.98)
-                return fig
+            #     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+            #     cbar.ax.tick_params(labelsize=9)
+            #     plt.title(title, pad=6, fontsize=12)
+            #     plt.tight_layout(pad=0)
+            #     fig.subplots_adjust(top=0.95, bottom=0.02, left=0.06, right=0.98)
+            #     return fig
             
-            # Build grids
-            sr_pace, counts_pace = build_sr_and_counts(pf_pace)
-            sr_spin, counts_spin = build_sr_and_counts(pf_spin)
-            ctrl_pace, total_pace = build_control_and_counts(pf_pace)
-            ctrl_spin, total_spin = build_control_and_counts(pf_spin)
+            # # Build grids
+            # sr_pace, counts_pace = build_sr_and_counts(pf_pace)
+            # sr_spin, counts_spin = build_sr_and_counts(pf_spin)
+            # ctrl_pace, total_pace = build_control_and_counts(pf_pace)
+            # ctrl_spin, total_spin = build_control_and_counts(pf_spin)
             
-            # vmax choices
-            vmax_sr = max(np.nanmax(sr_pace[np.isfinite(sr_pace)]) if np.any(np.isfinite(sr_pace)) else 0,
-                          np.nanmax(sr_spin[np.isfinite(sr_spin)]) if np.any(np.isfinite(sr_spin)) else 0, 10.0)
-            vmax_ctrl = 100.0
+            # # vmax choices
+            # vmax_sr = max(np.nanmax(sr_pace[np.isfinite(sr_pace)]) if np.any(np.isfinite(sr_pace)) else 0,
+            #               np.nanmax(sr_spin[np.isfinite(sr_spin)]) if np.any(np.isfinite(sr_spin)) else 0, 10.0)
+            # vmax_ctrl = 100.0
             
-            # Display maps
-            c1, c2 = st.columns([1,1], gap="large")
-            with c1:
-                st.markdown("<div style='font-weight:800;'>Strike Rate — Pace</div>", unsafe_allow_html=True)
-                fig_sr_pace = plot_grid_light(sr_pace, counts_pace, f"{player_selected} — SR% vs Pace", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
-                display_figure_fixed_height_html(fig_sr_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            with c2:
-                st.markdown("<div style='font-weight:800;'>Strike Rate — Spin</div>", unsafe_allow_html=True)
-                fig_sr_spin = plot_grid_light(sr_spin, counts_spin, f"{player_selected} — SR% vs Spin", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
-                display_figure_fixed_height_html(fig_sr_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # # Display maps
+            # c1, c2 = st.columns([1,1], gap="large")
+            # with c1:
+            #     st.markdown("<div style='font-weight:800;'>Strike Rate — Pace</div>", unsafe_allow_html=True)
+            #     fig_sr_pace = plot_grid_light(sr_pace, counts_pace, f"{player_selected} — SR% vs Pace", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
+            #     display_figure_fixed_height_html(fig_sr_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # with c2:
+            #     st.markdown("<div style='font-weight:800;'>Strike Rate — Spin</div>", unsafe_allow_html=True)
+            #     fig_sr_spin = plot_grid_light(sr_spin, counts_spin, f"{player_selected} — SR% vs Spin", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
+            #     display_figure_fixed_height_html(fig_sr_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
             
-            c3, c4 = st.columns([1,1], gap="large")
-            with c3:
-                st.markdown("<div style='font-weight:800;'> Control % — Pace</div>", unsafe_allow_html=True)
-                fig_ctrl_pace = plot_grid_light(ctrl_pace, total_pace, f"{player_selected} — Control% vs Pace", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
-                display_figure_fixed_height_html(fig_ctrl_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            with c4:
-                st.markdown("<div style='font-weight:800;'> Control % — Spin</div>", unsafe_allow_html=True)
-                fig_ctrl_spin = plot_grid_light(ctrl_spin, total_spin, f"{player_selected} — Control% vs Spin", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
-                display_figure_fixed_height_html(fig_ctrl_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            # ---------------- end light-colour pitchmaps ----------------
+            # c3, c4 = st.columns([1,1], gap="large")
+            # with c3:
+            #     st.markdown("<div style='font-weight:800;'> Control % — Pace</div>", unsafe_allow_html=True)
+            #     fig_ctrl_pace = plot_grid_light(ctrl_pace, total_pace, f"{player_selected} — Control% vs Pace", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
+            #     display_figure_fixed_height_html(fig_ctrl_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # with c4:
+            #     st.markdown("<div style='font-weight:800;'> Control % — Spin</div>", unsafe_allow_html=True)
+            #     fig_ctrl_spin = plot_grid_light(ctrl_spin, total_spin, f"{player_selected} — Control% vs Spin", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
+            #     display_figure_fixed_height_html(fig_ctrl_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
+            # # ---------------- end light-colour pitchmaps ----------------
 # ---------------- end improved pitchmaps snippet ----------------
         
     # -------------------- end pitchmaps snippet --------------------
