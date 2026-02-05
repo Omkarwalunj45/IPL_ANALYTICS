@@ -10083,9 +10083,7 @@ elif sidebar_option == "Strength vs Weakness":
                     bounds = maybe_flip(grids['bounds'])
                     dots = maybe_flip(grids['dots'])
                     sr = maybe_flip(grids['sr'])
-                    ctrl = maybe_flip(grids['ctrl_pct'])
                     wkt = maybe_flip(grids['wkt'])
-                    runs = maybe_flip(grids['runs'])
                 
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
@@ -10099,6 +10097,24 @@ elif sidebar_option == "Strength vs Weakness":
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
                 
+                    # False Shot % — FIXED: recompute from 'control' column
+                    false_shot_pct = np.zeros_like(count, dtype=float)
+                    if 'control' in df_src.columns:
+                        # Mark deliveries as "not in control" (safe for string/boolean)
+                        not_in_control = df_src['control'].astype(str).str.lower().str.contains('not', na=False)
+                        not_in_control = not_in_control | (df_src['control'] == 0) | (df_src['control'] == False)
+                        # If build_pitch_grids added indices, group by them
+                        if 'line_idx' in df_src.columns and 'length_idx' in df_src.columns:
+                            ctrl_raw = df_src.groupby(['line_idx', 'length_idx'])[not_in_control].mean() * 100
+                            false_shot_pct = ctrl_raw.unstack(fill_value=0).reindex(
+                                index=range(grids['n_rows']), columns=range(grids['n_cols']), fill_value=0
+                            ).values
+                        else:
+                            # Fallback: use existing ctrl_pct if no indices
+                            false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
+                    else:
+                        false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
+                
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
                 
@@ -10108,79 +10124,55 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # RAA per cell - use FULL bdf from globals
+                    # RAA per cell — using your working compute_pitchmap_raa (no changes)
                     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
-                    
-                    # Get necessary globals
-                    runs_col = globals().get('runs_col', 'batruns')
-                    COL_BAT = globals().get('COL_BAT', 'bat')
-                    bdf = globals().get('bdf', None)
-                    
-                    if bdf is not None and not bdf.empty:
+                    if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
                         raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
-                
-                        # Map grid positions to combo keys
                         for i in range(n_rows):
                             length_str = yticklabels[i].lower().strip()
                             for j in range(grids['n_cols']):
                                 line_str = xticks[j].lower().strip()
                                 combo = f"{line_str}_{length_str}"
                                 raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
-                
-                    # Get player_selected from globals
-                    player_selected = globals().get('player_selected', 'Player')
+                    else:
+                        st.warning("Cannot compute RAA map: missing 'line'/'length' columns or global 'bdf'.")
                 
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
                     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
                     plot_list = [
-                        (perc, '% of Balls (heat)', 'Blues', False),
-                        (bound_pct, 'Boundary %', 'OrRd', False),
-                        (dot_pct, 'Dot %', 'Blues', False),
-                        (sr, 'SR (runs/100 balls)', 'Reds', False),
-                        (ctrl, 'False Shot % (not in control)', 'PuBu', False),
-                        (raa_grid, 'RAA (vs Top7 Avg)', 'RdYlGn', True)  # Diverging
+                        (perc, '% of Balls (heat)', 'Blues'),
+                        (bound_pct, 'Boundary %', 'OrRd'),
+                        (dot_pct, 'Dot %', 'Blues'),
+                        (sr, 'SR (runs/100 balls)', 'Reds'),
+                        (false_shot_pct, 'False Shot %', 'PuBu'),
+                        (raa_grid, 'RAA', 'RdYlGn')  # Diverging cmap
                     ]
                 
-                    for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
+                    for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
                         flat = safe_arr.flatten()
-                        
-                        if is_diverging:
-                            # For RAA: center at 0, use symmetric range
-                            non_nan_vals = raa_grid[~np.isnan(raa_grid)]
-                            if len(non_nan_vals) > 0:
-                                abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
-                                if abs_max == 0:
-                                    abs_max = 10.0
-                            else:
-                                abs_max = 10.0
-                            
-                            norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
-                            im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
+                        if np.all(flat == 0):
+                            vmin, vmax = 0, 1
                         else:
-                            # For other metrics: use standard normalization
-                            if np.all(flat == 0):
-                                vmin, vmax = 0, 1
-                            else:
-                                vmin = float(np.nanmin(flat))
-                                vmax = float(np.nanpercentile(flat, 95))
-                                if vmax <= vmin:
-                                    vmax = vmin + 1.0
-                            
-                            im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                            vmin = float(np.nanmin(flat))
+                            vmax = float(np.nanpercentile(flat, 95))
+                            if vmax <= vmin:
+                                vmax = vmin + 1.0
                 
-                        ax.set_title(ttl, fontsize=12, weight='bold')
+                        im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                        ax.set_title(ttl)
                         ax.set_xticks(range(grids['n_cols']))
                         ax.set_yticks(range(grids['n_rows']))
-                        ax.set_xticklabels(xticks, rotation=45, ha='right', fontsize=9)
-                        ax.set_yticklabels(yticklabels, fontsize=9)
+                        ax.set_xticklabels(xticks, rotation=45, ha='right')
+                        ax.set_yticklabels(yticklabels)
                 
                         ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
                         ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                         ax.tick_params(which='minor', bottom=False, left=False)
                 
+                        # 'W' annotations ONLY on first map (% of Balls heat)
                         if ax_idx == 0:
                             for i in range(grids['n_rows']):
                                 for j in range(grids['n_cols']):
@@ -10189,16 +10181,6 @@ elif sidebar_option == "Strength vs Weakness":
                                         w_text = f"{w_count} W" if w_count > 1 else 'W'
                                         ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
                                                 bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        
-                        # Add RAA values as text on the RAA plot
-                        if is_diverging:
-                            for i in range(grids['n_rows']):
-                                for j in range(grids['n_cols']):
-                                    val = raa_grid[i, j]
-                                    if not np.isnan(val) and count[i, j] > 0:
-                                        text_color = 'white' if abs(val) > abs_max * 0.5 else 'black'
-                                        ax.text(j, i, f'{val:.1f}', ha='center', va='center', 
-                                               fontsize=8, color=text_color, weight='bold')
                 
                         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
                 
