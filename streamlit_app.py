@@ -9908,7 +9908,110 @@ elif sidebar_option == "Strength vs Weakness":
                         'LINE_MAP': LINE_MAP,
                         'LENGTH_MAP': LENGTH_MAP
                     }
-                
+
+                def compute_pitchmap_raa(df_src, bdf, runs_col, COL_BAT):
+                      """
+                      Dedicated RAA calculation for pitchmap.
+                      Computes RAA for each unique line-length combo.
+                      Uses same methodology as your main RAA function but tailored for per-combo.
+                      Returns dict: {'line_lower_length_lower': {'RAA': value}, ...}
+                      """
+                      out = {}
+                      if df_src.empty or bdf.empty:
+                          return out
+                  
+                      # Prepare selected (filtered) and benchmark data
+                      selected = df_src.copy()
+                      benchmark = bdf.copy()  # This is the FULL bdf now
+                  
+                      # Create normalized combo key
+                      for df in [selected, benchmark]:
+                          df['line_norm'] = df.get('line', '').astype(str).str.lower().str.strip()
+                          df['length_norm'] = df.get('length', '').astype(str).str.lower().str.strip()
+                          df['line_length_combo'] = df['line_norm'] + '_' + df['length_norm']
+                  
+                      # Remove empty combos
+                      selected = selected[selected['line_length_combo'] != '_']
+                      benchmark = benchmark[benchmark['line_length_combo'] != '_']
+                  
+                      if selected.empty or benchmark.empty:
+                          return out
+                  
+                      # Prepare data (same as your original)
+                      for df in [selected, benchmark]:
+                          df[runs_col] = pd.to_numeric(df.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
+                          df['out_flag_tmp'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
+                          df['dismissal_clean_tmp'] = df.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
+                  
+                      WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw']
+                      def is_bowler_wicket_local(out_flag_val, dismissal_text):
+                          try:
+                              if int(out_flag_val) != 1:
+                                  return False
+                          except:
+                              if not out_flag_val:
+                                  return False
+                          if not dismissal_text or str(dismissal_text).strip() == '':
+                              return False
+                          dd = str(dismissal_text).lower()
+                          for token in WICKET_TYPES:
+                              if token in dd:
+                                  return True
+                          return False
+                  
+                      for df in [selected, benchmark]:
+                          df['is_wkt_tmp'] = df.apply(
+                              lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0,
+                              axis=1
+                          )
+                  
+                      # Top7 from benchmark
+                      top7 = benchmark[benchmark.get('top7_flag', 0) == 1].copy()
+                      if top7.empty:
+                          if 'p_bat' in benchmark.columns and pd.api.types.is_numeric_dtype(benchmark['p_bat']):
+                              top7 = benchmark[pd.to_numeric(benchmark['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
+                      if top7.empty:
+                          # Use all benchmark data if no top7 flag
+                          top7 = benchmark.copy()
+                  
+                      # Aggregate per combo for top7
+                      per_combo_top7 = top7.groupby('line_length_combo', as_index=False).agg(
+                          runs=(runs_col, 'sum'),
+                          balls=(runs_col, 'count'),
+                          dismissals=('is_wkt_tmp', 'sum')
+                      )
+                  
+                      per_combo_top7['SR'] = per_combo_top7.apply(
+                          lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1
+                      )
+                  
+                      # Weighted average SR per combo (weighted by runs)
+                      def weighted_sr(g):
+                          if g['runs'].sum() == 0:
+                              return np.nan
+                          return (g['runs'] * g['SR']).sum() / g['runs'].sum()
+                  
+                      avg_sr_by_combo = per_combo_top7.groupby('line_length_combo').apply(weighted_sr).to_dict()
+                  
+                      # Selected player SR per combo
+                      sel_per_combo = selected.groupby('line_length_combo', as_index=False).agg(
+                          runs=(runs_col, 'sum'),
+                          balls=(runs_col, 'count')
+                      )
+                  
+                      sel_per_combo['SR'] = sel_per_combo.apply(
+                          lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1
+                      )
+                  
+                      # Compute RAA = selected SR - benchmark weighted SR
+                      for _, row in sel_per_combo.iterrows():
+                          combo = row['line_length_combo']
+                          sel_sr = row['SR']
+                          bench_sr = avg_sr_by_combo.get(combo, np.nan)
+                          raa = sel_sr - bench_sr if not np.isnan(sel_sr) and not np.isnan(bench_sr) else np.nan
+                          out[combo] = {'RAA': raa}
+                  
+                      return out
                 
                 def calculate_raa_grid(df_player, grids, chosen_kind, chosen_style):
                     """
