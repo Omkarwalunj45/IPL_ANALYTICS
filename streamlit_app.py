@@ -10066,19 +10066,36 @@ elif sidebar_option == "Strength vs Weakness":
                     bounds = maybe_flip(grids['bounds'])
                     dots = maybe_flip(grids['dots'])
                     sr = maybe_flip(grids['sr'])
-                    ctrl = maybe_flip(grids['ctrl_pct'])
                     wkt = maybe_flip(grids['wkt'])
-                    runs = maybe_flip(grids['runs'])
                 
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
                 
+                    # Boundary % = boundaries in cell / balls in cell × 100
                     bound_pct = np.zeros_like(bounds, dtype=float)
                     mask = count > 0
                     bound_pct[mask] = bounds[mask] / count[mask] * 100.0
                 
+                    # Dot % = dots in cell / balls in cell × 100
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
+                
+                    # False Shot % — recompute from 'control' column
+                    false_shot_pct = np.zeros_like(count, dtype=float)
+                    if 'control' in df_src.columns:
+                        # Assume 'control' is string/boolean; count 'not in control' or False
+                        df_src['not_in_control'] = df_src['control'].astype(str).str.lower().str.contains('not in control|not', na=False).astype(int)
+                        # If build_pitch_grids adds 'line_idx' and 'length_idx', use them
+                        if 'line_idx' in df_src.columns and 'length_idx' in df_src.columns:
+                            ctrl_raw = df_src.groupby(['line_idx', 'length_idx'])['not_in_control'].mean() * 100
+                            false_shot_pct = ctrl_raw.unstack(fill_value=0).reindex(
+                                index=range(grids['n_rows']), columns=range(grids['n_cols']), fill_value=0
+                            ).values
+                        else:
+                            # Fallback to existing ctrl_pct if no indices
+                            false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
+                    else:
+                        false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
                 
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
@@ -10089,25 +10106,10 @@ elif sidebar_option == "Strength vs Weakness":
                     else:
                         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
                 
-                    # FIXED: Create line_length_combo BEFORE calling RAA function
+                    # RAA per cell — using the working Claude function
                     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
                     if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
-                        # Add combo column to df_src (selected data)
-                        df_src['line_length_combo'] = (
-                            df_src['line'].astype(str).str.lower().str.strip() + '_' +
-                            df_src['length'].astype(str).str.lower().str.strip()
-                        )
-                
-                        # Add combo column to global bdf (benchmark)
-                        bdf['line_length_combo'] = (
-                            bdf['line'].astype(str).str.lower().str.strip() + '_' +
-                            bdf['length'].astype(str).str.lower().str.strip()
-                        )
-                
-                        # Now call your original function
-                        raa_dict = compute_RAA_DAA_for_group_column('line_length_combo')
-                
-                        # Map results to grid
+                        raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
                         for i in range(n_rows):
                             length_str = yticklabels[i].lower().strip()
                             for j in range(grids['n_cols']):
@@ -10115,7 +10117,7 @@ elif sidebar_option == "Strength vs Weakness":
                                 combo = f"{line_str}_{length_str}"
                                 raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
                     else:
-                        st.warning("Cannot compute RAA map: missing 'line'/'length' or global 'bdf'.")
+                        st.warning("Cannot compute RAA map: missing 'line'/'length' columns or global 'bdf'.")
                 
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
                     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
@@ -10125,8 +10127,8 @@ elif sidebar_option == "Strength vs Weakness":
                         (bound_pct, 'Boundary %', 'OrRd'),
                         (dot_pct, 'Dot %', 'Blues'),
                         (sr, 'SR (runs/100 balls)', 'Reds'),
-                        (ctrl, 'False Shot % (not in control)', 'PuBu'),
-                        (raa_grid, 'RAA', 'RdYlGn')
+                        (false_shot_pct, 'False Shot %', 'PuBu'),
+                        (raa_grid, 'RAA', 'RdYlGn')  # Diverging cmap
                     ]
                 
                     for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
@@ -10152,6 +10154,7 @@ elif sidebar_option == "Strength vs Weakness":
                         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                         ax.tick_params(which='minor', bottom=False, left=False)
                 
+                        # 'W' annotations ONLY on first map (% of Balls)
                         if ax_idx == 0:
                             for i in range(grids['n_rows']):
                                 for j in range(grids['n_cols']):
@@ -11304,10 +11307,8 @@ elif sidebar_option == "Strength vs Weakness":
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
                 
-                        # Updated call: no extra params needed
                         display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {chosen_kind}")
                 
-                # When bowl_style is chosen
                 if chosen_style and chosen_style != '-- none --':
                     def filter_by_style(df, col='bowl_style', style=chosen_style):
                         if col not in df.columns:
@@ -11331,7 +11332,6 @@ elif sidebar_option == "Strength vs Weakness":
                         st.markdown(f"#### {player_selected}'s Caught Dismissals")
                         draw_caught_dismissals_wagon(df_use, player_selected)
                 
-                        # Updated call: no extra params needed
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {chosen_style}")
                 # if chosen_kind and chosen_kind != '-- none --':
                 #     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
