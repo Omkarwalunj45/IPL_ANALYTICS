@@ -9768,35 +9768,63 @@ elif sidebar_option == "Strength vs Weakness":
                     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
                     plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
                 
-                    # Prepare for RAA: Create line_length_combo in df_src (pf) and bdf (assuming bdf is global all-data frame)
-                    if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
-                        df_src['line_length_combo'] = df_src['line'].astype(str).str.lower() + '_' + df_src['length'].astype(str).str.lower()
-                        bdf['line_length_combo'] = bdf['line'].astype(str).str.lower() + '_' + bdf['length'].astype(str).str.lower()
+                    # NEW: Boundary% (bounds in cell / balls in cell * 100)
+                    bound_pct = np.zeros_like(bounds, dtype=float)
+                    mask = count > 0
+                    bound_pct[mask] = bounds[mask] / count[mask] * 100.0
+                
+                    # NEW: Dot% (dots in cell / balls in cell * 100)
+                    dot_pct = np.zeros_like(dots, dtype=float)
+                    dot_pct[mask] = dots[mask] / count[mask] * 100.0
+                
+                    # SR and False Shot % are already per-cell (keep as is)
+                
+                    # NEW: RAA per cell
+                    raa_grid = np.full_like(runs, np.nan)
+                    if 'line' in df_src.columns and 'length' in df_src.columns:
+                        # Assume LINE_MAP and LENGTH_MAP are globals mapping strings to indices
+                        line_map = globals().get('LINE_MAP', {})
+                        length_map = globals().get('LENGTH_MAP', {})
                        
-                        # Call existing RAA function with group_col='line_length_combo' (data is already filtered for kind/style in df_use)
-                        raa_dict = compute_RAA_DAA_for_group_column('line_length_combo')
-                       
-                        # Build RAA grid (map combos to RAA values)
-                        raa_grid = np.full_like(runs, np.nan)
-                       
-                        # Map line/length to indices (based on your map globals - assume LINE_MAP and LENGTH_MAP exist)
-                        line_map_inv = {v: k.lower() for k, v in globals().get('LINE_MAP', {}).items()} if 'LINE_MAP' in globals() else {}
-                        length_map_inv = {v: k.lower() for k, v in globals().get('LENGTH_MAP', {}).items()} if 'LENGTH_MAP' in globals() else {}
-                       
-                        for i in range(n_rows):
-                            length_str = yticklabels[i].lower()
-                            for j in range(grids['n_cols']):
-                                line_str = xticks[j].lower()
-                                combo = f"{line_str}_{length_str}"
-                                raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
+                        # Assume bdf is global all-data frame for benchmark
+                        if 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
+                            for i in range(n_rows):
+                                length_str = yticklabels[i]
+                                le_idx = length_map.get(length_str, None)
+                                if le_idx is None:
+                                    continue
+                                for j in range(grids['n_cols']):
+                                    line_str = xticks[j]
+                                    li_idx = line_map.get(line_str, None)
+                                    if li_idx is None:
+                                        continue
+                                   
+                                    # Filter df_src and bdf to this line-length combo
+                                    df_src_sub = df_src[(df_src['line'] == line_str) & (df_src['length'] == length_str)].copy()
+                                    bdf_sub = bdf[(bdf['line'] == line_str) & (bdf['length'] == length_str)].copy()
+                                   
+                                    if df_src_sub.empty or bdf_sub.empty:
+                                        continue
+                                   
+                                    # Add dummy group_col for single-value RAA
+                                    df_src_sub['dummy_group'] = 'all'
+                                    bdf_sub['dummy_group'] = 'all'
+                                   
+                                    # Call existing RAA function with dummy group_col
+                                    raa_dict = compute_RAA_DAA_for_group_column('dummy_group')
+                                   
+                                    # Get RAA for 'all'
+                                    raa_val = raa_dict.get('all', {}).get('RAA', np.nan)
+                                    raa_grid[i, j] = raa_val
+                        else:
+                            st.warning("Global 'bdf' not found for RAA benchmark. Skipping RAA map.")
                     else:
-                        raa_grid = np.full_like(runs, np.nan)
-                        st.warning("Missing 'line' or 'length' columns or 'bdf' not available. Using placeholder for RAA map.")
+                        st.warning("Missing 'line' or 'length' columns for RAA calculation. Skipping RAA map.")
                 
                     plot_list = [
                         (perc, '% of Balls (heat)', 'Blues'),
-                        (bounds, 'Boundaries (count)', 'OrRd'),
-                        (dots, 'Dot balls (count)', 'Blues'),
+                        (bound_pct, 'Boundary %', 'OrRd'),
+                        (dot_pct, 'Dot %', 'Blues'),
                         (sr, 'SR (runs/100 balls)', 'Reds'),
                         (ctrl, 'False Shot % (not in control)', 'PuBu'),
                         (raa_grid, 'RAA', 'Reds')
