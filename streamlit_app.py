@@ -8303,6 +8303,7 @@ elif sidebar_option == "Strength vs Weakness":
 
     # ---------- Work on a copy ----------
     bdf = as_dataframe(df)
+    RAA_data=bdf.copy()
 
     # ---------- Column names (explicitly mapped to your provided schema) ----------
     COL_BAT = 'bat'  # batsman column
@@ -8455,6 +8456,7 @@ elif sidebar_option == "Strength vs Weakness":
     if chosen_phase != 'Overall':
         pf = pf[pf['PHASE'] == chosen_phase].copy()
         bdf = bdf[bdf['PHASE'] == chosen_phase].copy()
+        # bdf = bdf[bdf['PHASE'] == chosen_phase].copy()
 
     # ---------- FIRST 10 LEGAL BALLS FILTER (PER MATCH, PER BATTER) ----------
     if role == "Batting" and first_10_balls_only:
@@ -8465,6 +8467,7 @@ elif sidebar_option == "Strength vs Weakness":
         # mark legal deliveries in the player frame (pf)
         pf = pf.copy()
         pf['is_legal_ball'] = pf.apply(is_legal_ball_from_row, axis=1)
+        bdf['is_legal_ball'] = bdf.apply(is_legal_ball_from_row, axis=1)
 
         # prepare ordering columns to get chronological order within each match
         ordering_cols = []
@@ -9176,7 +9179,7 @@ elif sidebar_option == "Strength vs Weakness":
             bdf['top7_flag'] = bdf['top7_flag'].fillna(0).astype(int)
 
 
-
+          
         # ------------------ compute RAA / DAA (robustly) ------------------
         def compute_RAA_DAA_for_group_column(group_col):
             """
@@ -9587,7 +9590,8 @@ elif sidebar_option == "Strength vs Weakness":
 # import pandas as pd
 # import matplotlib.pyplot as plt
 # import streamlit as st
-            
+            st.write(pf.bat.unique())
+            st.write(bdf.bat.unique())
             # Required objects check
             required = ['pf', 'bdf', 'player_selected']
             missing = [r for r in required if r not in globals()]
