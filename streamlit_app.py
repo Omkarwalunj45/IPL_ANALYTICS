@@ -9876,27 +9876,43 @@ elif sidebar_option == "Strength vs Weakness":
                     total = count.sum() if count.sum() > 0 else 1.0
                     perc = count.astype(float) / total * 100.0
                 
-                    # NEW: Boundary% per cell (bounds / count in cell * 100)
+                    # NEW: Boundary % (boundaries / balls in cell * 100)
                     bound_pct = np.zeros_like(bounds, dtype=float)
                     mask = count > 0
                     bound_pct[mask] = bounds[mask] / count[mask] * 100.0
                 
-                    # NEW: Dot% per cell (dots / count in cell * 100)
+                    # NEW: Dot % (dots / balls in cell * 100)
                     dot_pct = np.zeros_like(dots, dtype=float)
                     dot_pct[mask] = dots[mask] / count[mask] * 100.0
                 
-                    # SR and False Shot % already per-cell
+                    xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+                    xticks = xticks_base[::-1] if is_lhb else xticks_base
                 
-                    # NEW: RAA per cell (using new function)
-                    raa_grid = np.full_like(runs, np.nan)
-                    raa_dict = compute_RAA_for_pitchmap(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)  # Assume runs_col and COL_BAT defined globally or pass them
-                    # Map dict to grid (using yticklabels and xticks for keys)
-                    for i in range(grids['n_rows']):
-                        length_str = yticklabels[i].lower()
-                        for j in range(grids['n_cols']):
-                            line_str = xticks[j].lower()
-                            combo = f"{line_str}_{length_str}"
-                            raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
+                    n_rows = grids['n_rows']
+                    if n_rows >= 6:
+                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
+                    else:
+                        yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+                
+                    # NEW: RAA per cell (using adapted function)
+                    raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
+                    if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
+                        # Add combo to both selected and benchmark
+                        df_src['line_length_combo'] = df_src['line'].astype(str).str.lower() + '_' + df_src['length'].astype(str).str.lower()
+                        bdf['line_length_combo'] = bdf['line'].astype(str).str.lower() + '_' + bdf['length'].astype(str).str.lower()
+                       
+                        # Call adapted RAA function
+                        raa_dict = compute_RAA_for_pitchmap(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT)
+                       
+                        # Map to grid using yticklabels and xticks
+                        for i in range(n_rows):
+                            length_str = yticklabels[i].lower()
+                            for j in range(grids['n_cols']):
+                                line_str = xticks[j].lower()
+                                combo = f"{line_str}_{length_str}"
+                                raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
+                    else:
+                        st.warning("Cannot compute RAA map: missing 'line'/'length' columns or 'bdf' not available.")
                 
                     plot_list = [
                         (perc, '% of Balls (heat)', 'Blues'),
@@ -9904,8 +9920,11 @@ elif sidebar_option == "Strength vs Weakness":
                         (dot_pct, 'Dot %', 'Blues'),
                         (sr, 'SR (runs/100 balls)', 'Reds'),
                         (ctrl, 'False Shot % (not in control)', 'PuBu'),
-                        (raa_grid, 'RAA', 'Reds')
+                        (raa_grid, 'RAA', 'RdYlGn')  # Diverging: green positive, red negative
                     ]
+                
+                    fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+                    plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
                 
                     for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
@@ -9920,7 +9939,8 @@ elif sidebar_option == "Strength vs Weakness":
                 
                         im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
                         ax.set_title(ttl)
-                        ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
+                        ax.set_xticks(range(grids['n_cols']))
+                        ax.set_yticks(range(grids['n_rows']))
                         ax.set_xticklabels(xticks, rotation=45, ha='right')
                         ax.set_yticklabels(yticklabels)
                 
