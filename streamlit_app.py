@@ -10210,7 +10210,7 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
                         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-                        safe_arr[total_grid < 3] = np.nan
+                        safe_arr[total_grid < 1] = np.nan
                         flat = safe_arr.flatten()
                                 # Mask low-sample cells (white/NaN)
                       
