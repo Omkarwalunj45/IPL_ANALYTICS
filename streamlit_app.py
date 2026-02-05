@@ -10061,7 +10061,18 @@ elif sidebar_option == "Strength vs Weakness":
                 
                     return out
                 
-                
+                def _is_legal_row(r):
+                  try:
+                      if 'noball' in r and int(r.get('noball', 0)) != 0:
+                          return False
+                  except:
+                      pass
+                  try:
+                      if 'wide' in r and int(r.get('wide', 0)) != 0:
+                          return False
+                  except:
+                      pass
+                  return True
                 def display_pitchmaps_from_df(df_src, title_prefix):
                     if df_src is None or df_src.empty:
                         st.info(f"No deliveries to show for {title_prefix}")
@@ -10100,34 +10111,35 @@ elif sidebar_option == "Strength vs Weakness":
                     # FIXED False Shot % — handles BOTH formats of 'control' column
                     # FIXED False Shot % — handles 0/1 column correctly
                     # FIXED False Shot % — opposite of Control %, using same logic as your working Control % code
-                    false_shot_pct = np.zeros_like(count, dtype=float)
+                    # FIXED False Shot % — mirror your working build_control_and_counts logic
+                    false_shot_grid = np.zeros((grids['n_rows'], grids['n_cols']), dtype=float)
+                    total_grid = np.zeros((grids['n_rows'], grids['n_cols']), dtype=int)
+                
                     if 'control' in df_src.columns:
-                        ctrl_col = df_src['control']
+                        # Loop over rows (same as your working code)
+                        for _, r in df_src.iterrows():
+                            if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
+                                continue
+                            if not _is_legal_row(r):  # Reuse your legal check if defined, else skip
+                                continue
+                            li = LINE_MAP.get(r[COL_LINE], None)
+                            le = LENGTH_MAP.get(r[COL_LENGTH], None)
+                            if li is None or le is None:
+                                continue
+                            # False shot if control == 0 (since 0/1 format)
+                            is_false = 1 if r['control'] == 0 else 0
+                            false_shot_grid[le, li] += is_false
+                            total_grid[le, li] += 1
                 
-                        # Since control is always 0 or 1: 0 = not in control (False Shot), 1 = in control
-                        false_shot_mask = (ctrl_col == 0) | ctrl_col.isna()  # NaN → False Shot (conservative)
-                        false_shot_mask = false_shot_mask.astype(int)
-                
-                        # Use same index columns as your working Control % code
-                        line_idx_col = 'line_idx'   # adjust if named differently
-                        length_idx_col = 'length_idx'  # adjust if named differently
-                
-                        if line_idx_col in df_src.columns and length_idx_col in df_src.columns:
-                            # Group by indices (exact same as your working code)
-                            false_raw = df_src.groupby([line_idx_col, length_idx_col])[false_shot_mask].mean() * 100
-                            # Reshape to match grid (n_rows x n_cols)
-                            false_shot_pct = false_raw.unstack(fill_value=0).reindex(
-                                index=range(grids['n_rows']), columns=range(grids['n_cols']), fill_value=0
-                            ).values
-                        else:
-                            # Fallback: overall False Shot % across all deliveries (better than zero grid)
-                            overall_false = false_shot_mask.mean() * 100
-                            false_shot_pct.fill(overall_false)
-                            st.warning("No 'line_idx'/'length_idx' columns found in df_src. Using overall False Shot % as fallback.")
+                        # Compute % per cell
+                        mask = total_grid > 0
+                        false_shot_pct = np.zeros_like(false_shot_grid, dtype=float)
+                        false_shot_pct[mask] = (false_shot_grid[mask] / total_grid[mask]) * 100.0
+                        false_shot_pct = maybe_flip(false_shot_pct)  # Apply LHB flip
                     else:
-                        # Ultimate fallback if no 'control' column
+                        # Fallback if no 'control' column
                         false_shot_pct = maybe_flip(grids.get('ctrl_pct', np.zeros_like(count)))
-                        st.warning("No 'control' column found. Using existing ctrl_pct as fallback.")
+                        st.warning("No 'control' column. Using existing ctrl_pct fallback.")
                 
                     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
                     xticks = xticks_base[::-1] if is_lhb else xticks_base
