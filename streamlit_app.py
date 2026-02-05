@@ -5312,7 +5312,8 @@ elif sidebar_option == "Matchup Analysis":
               yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
           else:
               yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
-    
+
+      
           fig, axes = plt.subplots(3, 2, figsize=(14, 18))
           plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
     
