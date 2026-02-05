@@ -5324,29 +5324,42 @@ elif sidebar_option == "Matchup Analysis":
               (ctrl, 'False Shot % (not in control)', 'PuBu'),
               (runs_pct, 'Runs Scored %', 'Reds')
           ]
-    
-          for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+          for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
               safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
               flat = safe_arr.flatten()
-              if np.all(flat == 0):
-                  vmin, vmax = 0, 1
+             
+              if is_diverging:
+                  # For RAA: center at 0, use symmetric range
+                  non_nan_vals = raa_grid[~np.isnan(raa_grid)]
+                  if len(non_nan_vals) > 0:
+                      abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
+                      if abs_max == 0:
+                          abs_max = 10.0
+                  else:
+                      abs_max = 10.0
+                 
+                  norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
+                  im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
               else:
-                  vmin = float(np.nanmin(flat))
-                  vmax = float(np.nanpercentile(flat, 95))
-                  if vmax <= vmin:
-                      vmax = vmin + 1.0
-    
-              im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                  # For other metrics: use standard normalization
+                  if np.all(flat == 0):
+                      vmin, vmax = 0, 1
+                  else:
+                      vmin = float(np.nanmin(flat))
+                      vmax = float(np.nanpercentile(flat, 95))
+                      if vmax <= vmin:
+                          vmax = vmin + 1.0
+                 
+                  im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
               ax.set_title(ttl)
-              ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
+              ax.set_xticks(range(grids['n_cols']))
+              ax.set_yticks(range(grids['n_rows']))
               ax.set_xticklabels(xticks, rotation=45, ha='right')
               ax.set_yticklabels(yticklabels)
-    
               ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
               ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
               ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
               ax.tick_params(which='minor', bottom=False, left=False)
-    
               if ax_idx == 0:
                   for i in range(grids['n_rows']):
                       for j in range(grids['n_cols']):
@@ -5355,7 +5368,7 @@ elif sidebar_option == "Matchup Analysis":
                               w_text = f"{w_count} W" if w_count > 1 else 'W'
                               ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
                                       bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-    
+             
               fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
     
           plt.tight_layout(rect=[0, 0.03, 1, 0.97])
