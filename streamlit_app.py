@@ -11409,39 +11409,19 @@ elif sidebar_option == "Strength vs Weakness":
                 
                 # ---------- When user selects a kind ----------
                 # Session state keys to track selections
-                if 'bowl_kind' not in st.session_state:
-                    st.session_state.bowl_kind = '-- none --'
-                if 'bowl_style' not in st.session_state:
-                    st.session_state.bowl_style = '-- none --'
+                # st.markdown("## Batter — Bowler Kind / Style exploration")
+                # st.write("Select a Bowler Kind (value as stored) or select a Bowler Style (value as stored).")
                 
-                # Callback when bowl_kind changes
-                def on_kind_change():
-                    if st.session_state.bowl_kind != '-- none --':
-                        st.session_state.bowl_style = '-- none --'  # Reset style
+                # ── No selectbox here — they are already defined earlier ──
+                # We just use the existing chosen_kind / chosen_style variables
                 
-                # Callback when bowl_style changes
-                def on_style_change():
-                    if st.session_state.bowl_style != '-- none --':
-                        st.session_state.bowl_kind = '-- none --'  # Reset kind
+                kind_opts = ['-- none --'] + bowl_kinds_present
+                style_opts = ['-- none --'] + bowl_styles_present
                 
-                # Your selectboxes (update with these callbacks)
-                chosen_kind = st.selectbox(
-                    "Bowler Kind",
-                    options=['-- none --', 'pace bowler', 'spin bowler'],  # adjust your actual options
-                    index=0,
-                    key='bowl_kind',
-                    on_change=on_kind_change
-                )
+                # Optional: Show current selection for clarity (debug/help text)
+                st.caption(f"Current Kind: **{chosen_kind}** | Current Style: **{chosen_style}**")
                 
-                chosen_style = st.selectbox(
-                    "Bowler Style",
-                    options=['-- none --', 'leg spin', 'off spin', 'left arm orthodox', ...],  # your actual styles
-                    index=0,
-                    key='bowl_style',
-                    on_change=on_style_change
-                )
-                
-                # Your filtering and display logic (updated labels)
+                # Your existing logic — only runs when one is selected
                 if chosen_kind and chosen_kind != '-- none --':
                     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
                         if col not in df.columns:
@@ -11492,7 +11472,7 @@ elif sidebar_option == "Strength vs Weakness":
                     if df_use.empty:
                         st.info(f"No deliveries found for bowler style '{chosen_style}'.")
                     else:
-                        # Optional: Cap first word for style too (if you want consistency)
+                        # Optional: Cap first word for style (if you want consistency)
                         style_first = chosen_style.split()[0].capitalize()
                 
                         st.markdown(f"### Detailed view — Bowler Style: {style_first}")
