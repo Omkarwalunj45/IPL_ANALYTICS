@@ -4135,31 +4135,34 @@ else:
 if sidebar_option == "Player Profile":
     st.header("Player Profile")
     def clean_numeric_columns(df):
-      """
-      - Columns containing 'runs', 'balls', 'innings' → int
-      - All float columns → rounded to 2 decimals (53.160000 → 53.16)
-      """
-      if df is None or df.empty:
-          return df
-  
-      df = df.copy()
-  
-      for col in df.columns:
-          col_l = str(col).lower()
-  
-          # --- Force INT columns
-          if any(key in col_l for key in ["runs", "balls", "innings"]):
-              df[col] = (
-                  pd.to_numeric(df[col], errors="coerce")
-                  .fillna(0)
-                  .astype(int)
-              )
-  
-          # --- Float cleanup (round to 2 decimals)
-          elif pd.api.types.is_float_dtype(df[col]):
-              df[col] = df[col].round(2)
-  
-      return df
+        """
+        - Columns containing 'runs', 'balls', 'innings' → int
+        - All float columns → formatted to exactly 2 decimals (35.50000 → 35.50)
+        """
+        if df is None or df.empty:
+            return df
+    
+        df = df.copy()
+    
+        for col in df.columns:
+            col_l = str(col).lower()
+    
+            # --- Force INT columns
+            if any(key in col_l for key in ["runs", "balls", "innings"]):
+                df[col] = (
+                    pd.to_numeric(df[col], errors="coerce")
+                    .fillna(0)
+                    .astype(int)
+                )
+    
+            # --- Float columns: FIXED 2 decimals
+            elif pd.api.types.is_float_dtype(df[col]):
+                df[col] = df[col].map(
+                    lambda x: f"{x:.2f}" if pd.notna(x) else ""
+                )
+    
+        return df
+
 
 
     if idf is None or idf.empty:
