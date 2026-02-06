@@ -5749,17 +5749,19 @@ elif sidebar_option == "Matchup Analysis":
             dismissals=('is_wkt_tmp', 'sum')
         )
     
-        per_combo_top7['SR'] = per_combo_top7.apply(
-            lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1
+        # AVG SR of batters who faced THIS bowler (per line-length cell)
+        
+        bench_agg = benchmark.groupby('line_length_combo', as_index=False).agg(
+            runs=(runs_col, 'sum'),
+            balls=(runs_col, 'count')
         )
-    
-        # Weighted average SR per combo (weighted by runs)
-        def weighted_sr(g):
-            if g['runs'].sum() == 0:
-                return np.nan
-            return (g['runs'] * g['SR']).sum() / g['runs'].sum()
-    
-        avg_sr_by_combo = per_combo_top7.groupby('line_length_combo').apply(weighted_sr).to_dict()
+        
+        bench_agg['SR'] = (bench_agg['runs'] / bench_agg['balls']) * 100
+        
+        avg_sr_by_combo = dict(
+            zip(bench_agg['line_length_combo'], bench_agg['SR'])
+        )
+
     
         # Selected player SR per combo
         sel_per_combo = selected.groupby('line_length_combo', as_index=False).agg(
