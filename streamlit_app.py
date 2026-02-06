@@ -6112,7 +6112,7 @@ elif sidebar_option == "Matchup Analysis":
             (dot_pct,     'Dot %',            'Blues'),
             (sr,          'Strike Rate',      'Reds'),
             (ctrl,        'False Shot %',     'PuBu'),
-            (runs_pct,    'Runs Scored (%)',  'Reds')
+            (runs_pct,    'Runs Distribution (%)',  'Reds')
         ]
     
         for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
