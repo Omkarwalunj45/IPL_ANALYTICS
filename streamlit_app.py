@@ -6633,9 +6633,9 @@ elif sidebar_option == "Matchup Analysis":
                                 bowler_col=bowler_col,
                                 bowler_name=bowler_name
                             )
-                            st.write("Selected combo sample:", selected['line_length_combo'].value_counts().head())
-                            st.write("Benchmark combo sample:", benchmark['line_length_combo'].value_counts().head())
-                            st.write("Benchmark rows:", len(benchmark))
+                            st.write("Selected combo sample:", selected_df['line_length_combo'].value_counts().head())
+                            st.write("Benchmark combo sample:", benchmark_df['line_length_combo'].value_counts().head())
+                            st.write("Benchmark rows:", len(benchmark_Df))
 
                             if benchmark_df.empty:
                                 st.warning("RAA benchmark data not available for this bowler.")
