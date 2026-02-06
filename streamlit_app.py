@@ -5619,7 +5619,14 @@ elif sidebar_option == "Matchup Analysis":
             'LINE_MAP': LINE_MAP,
             'LENGTH_MAP': LENGTH_MAP
         }
-    
+    def is_legal(df):
+        mask = np.ones(len(df), dtype=bool)
+        if 'wide' in df.columns:
+            mask &= (df['wide'].fillna(0) == 0)
+        if 'noball' in df.columns:
+            mask &= (df['noball'].fillna(0) == 0)
+        return df[mask]
+
     def compute_pitchmap_raa(df_src, full_df, runs_col, COL_BAT, COL_BOWL,selected_batter, selected_bowler):
         """
         Dedicated RAA calculation for pitchmap.
@@ -5658,10 +5665,17 @@ elif sidebar_option == "Matchup Analysis":
     
         # Prepare selected (filtered) and benchmark data
         selected = df_src.copy()
+        # BENCHMARK = all OTHER batters vs this bowler
         benchmark = full_df[
             (full_df[COL_BOWL] == selected_bowler) &
             (full_df[COL_BAT] != selected_batter)
         ].copy()
+        
+        if benchmark.empty:
+            return {}
+        selected = is_legal(selected)
+        benchmark = is_legal(benchmark)
+
 
     
         # Create combo keys using the MAP indices and convert to display names
@@ -5752,39 +5766,62 @@ elif sidebar_option == "Matchup Analysis":
             balls=(runs_col, 'count'),
             dismissals=('is_wkt_tmp', 'sum')
         )
+        st.write("Selected combos:", sel.head())
+        st.write("Benchmark combos:", bench.head())
+
     
         # AVG SR of batters who faced THIS bowler (per line-length cell)
         
-        bench_agg = benchmark.groupby('line_length_combo', as_index=False).agg(
-            runs=(runs_col, 'sum'),
-            balls=(runs_col, 'count')
-        )
+        # bench_agg = benchmark.groupby('line_length_combo', as_index=False).agg(
+        #     runs=(runs_col, 'sum'),
+        #     balls=(runs_col, 'count')
+        # )
         
-        bench_agg['SR'] = (bench_agg['runs'] / bench_agg['balls']) * 100
+        # bench_agg['SR'] = (bench_agg['runs'] / bench_agg['balls']) * 100
         
-        avg_sr_by_combo = dict(
-            zip(bench_agg['line_length_combo'], bench_agg['SR'])
-        )
+        # avg_sr_by_combo = dict(
+        #     zip(bench_agg['line_length_combo'], bench_agg['SR'])
+        # )
 
     
-        # Selected player SR per combo
-        sel_per_combo = selected.groupby('line_length_combo', as_index=False).agg(
+        # # Selected player SR per combo
+        # sel_per_combo = selected.groupby('line_length_combo', as_index=False).agg(
+        #     runs=(runs_col, 'sum'),
+        #     balls=(runs_col, 'count')
+        # )
+    
+        # sel_per_combo['SR'] = sel_per_combo.apply(
+        #     lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1
+        # )
+    
+        # # Compute RAA = selected SR - benchmark weighted SR
+        # for _, row in sel_per_combo.iterrows():
+        #     combo = row['line_length_combo']
+        #     sel_sr = row['SR']
+        #     bench_sr = avg_sr_by_combo.get(combo, np.nan)
+        #     raa = sel_sr - bench_sr if not np.isnan(sel_sr) and not np.isnan(bench_sr) else np.nan
+        #     out[combo] = {'RAA': raa}
+        # Selected batter SR per combo
+        sel = selected.groupby('line_length_combo').agg(
             runs=(runs_col, 'sum'),
-            balls=(runs_col, 'count')
+            balls=('line_length_combo', 'count')
         )
-    
-        sel_per_combo['SR'] = sel_per_combo.apply(
-            lambda r: (r['runs'] / r['balls'] * 100.0) if r['balls'] > 0 else np.nan, axis=1
+        sel['SR'] = sel['runs'] / sel['balls'] * 100
+        
+        # Benchmark SR per combo (ALL OTHER BATTERS)
+        bench = benchmark.groupby('line_length_combo').agg(
+            runs=(runs_col, 'sum'),
+            balls=('line_length_combo', 'count')
         )
-    
-        # Compute RAA = selected SR - benchmark weighted SR
-        for _, row in sel_per_combo.iterrows():
-            combo = row['line_length_combo']
-            sel_sr = row['SR']
-            bench_sr = avg_sr_by_combo.get(combo, np.nan)
-            raa = sel_sr - bench_sr if not np.isnan(sel_sr) and not np.isnan(bench_sr) else np.nan
-            out[combo] = {'RAA': raa}
-    
+        bench['SR'] = bench['runs'] / bench['balls'] * 100
+
+        for combo in sel.index:
+          if combo in bench.index:
+              out[combo] = {
+                  'RAA': sel.loc[combo, 'SR'] - bench.loc[combo, 'SR']
+              }
+
+
         return out
     
     def _is_legal_row(r):
@@ -6589,7 +6626,7 @@ elif sidebar_option == "Matchup Analysis":
                             # ---------- RAA-CORRECT MATCHUP LOGIC ----------
                             # selected_df = THIS batter vs THIS bowler (already filtered)
                             # benchmark_df = ALL batters vs THIS bowler
-                            bdf = bdf[bdf[bowler_col] == bowler_name]
+                            
 
                             benchmark_df = get_bowler_benchmark_df(
                                 full_df,
@@ -6606,7 +6643,7 @@ elif sidebar_option == "Matchup Analysis":
                                 display_pitchmaps_from_df(
                                     selected_df,
                                     f"{batter_name} vs {bowler_name} - {selected_year}",
-                                    bdf=full_df,                     # FULL, UNFILTERED dataframe
+                                    bdf=benchmark_df,                     # FULL, UNFILTERED dataframe
                                     selected_batter=batter_name,
                                     selected_bowler=bowler_name,
                                     runs_col=runs_col,
