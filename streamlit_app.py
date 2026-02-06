@@ -5361,6 +5361,20 @@ elif sidebar_option == "Matchup Analysis":
         'YORKER': 4,
         'FULLTOSS': 5
     }
+    COL_BAT = 'bat'  # batsman column
+    COL_BOWL = 'bowl'  # bowler column
+    COL_BAT_HAND = 'bat_hand'  # batting handedness (LHB/RHB)
+    COL_BOWL_KIND = 'bowl_kind'  # pace/spin
+    COL_BOWL_STYLE = 'bowl_style'  # specific style
+    COL_RUNS = 'batruns'  # batsman runs per ball
+    COL_WAGON_ZONE = 'wagonZone'  # wagon zone id (1..8)
+    COL_LINE = 'line'  # line (WIDE_OUTSIDE_OFFSTUMP etc.)
+    COL_LENGTH = 'length'  # length (SHORT, GOOD_LENGTH, etc.)
+    COL_OUT = 'out'  # out flag (0/1)
+    COL_DISMISSAL = 'dismissal'  # dismissal text
+    COL_PHASE = 'PHASE'
+    COL_MATCH = 'p_match'  # match id column used for grouping
+
     # ---------- robust map-lookup helpers ----------
     def _norm_key(s):
         if s is None:
