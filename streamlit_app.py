@@ -5393,7 +5393,29 @@ elif sidebar_option == "Matchup Analysis":
     }
     line_map = LINE_MAP
     length_map = LENGTH_MAP
+    def safe_map_lookup(mapping, val):
+        if val is None or pd.isna(val):
+            return None
+        key = str(val).strip().upper()
+        return mapping.get(key)
+
     # ---------- robust map-lookup helpers ----------
+    def add_line_length_combo(df, line_col='line', length_col='length'):
+        df = df.copy()
+        combos = []
+    
+        for _, r in df.iterrows():
+            li = safe_map_lookup(LINE_MAP, r.get(line_col))
+            le = safe_map_lookup(LENGTH_MAP, r.get(length_col))
+    
+            if li is None or le is None:
+                combos.append(None)
+            else:
+                combos.append(f"{li}_{le}")
+    
+        df['line_length_combo'] = combos
+        return df[df['line_length_combo'].notna()]
+
     def _norm_key(s):
         if s is None:
             return ''
@@ -5627,147 +5649,69 @@ elif sidebar_option == "Matchup Analysis":
             mask &= (df['noball'].fillna(0) == 0)
         return df[mask]
 
-    def compute_pitchmap_raa(df_src, full_df, runs_col, COL_BAT, COL_BOWL,selected_batter, selected_bowler):
+    def compute_pitchmap_raa_matchup(
+        selected_df,        # batter vs bowler (filtered)
+        full_df,            # FULL dataset (bdf)
+        batter_name,
+        bowler_name,
+        runs_col='batruns',
+        batter_col='bat',
+        bowler_col='bowl'
+    ):
         """
-        Dedicated RAA calculation for pitchmap.
-        Uses LINE_MAP and LENGTH_MAP from globals to create combo keys that match display.
+        RAA = SR(selected batter vs bowler at combo)
+              -
+              AVG SR(all OTHER batters vs same bowler at combo)
         """
-        out = {}
-        if df_src.empty or full_df.empty:
-            return out
     
-        # Get maps from globals
-        LINE_MAP = globals().get('LINE_MAP', {})
-        LENGTH_MAP = globals().get('LENGTH_MAP', {})
-        COL_LINE = globals().get('COL_LINE', 'line')
-        COL_LENGTH = globals().get('COL_LENGTH', 'length')
-        
-        if not LINE_MAP or not LENGTH_MAP:
-            return out
+        # --- Selected batter data ---
+        sel = selected_df.copy()
+        sel = add_line_length_combo(sel)
     
-        # Create reverse maps: index -> display name
-        line_idx_to_display = {
-            0: 'wide out off',
-            1: 'outside off',
-            2: 'on stumps',
-            3: 'down leg',
-            4: 'wide down leg'
-        }
-        
-        length_idx_to_display = {
-            0: 'short',
-            1: 'back of length',
-            2: 'good',
-            3: 'full',
-            4: 'yorker',
-            5: 'full toss'
-        }
-    
-        # Prepare selected (filtered) and benchmark data
-        selected = df_src.copy()
-        # BENCHMARK = all OTHER batters vs this bowler
-        benchmark = full_df[
-            (full_df[COL_BOWL] == selected_bowler) &
-            (full_df[COL_BAT] != selected_batter)
+        # --- Benchmark: SAME bowler, EXCLUDE batter ---
+        bench = full_df[
+            (full_df[bowler_col] == bowler_name) &
+            (full_df[batter_col] != batter_name)
         ].copy()
-        
-        if benchmark.empty:
+    
+        bench = add_line_length_combo(bench)
+    
+        if sel.empty or bench.empty:
             return {}
-        selected = is_legal(selected)
-        benchmark = is_legal(benchmark)
-
-
     
-        # Create combo keys using the MAP indices and convert to display names
-        def add_combo_key(df):
-            combos = []
-            for _, row in df.iterrows():
-                line_val = row.get(COL_LINE, None)
-                length_val = row.get(COL_LENGTH, None)
-                
-                # Get indices from maps
-                if pd.isna(line_val) or pd.isna(length_val):
-                    li, le = None, None
-                else:
-                    li = LINE_MAP.get(str(line_val).strip().upper(), None)
-                    le = LENGTH_MAP.get(str(length_val).strip().upper(), None)
-
-
-                
-                if li is not None and le is not None:
-                    # Convert to display names
-                    line_display = line_idx_to_display.get(li, '').lower().strip()
-                    length_display = length_idx_to_display.get(le, '').lower().strip()
-                    combo = f"{line_display}_{length_display}"
-                else:
-                    combo = '_'
-                combos.append(combo)
-            df['line_length_combo'] = combos
-            return df
-        
-        selected = add_combo_key(selected)
-        benchmark = add_combo_key(benchmark)
+        # Ensure numeric
+        for df in (sel, bench):
+            df[runs_col] = pd.to_numeric(df[runs_col], errors='coerce').fillna(0)
     
-        # Remove empty combos
-        selected = selected[selected['line_length_combo'] != '_']
-        benchmark = benchmark[benchmark['line_length_combo'] != '_']
-    
-        if selected.empty or benchmark.empty:
-            return out
-    
-        # Prepare data
-        for df in [selected, benchmark]:
-            df[runs_col] = pd.to_numeric(df.get(runs_col, 0), errors='coerce').fillna(0).astype(int)
-            df['out_flag_tmp'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
-            df['dismissal_clean_tmp'] = df.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan': '', 'none': ''})
-    
-        WICKET_TYPES = ['bowled', 'caught', 'hit wicket', 'stumped', 'leg before wicket', 'lbw']
-        
-        def is_bowler_wicket_local(out_flag_val, dismissal_text):
-            try:
-                if int(out_flag_val) != 1:
-                    return False
-            except:
-                if not out_flag_val:
-                    return False
-            if not dismissal_text or str(dismissal_text).strip() == '':
-                return False
-            dd = str(dismissal_text).lower()
-            for token in WICKET_TYPES:
-                if token in dd:
-                    return True
-            return False
-    
-        for df in [selected, benchmark]:
-            df['is_wkt_tmp'] = df.apply(
-                lambda r: 1 if is_bowler_wicket_local(r.get('out_flag_tmp', 0), r.get('dismissal_clean_tmp', '')) else 0,
-                axis=1
-            )
-    
-        # Top7 from benchmark
-        # --- Select Top-7 batters benchmark safely ---
-        if 'top7_flag' in benchmark.columns:
-            top7 = benchmark[pd.to_numeric(benchmark['top7_flag'], errors='coerce') == 1].copy()
-        
-        elif 'p_bat' in benchmark.columns:
-            # fallback: use batting position
-            top7 = benchmark[pd.to_numeric(benchmark['p_bat'], errors='coerce').fillna(99) <= 7].copy()
-        
-        else:
-            # final fallback: use full benchmark
-            top7 = benchmark.copy()
-    
-        if top7.empty:
-            return out
-    
-        # Aggregate per combo for top7
-        per_combo_top7 = top7.groupby('line_length_combo', as_index=False).agg(
+        # --- Aggregate SRs ---
+        sel_agg = sel.groupby('line_length_combo').agg(
             runs=(runs_col, 'sum'),
-            balls=(runs_col, 'count'),
-            dismissals=('is_wkt_tmp', 'sum')
+            balls=(runs_col, 'count')
+        ).reset_index()
+    
+        bench_agg = bench.groupby('line_length_combo').agg(
+            runs=(runs_col, 'sum'),
+            balls=(runs_col, 'count')
+        ).reset_index()
+    
+        sel_agg['SR'] = sel_agg['runs'] / sel_agg['balls'] * 100
+        bench_agg['SR'] = bench_agg['runs'] / bench_agg['balls'] * 100
+    
+        # --- Merge and compute RAA ---
+        merged = sel_agg.merge(
+            bench_agg[['line_length_combo', 'SR']],
+            on='line_length_combo',
+            how='left',
+            suffixes=('_sel', '_bench')
         )
-        st.write("Selected combos:", sel.head())
-        st.write("Benchmark combos:", bench.head())
+    
+        merged['RAA'] = merged['SR_sel'] - merged['SR_bench']
+    
+        # --- Debug (KEEP THIS ONCE) ---
+        st.write("RAA DEBUG — merged:", merged.head())
+    
+        return dict(zip(merged['line_length_combo'], merged['RAA']))
+
 
     
         # AVG SR of batters who faced THIS bowler (per line-length cell)
@@ -5802,27 +5746,7 @@ elif sidebar_option == "Matchup Analysis":
         #     raa = sel_sr - bench_sr if not np.isnan(sel_sr) and not np.isnan(bench_sr) else np.nan
         #     out[combo] = {'RAA': raa}
         # Selected batter SR per combo
-        sel = selected.groupby('line_length_combo').agg(
-            runs=(runs_col, 'sum'),
-            balls=('line_length_combo', 'count')
-        )
-        sel['SR'] = sel['runs'] / sel['balls'] * 100
-        
-        # Benchmark SR per combo (ALL OTHER BATTERS)
-        bench = benchmark.groupby('line_length_combo').agg(
-            runs=(runs_col, 'sum'),
-            balls=('line_length_combo', 'count')
-        )
-        bench['SR'] = bench['runs'] / bench['balls'] * 100
 
-        for combo in sel.index:
-          if combo in bench.index:
-              out[combo] = {
-                  'RAA': sel.loc[combo, 'SR'] - bench.loc[combo, 'SR']
-              }
-
-
-        return out
     
     def _is_legal_row(r):
       try:
@@ -5930,15 +5854,30 @@ elif sidebar_option == "Matchup Analysis":
             yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
     
         # RAA per cell — using your working compute_pitchmap_raa (unchanged)
-        raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
+        # raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
         if 'line' in df_src.columns and 'length' in df_src.columns and bdf is not None and not bdf.empty:
-            raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT, COL_BOWL = COL_BOWL, selected_batter = batter_name, selected_bowler = bowler_name)
-            for i in range(n_rows):
-                length_str = yticklabels[i].lower().strip()
-                for j in range(grids['n_cols']):
-                    line_str = xticks[j].lower().strip()
-                    combo = f"{line_str}_{length_str}"
-                    raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
+            raa_dict = compute_pitchmap_raa_matchup(
+                selected_df=df_src,
+                full_df=bdf,
+                batter_name=batter_name,
+                bowler_name=bowler_name,
+                runs_col=runs_col,
+                batter_col=batter_col,
+                bowler_col=bowler_col
+            )
+            
+            raa_grid = np.full((grids['n_rows'], grids['n_cols']), np.nan)
+            
+            for combo, raa in raa_dict.items():
+                li, le = map(int, combo.split('_'))
+                raa_grid[le, li] = raa
+
+            # for i in range(n_rows):
+            #     length_str = yticklabels[i].lower().strip()
+            #     for j in range(grids['n_cols']):
+            #         line_str = xticks[j].lower().strip()
+            #         combo = f"{line_str}_{length_str}"
+            #         raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
         else:
             st.warning("Cannot compute RAA map: missing 'line'/'length' columns or global 'bdf'.")
     
