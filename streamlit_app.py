@@ -6541,267 +6541,151 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 else:
                     print("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
 
-
-
-                    
-            #     # import base64
-            #     # from io import BytesIO
-            #     # from PIL import Image
-                
-            #     # # Pixel height for pitchmaps (change this value to whatever visible height you want)
-            #     # HEIGHT_PITCHMAP_PX = 1600
-
-            #     # Assuming dot_grid and run_grid are 5x5 numpy arrays already defined
-                
-            #     st.markdown("### Pitchmaps")
-            #     c1, c2 = st.columns([1, 1])
-                
+            # import plotly.express as px
+            # import pandas as pd
+            # import numpy as np
+            # import streamlit as st
+            
+            # st.write("Hope")
+            # def build_shot_tables(df):
+            #     if df.empty:
+            #         return None, None
+            
+            #     df = df.dropna(subset=['shot']).copy()
+            #     if df.empty:
+            #         return None, None
+            
+            #     df['batruns'] = pd.to_numeric(df['batruns'], errors='coerce').fillna(0).astype(int)
+            
+            #     df['out_flag'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
+            #     df['dismissal_clean'] = df.get('dismissal', '').astype(str).str.lower().str.strip()
+            
+            #     ignore = {
+            #         'run out','runout','retired','retired not out',
+            #         'retired out','obstructing the field'
+            #     }
+            
+            #     df['is_wkt'] = df.apply(
+            #         lambda r: 1 if (
+            #             r['out_flag'] == 1
+            #             and r['dismissal_clean'] not in ignore
+            #             and r['dismissal_clean'] != ''
+            #         ) else 0,
+            #         axis=1
+            #     )
+            
+            #     total_runs = df['batruns'].sum()
+            
+            #     shot_grp = df.groupby('shot').agg(
+            #         runs_by_shot=('batruns','sum'),
+            #         balls=('shot','size'),
+            #         dismissals=('is_wkt','sum')
+            #     ).reset_index()
+            
+            #     shot_grp['% of Runs'] = (
+            #         shot_grp['runs_by_shot'] / total_runs * 100
+            #         if total_runs > 0 else 0
+            #     )
+            #     shot_grp['SR'] = np.where(
+            #         shot_grp['balls'] > 0,
+            #         shot_grp['runs_by_shot'] / shot_grp['balls'] * 100,
+            #         np.nan
+            #     )
+            
+            #     control_df = None
+            #     if 'control' in df.columns:
+            #         df['control_num'] = df['control'].astype(str).str.lower().isin(
+            #             ['1','true','yes','controlled','c','ok']
+            #         ).astype(int)
+            
+            #         control_df = df.groupby('shot').agg(
+            #             total=('control_num','size'),
+            #             controlled=('control_num','sum')
+            #         ).reset_index()
+            
+            #         control_df['Control Percentage'] = (
+            #             control_df['controlled'] / control_df['total'] * 100
+            #         )
+            
+            #     return shot_grp.sort_values('% of Runs'), control_df
+            
+            
+            # # ---------------- MAIN ----------------
+            
+            # pf = filtered_df.copy()
+            # pf['bowl_kind'] = pf['bowl_kind'].astype(str).str.lower().str.strip()
+            
+            # pace_df = pf[pf['bowl_kind'] == 'pace bowler']
+            # spin_df = pf[pf['bowl_kind'] == 'spin bowler']
+            
+            # st.markdown("## Shot Analysis")
+            
+            # tab_pace, tab_spin = st.tabs(["vs Pace", "vs Spin"])
+            
+            # # ========== PACE TAB ==========
+            # with tab_pace:
+            #     c1, c2 = st.columns(2)
+            
+            #     prod, ctrl = build_shot_tables(pace_df)
+            
             #     with c1:
-            #         st.markdown("**Dot Balls**")
-            #         fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
-            #         im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
-            #         ax1.set_xticks(range(5))
-            #         ax1.set_yticks(range(5))
-            #         ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-            #                             rotation=45, ha='right')
-            #         ax1.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
-            #         for i in range(5):
-            #             for j in range(5):
-            #                 ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-            #         fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-            #         plt.tight_layout(pad=3.0)
-            #         st.pyplot(fig1)
-                
+            #         st.markdown("### Most Productive Shots")
+            #         if prod is not None:
+            #             fig = px.bar(
+            #                 prod,
+            #                 x='% of Runs', y='shot',
+            #                 orientation='h', color='% of Runs',
+            #                 height=520
+            #             )
+            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+            #             fig.update_yaxes(categoryorder='total ascending')
+            #             st.plotly_chart(fig, use_container_width=True)
+            
             #     with c2:
-            #         st.markdown("**Scoring Balls**")
-            #         fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
-            #         im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
-            #         ax2.set_xticks(range(5))
-            #         ax2.set_yticks(range(5))
-            #         ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-            #                             rotation=45, ha='right')
-            #         ax2.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
-            #         for i in range(5):
-            #             for j in range(5):
-            #                 ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-            #         fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-            #         plt.tight_layout(pad=3.0)
-            #         st.pyplot(fig2)
-
-            #             # Pitchmaps below Wagon: two heatmaps (dots vs scoring) - increased height
-            # # -------------------------
-            # run_grid = np.zeros((5,5), dtype=float)
-            # dot_grid = np.zeros((5,5), dtype=int)
-
-            # if line_col in final_df.columns and length_col in final_df.columns:
-            #     plot_df = final_df[[line_col,length_col,run_col]].copy().dropna(subset=[line_col,length_col])
-            #     for _, r in plot_df.iterrows():
-            #         li = line_map.get(r[line_col], None)
-            #         le = length_map.get(r[length_col], None)
-            #         if li is None or le is None:
-            #             continue
-            #         runs_here = int(r[run_col])
-            #         run_grid[le, li] += runs_here
-            #         if runs_here == 0:
-            #             dot_grid[le, li] += 1
-
-            #     # import base64
-            #     # from io import BytesIO
-            #     # from PIL import Image
-
-            #     # # Pixel height for pitchmaps (change this value to whatever visible height you want)
-            #     # HEIGHT_PITCHMAP_PX = 1600
-
-            #     # Assuming dot_grid and run_grid are 5x5 numpy arrays already defined
-
-            #     st.markdown("### Pitchmaps")
-            #     c1, c2 = st.columns([1, 1])
-
+            #         st.markdown("### Control Percentage")
+            #         if ctrl is not None:
+            #             fig = px.bar(
+            #                 ctrl.sort_values('Control Percentage'),
+            #                 x='Control Percentage', y='shot',
+            #                 orientation='h', color='Control Percentage',
+            #                 height=520
+            #             )
+            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+            #             fig.update_yaxes(categoryorder='total ascending')
+            #             st.plotly_chart(fig, use_container_width=True)
+            
+            
+            # # ========== SPIN TAB ==========
+            # with tab_spin:
+            #     c1, c2 = st.columns(2)
+            
+            #     prod, ctrl = build_shot_tables(spin_df)
+            
             #     with c1:
-            #         st.markdown("**Dot Balls**")
-            #         fig1, ax1 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
-            #         im1 = ax1.imshow(dot_grid, origin='lower', cmap='Blues')
-            #         ax1.set_xticks(range(5))
-            #         ax1.set_yticks(range(5))
-            #         ax1.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-            #                             rotation=45, ha='right')
-            #         ax1.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
-            #         for i in range(5):
-            #             for j in range(5):
-            #                 ax1.text(j, i, int(dot_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-            #         fig1.colorbar(im1, ax=ax1, fraction=0.046, pad=0.04)
-            #         plt.tight_layout(pad=3.0)
-            #         st.pyplot(fig1)
-
+            #         st.markdown("### Most Productive Shots")
+            #         if prod is not None:
+            #             fig = px.bar(
+            #                 prod,
+            #                 x='% of Runs', y='shot',
+            #                 orientation='h', color='% of Runs',
+            #                 height=520
+            #             )
+            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+            #             fig.update_yaxes(categoryorder='total ascending')
+            #             st.plotly_chart(fig, use_container_width=True)
+            
             #     with c2:
-            #         st.markdown("**Scoring Balls**")
-            #         fig2, ax2 = plt.subplots(figsize=(8, 14), dpi=150)  # Increased height from 10 to 12
-            #         im2 = ax2.imshow(run_grid, origin='lower', cmap='Reds')
-            #         ax2.set_xticks(range(5))
-            #         ax2.set_yticks(range(5))
-            #         ax2.set_xticklabels(['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg'],
-            #                             rotation=45, ha='right')
-            #         ax2.set_yticklabels(['Short', 'Back of Length', 'Good', 'Full', 'Yorker'])
-            #         for i in range(5):
-            #             for j in range(5):
-            #                 ax2.text(j, i, int(run_grid[i, j]), ha='center', va='center', color='black', fontsize=12)
-            #         fig2.colorbar(im2, ax=ax2, fraction=0.046, pad=0.04)
-            #         plt.tight_layout(pad=3.0)
-            #         st.pyplot(fig2)
-
-            # else:
-            #     st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
-    
-            # else:
-            #     st.info("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
-
-            # Adapted shot-productivity + control charts for your dataset (uses `bdf`)
-            # ---------- Shot productivity + SR + Dismissals + BallsPerDismissal (for selected batter only) ----------
-            import plotly.express as px
-            import pandas as pd
-            import numpy as np
-            import streamlit as st
-            
-            st.write("Hope")
-            def build_shot_tables(df):
-                if df.empty:
-                    return None, None
-            
-                df = df.dropna(subset=['shot']).copy()
-                if df.empty:
-                    return None, None
-            
-                df['batruns'] = pd.to_numeric(df['batruns'], errors='coerce').fillna(0).astype(int)
-            
-                df['out_flag'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
-                df['dismissal_clean'] = df.get('dismissal', '').astype(str).str.lower().str.strip()
-            
-                ignore = {
-                    'run out','runout','retired','retired not out',
-                    'retired out','obstructing the field'
-                }
-            
-                df['is_wkt'] = df.apply(
-                    lambda r: 1 if (
-                        r['out_flag'] == 1
-                        and r['dismissal_clean'] not in ignore
-                        and r['dismissal_clean'] != ''
-                    ) else 0,
-                    axis=1
-                )
-            
-                total_runs = df['batruns'].sum()
-            
-                shot_grp = df.groupby('shot').agg(
-                    runs_by_shot=('batruns','sum'),
-                    balls=('shot','size'),
-                    dismissals=('is_wkt','sum')
-                ).reset_index()
-            
-                shot_grp['% of Runs'] = (
-                    shot_grp['runs_by_shot'] / total_runs * 100
-                    if total_runs > 0 else 0
-                )
-                shot_grp['SR'] = np.where(
-                    shot_grp['balls'] > 0,
-                    shot_grp['runs_by_shot'] / shot_grp['balls'] * 100,
-                    np.nan
-                )
-            
-                control_df = None
-                if 'control' in df.columns:
-                    df['control_num'] = df['control'].astype(str).str.lower().isin(
-                        ['1','true','yes','controlled','c','ok']
-                    ).astype(int)
-            
-                    control_df = df.groupby('shot').agg(
-                        total=('control_num','size'),
-                        controlled=('control_num','sum')
-                    ).reset_index()
-            
-                    control_df['Control Percentage'] = (
-                        control_df['controlled'] / control_df['total'] * 100
-                    )
-            
-                return shot_grp.sort_values('% of Runs'), control_df
-            
-            
-            # ---------------- MAIN ----------------
-            
-            pf = filtered_df.copy()
-            pf['bowl_kind'] = pf['bowl_kind'].astype(str).str.lower().str.strip()
-            
-            pace_df = pf[pf['bowl_kind'] == 'pace bowler']
-            spin_df = pf[pf['bowl_kind'] == 'spin bowler']
-            
-            st.markdown("## Shot Analysis")
-            
-            tab_pace, tab_spin = st.tabs(["vs Pace", "vs Spin"])
-            
-            # ========== PACE TAB ==========
-            with tab_pace:
-                c1, c2 = st.columns(2)
-            
-                prod, ctrl = build_shot_tables(pace_df)
-            
-                with c1:
-                    st.markdown("### Most Productive Shots")
-                    if prod is not None:
-                        fig = px.bar(
-                            prod,
-                            x='% of Runs', y='shot',
-                            orientation='h', color='% of Runs',
-                            height=520
-                        )
-                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-                        fig.update_yaxes(categoryorder='total ascending')
-                        st.plotly_chart(fig, use_container_width=True)
-            
-                with c2:
-                    st.markdown("### Control Percentage")
-                    if ctrl is not None:
-                        fig = px.bar(
-                            ctrl.sort_values('Control Percentage'),
-                            x='Control Percentage', y='shot',
-                            orientation='h', color='Control Percentage',
-                            height=520
-                        )
-                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-                        fig.update_yaxes(categoryorder='total ascending')
-                        st.plotly_chart(fig, use_container_width=True)
-            
-            
-            # ========== SPIN TAB ==========
-            with tab_spin:
-                c1, c2 = st.columns(2)
-            
-                prod, ctrl = build_shot_tables(spin_df)
-            
-                with c1:
-                    st.markdown("### Most Productive Shots")
-                    if prod is not None:
-                        fig = px.bar(
-                            prod,
-                            x='% of Runs', y='shot',
-                            orientation='h', color='% of Runs',
-                            height=520
-                        )
-                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-                        fig.update_yaxes(categoryorder='total ascending')
-                        st.plotly_chart(fig, use_container_width=True)
-            
-                with c2:
-                    st.markdown("### Control Percentage")
-                    if ctrl is not None:
-                        fig = px.bar(
-                            ctrl.sort_values('Control Percentage'),
-                            x='Control Percentage', y='shot',
-                            orientation='h', color='Control Percentage',
-                            height=520
-                        )
-                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-                        fig.update_yaxes(categoryorder='total ascending')
-                        st.plotly_chart(fig, use_container_width=True)
+            #         st.markdown("### Control Percentage")
+            #         if ctrl is not None:
+            #             fig = px.bar(
+            #                 ctrl.sort_values('Control Percentage'),
+            #                 x='Control Percentage', y='shot',
+            #                 orientation='h', color='Control Percentage',
+            #                 height=520
+            #             )
+            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+            #             fig.update_yaxes(categoryorder='total ascending')
+            #             st.plotly_chart(fig, use_container_width=True)
 
 
 
