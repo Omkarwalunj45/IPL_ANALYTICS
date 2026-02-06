@@ -4134,6 +4134,33 @@ else:
 
 if sidebar_option == "Player Profile":
     st.header("Player Profile")
+    def clean_numeric_columns(df):
+      """
+      - Columns containing 'runs', 'balls', 'innings' → int
+      - All float columns → rounded to 2 decimals (53.160000 → 53.16)
+      """
+      if df is None or df.empty:
+          return df
+  
+      df = df.copy()
+  
+      for col in df.columns:
+          col_l = str(col).lower()
+  
+          # --- Force INT columns
+          if any(key in col_l for key in ["runs", "balls", "innings"]):
+              df[col] = (
+                  pd.to_numeric(df[col], errors="coerce")
+                  .fillna(0)
+                  .astype(int)
+              )
+  
+          # --- Float cleanup (round to 2 decimals)
+          elif pd.api.types.is_float_dtype(df[col]):
+              df[col] = df[col].round(2)
+  
+      return df
+
 
     if idf is None or idf.empty:
         st.error("⚠️ Please run idf = Custom(df) before showing Player Profile (ensure raw 'df' is loaded).")
@@ -4458,6 +4485,7 @@ if sidebar_option == "Player Profile":
                         if c in result_df.columns:
                             result_df[c] = pd.to_numeric(result_df[c], errors='coerce').fillna(0).astype(int)
                     result_df = round_up_floats(result_df)
+                    result_df = clean_numeric_columns(result_df)
     
                     # Light blue header color for Opponentwise table
                     opp_header_color = "#e6f2ff"
@@ -4501,6 +4529,8 @@ if sidebar_option == "Player Profile":
                         if c in result_df.columns:
                             result_df[c] = pd.to_numeric(result_df[c], errors='coerce').fillna(0).astype(int)
                     result_df = round_up_floats(result_df)
+                    result_df = clean_numeric_columns(result_df)
+
     
                     # Light purple header for Yearwise table
                     year_header_color = "#efe6ff"  # light purple
@@ -4577,6 +4607,7 @@ if sidebar_option == "Player Profile":
                             )
             
                     result_df = round_up_floats(result_df)
+                    result_df = clean_numeric_columns(result_df)
             
                     # Styling: soft peach / sand tone (distinct from others)
                     country_header_color = "#fff4e6"
@@ -4646,6 +4677,7 @@ if sidebar_option == "Player Profile":
                             result_df[c] = pd.to_numeric(result_df[c], errors='coerce').fillna(0).astype(int)
             
                     result_df = round_up_floats(result_df)
+                    result_df = clean_numeric_columns(result_df)
             
                     # Styling: reuse light-blue style (or change color hex if you prefer)
                     venue_header_color = "#e6f7ff"
@@ -4693,6 +4725,7 @@ if sidebar_option == "Player Profile":
                         if c in result_df.columns:
                             result_df[c] = pd.to_numeric(result_df[c], errors='coerce').fillna(0).astype(int)
                     result_df = round_up_floats(result_df)
+                    result_df = clean_numeric_columns(result_df)
                     result_df = result_df.drop(columns=['MATCHES'], errors='ignore')
     
                     # Light green header for Inningwise table
@@ -5049,6 +5082,7 @@ if sidebar_option == "Player Profile":
                         result_df[c] = pd.to_numeric(result_df[c], errors='coerce').fillna(0)
         
                 result_df = round_up_floats(result_df)
+                result_df = clean_numeric_columns(result_df)
         
                 # styling: light blue
                 opp_header_color = "#e6f2ff"
@@ -5094,6 +5128,8 @@ if sidebar_option == "Player Profile":
                 result_df = pd.concat(all_seasons, ignore_index=True).drop(columns=['bowler'], errors='ignore')
                 result_df.columns = [str(col).upper().replace('_', ' ') for col in result_df.columns]
                 result_df = round_up_floats(result_df)
+                result_df = clean_numeric_columns(result_df)
+                
         
                 # light purple header
                 year_header_color = "#efe6ff"
@@ -5149,6 +5185,7 @@ if sidebar_option == "Player Profile":
                     if c in result_df.columns:
                         result_df[c] = pd.to_numeric(result_df[c], errors='coerce').fillna(0)
                 result_df = round_up_floats(result_df)
+                result_df = clean_numeric_columns(result_df)
         
                 # Styling: light blue/teal for venue
                 venue_header_color = "#e6f7ff"
@@ -5193,6 +5230,7 @@ if sidebar_option == "Player Profile":
                 result_df = pd.concat(innings_list, ignore_index=True).drop(columns=['bowler'], errors='ignore')
                 result_df.columns = [str(col).upper().replace('_', ' ') for col in result_df.columns]
                 result_df = round_up_floats(result_df)
+                result_df = clean_numeric_columns(result_df)
         
                 # light green header
                 inning_header_color = "#e9f9ea"
