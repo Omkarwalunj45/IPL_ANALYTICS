@@ -5799,7 +5799,19 @@ elif sidebar_option == "Matchup Analysis":
       except:
           pass
       return True
-    def display_pitchmaps_from_df(df_src, title_prefix, player_label=None):
+    def display_pitchmaps_from_df(
+        df_src,
+        title_prefix,
+        *,
+        bdf,
+        selected_batter,
+        selected_bowler,
+        runs_col,
+        COL_BAT,
+        COL_BOWL,
+        player_label=None
+    ):
+
         if df_src is None or df_src.empty:
             st.info(f"No deliveries to show for {title_prefix}")
             return
@@ -6594,8 +6606,15 @@ elif sidebar_option == "Matchup Analysis":
                                 display_pitchmaps_from_df(
                                     selected_df,
                                     f"{batter_name} vs {bowler_name} - {selected_year}",
+                                    bdf=bdf,                     # FULL, UNFILTERED dataframe
+                                    selected_batter=batter_name,
+                                    selected_bowler=bowler_name,
+                                    runs_col=runs_col,
+                                    COL_BAT=batter_col,
+                                    COL_BOWL=bowler_col,
                                     player_label=batter_name
                                 )
+
 
 
                         except NameError as ne:
