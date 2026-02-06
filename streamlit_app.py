@@ -5146,9 +5146,104 @@ if sidebar_option == "Player Profile":
                 st.dataframe(result_df.style.set_table_styles(year_table_styles), use_container_width=True)
             else:
                 st.info("No yearwise bowling summary available for this player.")
+              
         
         # -------------------------
         # Venuewise Performance (Bowling) — drop in after Yearwise
+
+        # -------------------------
+        # Countrywise Performance (Bowling)
+        # -------------------------
+        
+        country_col = safe_get_col(bpdf, ['country'], default=None)
+        
+        if bowler_col is None:
+            st.info("Ball-by-ball data missing 'bowl'/'bowler' column; countrywise breakdown not available.")
+        elif country_col is None:
+            st.info("Could not detect 'country' column for countrywise breakdown.")
+        else:
+            countries = sorted(
+                bpdf[bpdf[bowler_col] == player_name][country_col]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+        
+            all_countries = []
+        
+            for country in countries:
+                temp = bpdf[
+                    (bpdf[bowler_col] == player_name) &
+                    (bpdf[country_col] == country)
+                ].copy()
+        
+                if temp.empty:
+                    continue
+        
+                # bowlerstat normalizes internally
+                temp_summary = bowlerstat(temp)
+                temp_summary = as_dataframe(temp_summary)
+        
+                if temp_summary.empty:
+                    continue
+        
+                temp_summary['COUNTRY'] = str(country).upper()
+        
+                # Ensure COUNTRY first
+                cols = temp_summary.columns.tolist()
+                if 'COUNTRY' in temp_summary.columns:
+                    temp_summary = (
+                        temp_summary[['COUNTRY'] + [c for c in cols if c != 'COUNTRY']]
+                    )
+        
+                all_countries.append(temp_summary)
+        
+            if all_countries:
+                result_df = (
+                    pd.concat(all_countries, ignore_index=True)
+                    .drop(columns=['bowler'], errors='ignore')
+                )
+        
+                # Upper-case + normalize column names
+                result_df.columns = [
+                    str(col).upper().replace('_', ' ')
+                    for col in result_df.columns
+                ]
+        
+                # Safe numeric casting (same as opponentwise)
+                for c in ['RUNS', 'WKTS', 'BALLS', 'OVERS', 'ECON', 'AVG']:
+                    if c in result_df.columns:
+                        result_df[c] = (
+                            pd.to_numeric(result_df[c], errors='coerce')
+                            .fillna(0)
+                        )
+        
+                result_df = round_up_floats(result_df)
+                result_df = clean_numeric_columns(result_df)
+        
+                # Styling: soft peach / sand tone (distinct from opponentwise)
+                country_header_color = "#fff4e6"
+                country_table_styles = [
+                    {
+                        "selector": "thead th",
+                        "props": [
+                            ("background-color", country_header_color),
+                            ("color", "#000"),
+                            ("font-weight", "600"),
+                        ],
+                    },
+                    {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]},
+                    {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#fffaf3")]},
+                ]
+        
+                st.markdown("### Countrywise Performance")
+                st.dataframe(
+                    result_df.style.set_table_styles(country_table_styles),
+                    use_container_width=True,
+                )
+            else:
+                st.info("No countrywise bowling summary available for this player.")
+
         
         bpdf = as_dataframe(df)  # raw ball-by-ball
         # actual bowler column in your df is 'bowl' (bowlerstat normalizes it internally)
