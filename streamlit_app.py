@@ -5567,14 +5567,14 @@ elif sidebar_option == "Matchup Analysis":
               #     norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
               #     im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
               # else:
-              #     # For other metrics: use standard normalization
-              #     if np.all(flat == 0):
-              #         vmin, vmax = 0, 1
-              #     else:
-              #         vmin = float(np.nanmin(flat))
-              #         vmax = float(np.nanpercentile(flat, 95))
-              #         if vmax <= vmin:
-              #             vmax = vmin + 1.0
+              # For other metrics: use standard normalization
+              if np.all(flat == 0):
+                  vmin, vmax = 0, 1
+              else:
+                  vmin = float(np.nanmin(flat))
+                  vmax = float(np.nanpercentile(flat, 95))
+                  if vmax <= vmin:
+                      vmax = vmin + 1.0
                  
               im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
               ax.set_title(ttl)
