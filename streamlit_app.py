@@ -5577,7 +5577,9 @@ elif sidebar_option == "Matchup Analysis":
             
             # Check dismissal column for wicket tokens
             if 'dismissal' in row.index:
-                dval = str(row.get('dismissal', '') or '').lower()
+                raw = row.get('dismissal', '')
+                dval = '' if pd.isna(raw) else str(raw).lower()
+
                 if any(tok in dval for tok in wkt_tokens):
                     # Already counted above if out flag was set
                     pass
