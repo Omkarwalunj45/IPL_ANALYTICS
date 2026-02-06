@@ -6606,7 +6606,7 @@ elif sidebar_option == "Matchup Analysis":
                                 display_pitchmaps_from_df(
                                     selected_df,
                                     f"{batter_name} vs {bowler_name} - {selected_year}",
-                                    bdf=bdf,                     # FULL, UNFILTERED dataframe
+                                    bdf=full_df,                     # FULL, UNFILTERED dataframe
                                     selected_batter=batter_name,
                                     selected_bowler=bowler_name,
                                     runs_col=runs_col,
