@@ -5793,7 +5793,7 @@ elif sidebar_option == "Matchup Analysis":
       except:
           pass
       return True
-    def display_pitchmaps_from_df(df_src, title_prefix):
+    def display_pitchmaps_from_df(df_src, title_prefix, player_label=None):
         if df_src is None or df_src.empty:
             st.info(f"No deliveries to show for {title_prefix}")
             return
@@ -5888,7 +5888,11 @@ elif sidebar_option == "Matchup Analysis":
             st.warning("Cannot compute RAA map: missing 'line'/'length' columns or global 'bdf'.")
     
         fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-        plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
+        if player_label:
+            plt.suptitle(f"{player_label} — {title_prefix}", fontsize=16, weight='bold')
+        else:
+            plt.suptitle(title_prefix, fontsize=16, weight='bold')
+
     
     
             # Global total balls per cell (for threshold on all maps)
@@ -6582,8 +6586,10 @@ elif sidebar_option == "Matchup Analysis":
                             
                                 display_pitchmaps_from_df(
                                     selected_df,
-                                    f"{batter_name} vs {bowler_name} - {selected_year}"
+                                    f"{batter_name} vs {bowler_name} - {selected_year}",
+                                    player_label=batter_name
                                 )
+
 
                         except NameError as ne:
                             st.warning(f"Visualization functions not available: {ne}. Define draw_wagon_if_available and display_pitchmaps_from_df earlier in the script.")
