@@ -6164,100 +6164,100 @@ elif sidebar_option == "Matchup Analysis":
               st.pyplot(fig)
           finally:
               plt.close(fig) 
-    def display_pitchmaps_from_df(df_src, title_prefix):
-          if df_src is None or df_src.empty:
-              st.info(f"No deliveries to show for {title_prefix}")
-              return
+    # def display_pitchmaps_from_df(df_src, title_prefix):
+    #       if df_src is None or df_src.empty:
+    #           st.info(f"No deliveries to show for {title_prefix}")
+    #           return
      
-          grids = build_pitch_grids(df_src)
+    #       grids = build_pitch_grids(df_src)
      
-          bh_col_name = globals().get('bat_hand_col', 'bat_hand')
-          is_lhb = False
-          if bh_col_name in df_src.columns:
-              hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
-              if any(h.upper().startswith('L') for h in hands):
-                  is_lhb = True
+    #       bh_col_name = globals().get('bat_hand_col', 'bat_hand')
+    #       is_lhb = False
+    #       if bh_col_name in df_src.columns:
+    #           hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
+    #           if any(h.upper().startswith('L') for h in hands):
+    #               is_lhb = True
      
-          def maybe_flip(arr):
-              return np.fliplr(arr) if is_lhb else arr.copy()
+    #       def maybe_flip(arr):
+    #           return np.fliplr(arr) if is_lhb else arr.copy()
      
-          count = maybe_flip(grids['count'])
-          bounds = maybe_flip(grids['bounds'])
-          dots = maybe_flip(grids['dots'])
-          sr = maybe_flip(grids['sr'])
-          ctrl = maybe_flip(grids['ctrl_pct'])
-          wkt = maybe_flip(grids['wkt'])
-          runs = maybe_flip(grids['runs'])
+    #       count = maybe_flip(grids['count'])
+    #       bounds = maybe_flip(grids['bounds'])
+    #       dots = maybe_flip(grids['dots'])
+    #       sr = maybe_flip(grids['sr'])
+    #       ctrl = maybe_flip(grids['ctrl_pct'])
+    #       wkt = maybe_flip(grids['wkt'])
+    #       runs = maybe_flip(grids['runs'])
      
-          total = count.sum() if count.sum() > 0 else 1.0
-          perc = count.astype(float) / total * 100.0
+    #       total = count.sum() if count.sum() > 0 else 1.0
+    #       perc = count.astype(float) / total * 100.0
      
-          xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-          xticks = xticks_base[::-1] if is_lhb else xticks_base
+    #       xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+    #       xticks = xticks_base[::-1] if is_lhb else xticks_base
      
-          n_rows = grids['n_rows']
-          if n_rows >= 6:
-              yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-          else:
-              yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+    #       n_rows = grids['n_rows']
+    #       if n_rows >= 6:
+    #           yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
+    #       else:
+    #           yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
      
-          fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-          plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
+    #       fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+    #       plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
      
-          plot_list = [
-              (perc, 'Balls Bowled', 'Blues'),
-              (bounds, 'Boundaries (count)', 'OrRd'),
-              (dots, 'Dot balls (count)', 'Blues'),
-              (sr, 'SR', 'Reds'),
-              (ctrl, 'False Shot % (not in control)', 'PuBu'),
-              (runs, 'Runs (sum)', 'Reds')
-          ]
+    #       plot_list = [
+    #           (perc, 'Balls Bowled', 'Blues'),
+    #           (bounds, 'Boundaries (count)', 'OrRd'),
+    #           (dots, 'Dot balls (count)', 'Blues'),
+    #           (sr, 'SR', 'Reds'),
+    #           (ctrl, 'False Shot % (not in control)', 'PuBu'),
+    #           (runs, 'Runs (sum)', 'Reds')
+    #       ]
      
-          for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
-              safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-              flat = safe_arr.flatten()
-              if np.all(flat == 0):
-                  vmin, vmax = 0, 1
-              else:
-                  vmin = float(np.nanmin(flat))
-                  vmax = float(np.nanpercentile(flat, 95))
-                  if vmax <= vmin:
-                      vmax = vmin + 1.0
+    #       for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+    #           safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
+    #           flat = safe_arr.flatten()
+    #           if np.all(flat == 0):
+    #               vmin, vmax = 0, 1
+    #           else:
+    #               vmin = float(np.nanmin(flat))
+    #               vmax = float(np.nanpercentile(flat, 95))
+    #               if vmax <= vmin:
+    #                   vmax = vmin + 1.0
      
-              im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
-              ax.set_title(ttl)
-              ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
-              ax.set_xticklabels(xticks, rotation=45, ha='right')
-              ax.set_yticklabels(yticklabels)
+    #           im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+    #           ax.set_title(ttl)
+    #           ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
+    #           ax.set_xticklabels(xticks, rotation=45, ha='right')
+    #           ax.set_yticklabels(yticklabels)
      
-              ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
-              ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
-              ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
-              ax.tick_params(which='minor', bottom=False, left=False)
+    #           ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
+    #           ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
+    #           ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
+    #           ax.tick_params(which='minor', bottom=False, left=False)
      
-              if ax_idx == 0:
-                  for i in range(grids['n_rows']):
-                      for j in range(grids['n_cols']):
-                          w_count = int(wkt[i, j])
-                          if w_count > 0:
-                              w_text = f"{w_count} W" if w_count > 1 else 'W'
-                              ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                      bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+    #           if ax_idx == 0:
+    #               for i in range(grids['n_rows']):
+    #                   for j in range(grids['n_cols']):
+    #                       w_count = int(wkt[i, j])
+    #                       if w_count > 0:
+    #                           w_text = f"{w_count} W" if w_count > 1 else 'W'
+    #                           ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
+    #                                   bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
      
-              fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    #           fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
      
-          plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    #       plt.tight_layout(rect=[0, 0.03, 1, 0.97])
      
-          safe_fn = globals().get('safe_st_pyplot', None)
-          try:
-              if callable(safe_fn):
-                  safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-              else:
-                  st.pyplot(fig)
-          except Exception:
-              st.pyplot(fig)
-          finally:
-              plt.close(fig)
+    #       safe_fn = globals().get('safe_st_pyplot', None)
+    #       try:
+    #           if callable(safe_fn):
+    #               safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+    #           else:
+    #               st.pyplot(fig)
+    #       except Exception:
+    #           st.pyplot(fig)
+    #       finally:
+    #           plt.close(fig)
    
     # ---------- attempt to draw wagon chart using your existing function ----------
     def draw_wagon_if_available(df_wagon, batter_name):
