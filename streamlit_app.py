@@ -4514,7 +4514,92 @@ if sidebar_option == "Player Profile":
             # -------------------------
             # Venuewise Performance (Batting) — drop in after Yearwise
             # ------------
+            # -------------------------
+            # Countrywise Performance (Batting)
+            # -------------------------
             
+            country_col = safe_get_col(df, ['country', 'nation'], default=None)
+            
+            if country_col is None:
+                st.info("Countrywise performance not available (missing 'country' column).")
+            else:
+                countries = sorted(
+                    df[df[bat_col] == player_name][country_col]
+                    .dropna()
+                    .unique()
+                    .tolist()
+                )
+            
+                all_countries = []
+            
+                for country in countries:
+                    temp = df[
+                        (df[bat_col] == player_name) &
+                        (df[country_col] == country)
+                    ].copy()
+            
+                    if temp.empty:
+                        continue
+            
+                    temp_summary = cumulator(temp)
+            
+                    if not temp_summary.empty:
+                        temp_summary['COUNTRY'] = country
+                        all_countries.append(temp_summary)
+            
+                if all_countries:
+                    result_df = (
+                        pd.concat(all_countries, ignore_index=True)
+                        .drop(columns=['batsman', 'debut_year', 'final_year'], errors='ignore')
+                    )
+            
+                    # Upper-case column names, replace underscores, normalize middle phases
+                    new_cols = []
+                    for col in result_df.columns:
+                        cname = str(col).upper().replace('_', ' ')
+                        cname = cname.replace('MIDDLE1', 'MIDDLE 1').replace('MIDDLE2', 'MIDDLE 2')
+                        new_cols.append(cname)
+                    result_df.columns = new_cols
+            
+                    # Ensure COUNTRY is first column
+                    if 'COUNTRY' in result_df.columns:
+                        cols = ['COUNTRY'] + [c for c in result_df.columns if c != 'COUNTRY']
+                        result_df = result_df[cols]
+            
+                    # Safe numeric casts
+                    for c in ['RUNS', 'HUNDREDS', 'FIFTIES', '30S', 'HIGHEST SCORE']:
+                        if c in result_df.columns:
+                            result_df[c] = (
+                                pd.to_numeric(result_df[c], errors='coerce')
+                                .fillna(0)
+                                .astype(int)
+                            )
+            
+                    result_df = round_up_floats(result_df)
+            
+                    # Styling: soft peach / sand tone (distinct from others)
+                    country_header_color = "#fff4e6"
+                    country_table_styles = [
+                        {
+                            "selector": "thead th",
+                            "props": [
+                                ("background-color", country_header_color),
+                                ("color", "#000"),
+                                ("font-weight", "600")
+                            ],
+                        },
+                        {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]},
+                        {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#fffaf3")]},
+                    ]
+            
+                    st.markdown("### Countrywise Performance")
+                    st.dataframe(
+                        result_df.style.set_table_styles(country_table_styles),
+                        use_container_width=True
+                    )
+                else:
+                    st.info("No countrywise batting summary available for this player.")
+
             bpdf = as_dataframe(df)  # raw ball-by-ball
             bat_col = 'batsman' if 'batsman' in bpdf.columns else ('bat' if 'bat' in bpdf.columns else None)
             
