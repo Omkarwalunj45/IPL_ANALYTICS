@@ -5550,31 +5550,31 @@ elif sidebar_option == "Matchup Analysis":
               (ctrl, 'False Shot % (not in control)', 'PuBu'),
               (runs_pct, 'Runs Scored %', 'Reds')
           ]
-          for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
+          for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
               safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
               flat = safe_arr.flatten()
              
-              if is_diverging:
-                  # For RAA: center at 0, use symmetric range
-                  non_nan_vals = raa_grid[~np.isnan(raa_grid)]
-                  if len(non_nan_vals) > 0:
-                      abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
-                      if abs_max == 0:
-                          abs_max = 10.0
-                  else:
-                      abs_max = 10.0
+              # if is_diverging:
+              #     # For RAA: center at 0, use symmetric range
+              #     non_nan_vals = raa_grid[~np.isnan(raa_grid)]
+              #     if len(non_nan_vals) > 0:
+              #         abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
+              #         if abs_max == 0:
+              #             abs_max = 10.0
+              #     else:
+              #         abs_max = 10.0
                  
-                  norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
-                  im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
-              else:
-                  # For other metrics: use standard normalization
-                  if np.all(flat == 0):
-                      vmin, vmax = 0, 1
-                  else:
-                      vmin = float(np.nanmin(flat))
-                      vmax = float(np.nanpercentile(flat, 95))
-                      if vmax <= vmin:
-                          vmax = vmin + 1.0
+              #     norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
+              #     im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
+              # else:
+              #     # For other metrics: use standard normalization
+              #     if np.all(flat == 0):
+              #         vmin, vmax = 0, 1
+              #     else:
+              #         vmin = float(np.nanmin(flat))
+              #         vmax = float(np.nanpercentile(flat, 95))
+              #         if vmax <= vmin:
+              #             vmax = vmin + 1.0
                  
                   im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
               ax.set_title(ttl)
