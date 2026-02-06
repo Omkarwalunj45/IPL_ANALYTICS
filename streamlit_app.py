@@ -5464,9 +5464,12 @@ elif sidebar_option == "Matchup Analysis":
                 bounds[le, li] += 1
             if rv == 0:
                 dots[le, li] += 1
-            dval = str(row.get(dismissal_col, '') or '').lower()
+            raw = row.get(dismissal_col)
+            dval = '' if pd.isna(raw) else str(raw).lower()
+            
             if any(tok in dval for tok in wkt_tokens):
                 wkt[le, li] += 1
+
             cval = row.get(control_col, None)
             if cval is not None:
                 if isinstance(cval, str) and 'not' in cval.lower():
