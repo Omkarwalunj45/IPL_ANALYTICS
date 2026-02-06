@@ -5620,7 +5620,7 @@ elif sidebar_option == "Matchup Analysis":
             'LENGTH_MAP': LENGTH_MAP
         }
     
-    def compute_pitchmap_raa(df_src, bdf, runs_col, COL_BAT):
+    def compute_pitchmap_raa(df_src, full_df, runs_col, COL_BAT, COL_BOWL,selected_batter, selected_bowler):
         """
         Dedicated RAA calculation for pitchmap.
         Uses LINE_MAP and LENGTH_MAP from globals to create combo keys that match display.
@@ -5658,7 +5658,11 @@ elif sidebar_option == "Matchup Analysis":
     
         # Prepare selected (filtered) and benchmark data
         selected = df_src.copy()
-        benchmark = bdf.copy()
+        benchmark = full_df[
+            (full_df[COL_BOWL] == selected_bowler) &
+            (full_df[COL_BAT] != selected_batter)
+        ].copy()
+
     
         # Create combo keys using the MAP indices and convert to display names
         def add_combo_key(df):
@@ -6364,6 +6368,7 @@ elif sidebar_option == "Matchup Analysis":
                 return c
         return default
     bdf = as_dataframe(df)
+    full_df = bdf
     # Detect column names in your data
     batter_col = safe_get_col(bdf, ['bat', 'batsman'], default=None)
     bowler_col = safe_get_col(bdf, ['bowl', 'bowler'], default=None)
