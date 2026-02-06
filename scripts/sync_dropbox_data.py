@@ -17,7 +17,7 @@ import time
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Dropbox direct download link
-DROPBOX_DIRECT_URL = os.getenv("DROPBOX_DIRECT_URL", "REPLACE_WITH_YOUR_DIRECT_LINK")
+DROPBOX_DIRECT_URL = os.getenv("DROPBOX_DIRECT_URL", "https://www.dropbox.com/scl/fo/1s4zle5elm98zsquvixl5/AMAwqTwpKu9e6hyNCYYoQLI/t20_bbb.csv?rlkey=5k98lxpc1dafyft5poa3bgh5e&st=rxk6baa0&dl=1")
 
 DATASETS_DIR = "Datasets"
 os.makedirs(DATASETS_DIR, exist_ok=True)
