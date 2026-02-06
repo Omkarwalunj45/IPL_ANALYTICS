@@ -5576,7 +5576,7 @@ elif sidebar_option == "Matchup Analysis":
               #         if vmax <= vmin:
               #             vmax = vmin + 1.0
                  
-                  im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+              im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
               ax.set_title(ttl)
               ax.set_xticks(range(grids['n_cols']))
               ax.set_yticks(range(grids['n_rows']))
