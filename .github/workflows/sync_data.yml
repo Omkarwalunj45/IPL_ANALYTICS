@@ -1,0 +1,58 @@
+name: Sync Dropbox Data
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM UTC
+  
+  workflow_dispatch:  # Manual trigger
+  
+  push:
+    paths:
+      - 'scripts/sync_dropbox_data.py'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install dependencies
+        run: |
+          pip install pandas requests numpy
+      
+      - name: Run sync
+        env:
+          DROPBOX_DIRECT_URL: ${{ secrets.DROPBOX_DIRECT_URL }}
+        run: |
+          python scripts/sync_dropbox_data.py
+      
+      - name: Check for changes
+        id: changes
+        run: |
+          if [[ -n $(git status --porcelain Datasets/) ]]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit and push
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Datasets/
+          git commit -m "Auto-sync: Update datasets [$(date +'%Y-%m-%d %H:%M')]"
+          git push
+      
+      - name: No changes
+        if: steps.changes.outputs.has_changes == 'false'
+        run: echo "✅ All datasets up to date"
