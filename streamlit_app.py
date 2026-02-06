@@ -5727,12 +5727,16 @@ elif sidebar_option == "Matchup Analysis":
             )
     
         # Top7 from benchmark
-        top7 = benchmark[benchmark.get('top7_flag', 0) == 1].copy()
-        if top7.empty:
-            if 'p_bat' in benchmark.columns:
-                top7 = benchmark[pd.to_numeric(benchmark['p_bat'], errors='coerce').fillna(9999) <= 7].copy()
-        if top7.empty:
-            # Use all benchmark data if no top7 flag
+        # --- Select Top-7 batters benchmark safely ---
+        if 'top7_flag' in benchmark.columns:
+            top7 = benchmark[pd.to_numeric(benchmark['top7_flag'], errors='coerce') == 1].copy()
+        
+        elif 'p_bat' in benchmark.columns:
+            # fallback: use batting position
+            top7 = benchmark[pd.to_numeric(benchmark['p_bat'], errors='coerce').fillna(99) <= 7].copy()
+        
+        else:
+            # final fallback: use full benchmark
             top7 = benchmark.copy()
     
         if top7.empty:
