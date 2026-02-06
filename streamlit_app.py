@@ -6580,7 +6580,7 @@ elif sidebar_option == "Matchup Analysis":
                             bdf = bdf[bdf[bowler_col] == bowler_name]
 
                             benchmark_df = get_bowler_benchmark_df(
-                                bdf,
+                                full_df,
                                 bowler_col=bowler_col,
                                 bowler_name=bowler_name
                             )
