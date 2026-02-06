@@ -5633,7 +5633,7 @@ elif sidebar_option == "Matchup Analysis":
         Uses LINE_MAP and LENGTH_MAP from globals to create combo keys that match display.
         """
         out = {}
-        if df_src.empty or bdf.empty:
+        if df_src.empty or full_df.empty:
             return out
     
         # Get maps from globals
@@ -5932,7 +5932,7 @@ elif sidebar_option == "Matchup Analysis":
         # RAA per cell — using your working compute_pitchmap_raa (unchanged)
         raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
         if 'line' in df_src.columns and 'length' in df_src.columns and 'bdf' in globals() and isinstance(bdf, pd.DataFrame):
-            raa_dict = compute_pitchmap_raa(df_src, full_df, runs_col=runs_col, COL_BAT=COL_BAT, COL_BOWL = COL_BOWL, selected_batter = batter_name, selected_bowler = bowler_name)
+            raa_dict = compute_pitchmap_raa(df_src, bdf, runs_col=runs_col, COL_BAT=COL_BAT, COL_BOWL = COL_BOWL, selected_batter = batter_name, selected_bowler = bowler_name)
             for i in range(n_rows):
                 length_str = yticklabels[i].lower().strip()
                 for j in range(grids['n_cols']):
