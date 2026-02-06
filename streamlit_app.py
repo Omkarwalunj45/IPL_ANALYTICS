@@ -5668,8 +5668,13 @@ elif sidebar_option == "Matchup Analysis":
                 length_val = row.get(COL_LENGTH, None)
                 
                 # Get indices from maps
-                li = LINE_MAP.get(line_val, None) if line_val else None
-                le = LENGTH_MAP.get(length_val, None) if length_val else None
+                if pd.isna(line_val) or pd.isna(length_val):
+                    li, le = None, None
+                else:
+                    li = LINE_MAP.get(str(line_val).strip().upper(), None)
+                    le = LENGTH_MAP.get(str(length_val).strip().upper(), None)
+
+
                 
                 if li is not None and le is not None:
                     # Convert to display names
