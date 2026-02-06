@@ -5964,9 +5964,14 @@ elif sidebar_option == "Matchup Analysis":
     #         plt.close(fig)
 
     
-
-    def build_pitch_grids(df_in, line_col_name='line', length_col_name='length', runs_col_candidates=('batruns', 'score'),
-                          control_col='control', dismissal_col='dismissal'):
+    def build_pitch_grids(
+        df_in,
+        line_col_name='line',
+        length_col_name='length',
+        runs_col_candidates=('batruns', 'score'),
+        control_col='control',
+        dismissal_col='dismissal'
+    ):
         if 'length_map' in globals() and isinstance(length_map, dict) and len(length_map) > 0:
             try:
                 max_idx = max(int(v) for v in length_map.values())
@@ -5976,194 +5981,190 @@ elif sidebar_option == "Matchup Analysis":
         else:
             n_rows = 5
             st.warning("length_map not found; defaulting to 5 rows.")
-   
+    
         length_vals = df_in.get(length_col_name, pd.Series()).dropna().astype(str).str.lower().unique()
         if any('full toss' in val for val in length_vals):
             n_rows = max(n_rows, 6)
-   
+    
         n_cols = 5
-   
+    
         count = np.zeros((n_rows, n_cols), dtype=int)
         bounds = np.zeros((n_rows, n_cols), dtype=int)
         dots = np.zeros((n_rows, n_cols), dtype=int)
         runs = np.zeros((n_rows, n_cols), dtype=float)
         wkt = np.zeros((n_rows, n_cols), dtype=int)
         ctrl_not = np.zeros((n_rows, n_cols), dtype=int)
-   
+    
         runs_col = None
         for c in runs_col_candidates:
             if c in df_in.columns:
                 runs_col = c
                 break
-        if runs_col is None:
-            runs_col = None # will use 0
-   
-        wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw','leg before wicket','hit wicket'}
-        dismissal_series = df_in[dismissal_col].fillna('').astype(str).str.lower()
+    
+        wkt_tokens = {'caught', 'bowled', 'stumped', 'lbw', 'leg before wicket', 'hit wicket'}
+    
         for _, row in df_in.iterrows():
-            li = get_map_index(line_map, row.get(line_col_name, None)) if 'line_map' in globals() else None
-            le = get_map_index(length_map, row.get(length_col_name, None)) if 'length_map' in globals() else None
+            li = get_map_index(line_map, row.get(line_col_name)) if 'line_map' in globals() else None
+            le = get_map_index(length_map, row.get(length_col_name)) if 'length_map' in globals() else None
             if li is None or le is None:
                 continue
             if not (0 <= le < n_rows and 0 <= li < n_cols):
                 continue
+    
             count[le, li] += 1
+    
             rv = 0
             if runs_col:
                 try:
                     rv = int(row.get(runs_col, 0) or 0)
-                except:
+                except Exception:
                     rv = 0
             runs[le, li] += rv
+    
             if rv >= 4:
                 bounds[le, li] += 1
             if rv == 0:
                 dots[le, li] += 1
-            raw = row.get(dismissal_col)
-            dval = '' if pd.isna(raw) else str(raw).lower()
-            
+    
+            dval = str(row.get(dismissal_col, '')).lower()
             if any(tok in dval for tok in wkt_tokens):
                 wkt[le, li] += 1
-
-            cval = row.get(control_col, None)
+    
+            cval = row.get(control_col)
             if cval is not None:
                 if isinstance(cval, str) and 'not' in cval.lower():
                     ctrl_not[le, li] += 1
                 elif isinstance(cval, (int, float)) and float(cval) == 0:
                     ctrl_not[le, li] += 1
-   
+    
         sr = np.full(count.shape, np.nan)
         ctrl_pct = np.full(count.shape, np.nan)
         for i in range(n_rows):
             for j in range(n_cols):
                 if count[i, j] > 0:
-                    sr[i, j] = runs[i, j] / count[i, j] * 100.0
+                    sr[i, j] = (runs[i, j] / count[i, j]) * 100.0
                     ctrl_pct[i, j] = (ctrl_not[i, j] / count[i, j]) * 100.0
-   
+    
         return {
-            'count': count, 'bounds': bounds, 'dots': dots,
-            'runs': runs, 'sr': sr, 'ctrl_pct': ctrl_pct, 'wkt': wkt, 'n_rows': n_rows, 'n_cols': n_cols
+            'count': count,
+            'bounds': bounds,
+            'dots': dots,
+            'runs': runs,
+            'sr': sr,
+            'ctrl_pct': ctrl_pct,
+            'wkt': wkt,
+            'n_rows': n_rows,
+            'n_cols': n_cols
         }
 
-
     def display_pitchmaps_from_df(df_src, title_prefix):
-          if df_src is None or df_src.empty:
-              st.info(f"No deliveries to show for {title_prefix}")
-              return
+        if df_src is None or df_src.empty:
+            st.info(f"No deliveries to show for {title_prefix}")
+            return
     
-          grids = build_pitch_grids(df_src)
+        grids = build_pitch_grids(df_src)
     
-          bh_col_name = globals().get('bat_hand_col', 'bat_hand')
-          is_lhb = False
-          if bh_col_name in df_src.columns:
-              hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
-              if any(h.upper().startswith('L') for h in hands):
-                  is_lhb = True
+        bh_col_name = globals().get('bat_hand_col', 'bat_hand')
+        is_lhb = False
+        if bh_col_name in df_src.columns:
+            hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
+            if any(h.upper().startswith('L') for h in hands):
+                is_lhb = True
     
-          def maybe_flip(arr):
-              return np.fliplr(arr) if is_lhb else arr.copy()
+        def maybe_flip(arr):
+            return np.fliplr(arr) if is_lhb else arr.copy()
     
-          count = maybe_flip(grids['count'])
-          bounds = maybe_flip(grids['bounds'])
-          dots = maybe_flip(grids['dots'])
-          sr = maybe_flip(grids['sr'])
-          ctrl = maybe_flip(grids['ctrl_pct'])
-          wkt = maybe_flip(grids['wkt'])
-          runs = maybe_flip(grids['runs'])
+        count  = maybe_flip(grids['count'])
+        bounds = maybe_flip(grids['bounds'])
+        dots   = maybe_flip(grids['dots'])
+        runs   = maybe_flip(grids['runs'])
+        sr     = maybe_flip(grids['sr'])
+        ctrl   = maybe_flip(grids['ctrl_pct'])
+        wkt    = maybe_flip(grids['wkt'])
     
-          total = count.sum() if count.sum() > 0 else 1.0
-          perc = count.astype(float) / total * 100.0
+        # ---------- % CALCULATIONS ----------
+        total_balls = count.sum() if count.sum() > 0 else 1.0
+        balls_pct = (count / total_balls) * 100.0
     
-          # NEW: Calculate percentages
-          total_bounds = bounds.sum() if bounds.sum() > 0 else 1.0
-          bound_pct = bounds.astype(float) / total_bounds * 100.0
+        with np.errstate(divide='ignore', invalid='ignore'):
+            boundary_pct = np.where(count > 0, (bounds / count) * 100.0, np.nan)
+            dot_pct      = np.where(count > 0, (dots / count) * 100.0, np.nan)
     
-          total_dots = dots.sum() if dots.sum() > 0 else 1.0
-          dot_pct = dots.astype(float) / total_dots * 100.0
+        total_runs = runs.sum() if runs.sum() > 0 else 1.0
+        runs_pct = (runs / total_runs) * 100.0
     
-          total_runs = runs.sum() if runs.sum() > 0 else 1.0
-          runs_pct = runs.astype(float) / total_runs * 100.0
+        xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
+        xticks = xticks_base[::-1] if is_lhb else xticks_base
     
-          xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-          xticks = xticks_base[::-1] if is_lhb else xticks_base
+        n_rows = grids['n_rows']
+        yticklabels = (
+            ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
+            if n_rows >= 6 else
+            ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+        )
     
-          n_rows = grids['n_rows']
-          if n_rows >= 6:
-              yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-          else:
-              yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
+        fig, axes = plt.subplots(3, 2, figsize=(14, 18))
+        plt.suptitle(title_prefix, fontsize=16, weight='bold')
+    
+        plot_list = [
+            (balls_pct,   'Balls Bowled (%)', 'Blues'),
+            (boundary_pct,'Boundary %',       'OrRd'),
+            (dot_pct,     'Dot %',            'Blues'),
+            (sr,          'Strike Rate',      'Reds'),
+            (ctrl,        'False Shot %',     'PuBu'),
+            (runs_pct,    'Runs Scored (%)',  'Reds')
+        ]
+    
+        for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
+            safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
+            flat = safe_arr.flatten()
+    
+            if np.all(flat == 0):
+                vmin, vmax = 0, 1
+            else:
+                vmin = float(np.nanmin(flat))
+                vmax = float(np.nanpercentile(flat, 95))
+                if vmax <= vmin:
+                    vmax = vmin + 1.0
+    
+            im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+            ax.set_title(ttl)
+    
+            ax.set_xticks(range(grids['n_cols']))
+            ax.set_yticks(range(grids['n_rows']))
+            ax.set_xticklabels(xticks, rotation=45, ha='right')
+            ax.set_yticklabels(yticklabels)
+    
+            ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
+            ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
+            ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
+            ax.tick_params(which='minor', bottom=False, left=False)
+    
+            if ax_idx == 0:
+                for i in range(grids['n_rows']):
+                    for j in range(grids['n_cols']):
+                        wc = int(wkt[i, j])
+                        if wc > 0:
+                            ax.text(
+                                j, i, f"{wc} W" if wc > 1 else "W",
+                                ha='center', va='center',
+                                fontsize=14, color='gold', weight='bold',
+                                bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2')
+                            )
+    
+            fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
+    
+        plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    
+        safe_fn = globals().get('safe_st_pyplot')
+        try:
+            if callable(safe_fn):
+                safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
+            else:
+                st.pyplot(fig)
+        finally:
+            plt.close(fig)
 
-      
-          fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-          plt.suptitle(f"{title_prefix}", fontsize=16, weight='bold')
-    
-          plot_list = [
-              (perc, 'Balls Bowled', 'Blues'),
-              (bound_pct, 'Boundary %', 'OrRd'),
-              (dot_pct, 'Dot %', 'Blues'),
-              (sr, 'SR', 'Reds'),
-              (ctrl, 'False Shot % (not in control)', 'PuBu'),
-              (runs_pct, 'Runs Scored %', 'Reds')
-          ]
-          for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
-              safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-              flat = safe_arr.flatten()
-             
-              # if is_diverging:
-              #     # For RAA: center at 0, use symmetric range
-              #     non_nan_vals = raa_grid[~np.isnan(raa_grid)]
-              #     if len(non_nan_vals) > 0:
-              #         abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
-              #         if abs_max == 0:
-              #             abs_max = 10.0
-              #     else:
-              #         abs_max = 10.0
-                 
-              #     norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
-              #     im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
-              # else:
-              # For other metrics: use standard normalization
-              if np.all(flat == 0):
-                  vmin, vmax = 0, 1
-              else:
-                  vmin = float(np.nanmin(flat))
-                  vmax = float(np.nanpercentile(flat, 95))
-                  if vmax <= vmin:
-                      vmax = vmin + 1.0
-                 
-              im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
-              ax.set_title(ttl)
-              ax.set_xticks(range(grids['n_cols']))
-              ax.set_yticks(range(grids['n_rows']))
-              ax.set_xticklabels(xticks, rotation=45, ha='right')
-              ax.set_yticklabels(yticklabels)
-              ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
-              ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
-              ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
-              ax.tick_params(which='minor', bottom=False, left=False)
-              if ax_idx == 0:
-                  for i in range(grids['n_rows']):
-                      for j in range(grids['n_cols']):
-                          w_count = int(wkt[i, j])
-                          if w_count > 0:
-                              w_text = f"{w_count} W" if w_count > 1 else 'W'
-                              ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                      bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-             
-              fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-    
-          plt.tight_layout(rect=[0, 0.03, 1, 0.97])
-    
-          safe_fn = globals().get('safe_st_pyplot', None)
-          try:
-              if callable(safe_fn):
-                  safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-              else:
-                  st.pyplot(fig)
-          except Exception:
-              st.pyplot(fig)
-          finally:
-              plt.close(fig) 
     # def display_pitchmaps_from_df(df_src, title_prefix):
     #       if df_src is None or df_src.empty:
     #           st.info(f"No deliveries to show for {title_prefix}")
