@@ -5374,7 +5374,23 @@ elif sidebar_option == "Matchup Analysis":
     COL_DISMISSAL = 'dismissal'  # dismissal text
     COL_PHASE = 'PHASE'
     COL_MATCH = 'p_match'  # match id column used for grouping
-
+    LINE_MAP = {
+        'WIDE_OUTSIDE_OFFSTUMP': 0,
+        'OUTSIDE_OFFSTUMP': 1,
+        'ON_THE_STUMPS': 2,
+        'DOWN_LEG': 3,
+        'WIDE_DOWN_LEG': 4
+    }
+    LENGTH_MAP = {
+        'SHORT': 0,
+        'SHORT_OF_A_GOOD_LENGTH': 1,
+        'GOOD_LENGTH': 2,
+        'FULL': 3,
+        'YORKER': 4,
+        'FULL_TOSS': 5
+    }
+    line_map = LINE_MAP
+    length_map = LENGTH_MAP
     # ---------- robust map-lookup helpers ----------
     def _norm_key(s):
         if s is None:
