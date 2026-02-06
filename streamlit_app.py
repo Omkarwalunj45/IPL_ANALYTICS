@@ -5374,7 +5374,8 @@ elif sidebar_option == "Matchup Analysis":
     COL_DISMISSAL = 'dismissal'  # dismissal text
     COL_PHASE = 'PHASE'
     COL_MATCH = 'p_match' 
-    RUNS_COL ='batruns'# match id column used for grouping
+    RUNS_COL ='batruns'
+    runs_col =  RUNS_COL# match id column used for grouping
     LINE_MAP = {
         'WIDE_OUTSIDE_OFFSTUMP': 0,
         'OUTSIDE_OFFSTUMP': 1,
