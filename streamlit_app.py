@@ -6553,7 +6553,8 @@ elif sidebar_option == "Matchup Analysis":
                             # ---------- RAA-CORRECT MATCHUP LOGIC ----------
                             # selected_df = THIS batter vs THIS bowler (already filtered)
                             # benchmark_df = ALL batters vs THIS bowler
-                            
+                            bdf[bdf[bowler_col] == bowler_name]
+
                             benchmark_df = get_bowler_benchmark_df(
                                 bdf,
                                 bowler_col=bowler_col,
