@@ -7830,7 +7830,9 @@ elif sidebar_option == "Strength vs Weakness":
                             if li is None or le is None:
                                 continue
                             # False shot if control == 0 (since 0/1 format)
-                            is_false = 1 if r['control'] == 0 else 0
+                            ctrl = r.get('control')
+                            is_false = 1 if (pd.notna(ctrl) and ctrl == 0) else 0
+
                             false_shot_grid[le, li] += is_false
                             total_grid[le, li] += 1
                         # Compute % per cell
@@ -8206,23 +8208,36 @@ elif sidebar_option == "Strength vs Weakness":
                     sel_bdf = filter_by_kind(bdf)
                 
                     df_use = sel_pf if not sel_pf.empty else sel_bdf
+                    
                     if df_use.empty:
                         st.info(f"No deliveries found for bowler kind '{chosen_kind}'.")
                     else:
-                        # Cap first word only (e.g., "pace bowler" → "Pace")
                         kind_first = chosen_kind.split()[0].capitalize()
-                
                         st.markdown(f"### Detailed view — Bowler Kind: {kind_first}")
-                        draw_wagon_if_available(df_use, player_selected)
-                
-                        # Updated caught dismissals label
-                        label = f"#### {player_selected}'s Caught Dismissals against {kind_first}"
-                        if chosen_phase != 'Overall':
-                            label += f" in {chosen_phase}"
-                        st.markdown(label)
-                
-                        draw_caught_dismissals_wagon(df_use, player_selected)
-                        display_pitchmaps_from_df(df_use, f"vs Bowler Kind: {kind_first}")
+                    
+                        # 🔹 FILTER before wagon
+                        df_wagon = filter_valid_wagon(df_use)
+                    
+                        if not df_wagon.empty:
+                            draw_wagon_if_available(df_wagon, player_selected)
+                    
+                            label = f"#### {player_selected}'s Caught Dismissals against {kind_first}"
+                            if chosen_phase != 'Overall':
+                                label += f" in {chosen_phase}"
+                            st.markdown(label)
+                    
+                            draw_caught_dismissals_wagon(df_wagon, player_selected)
+                        else:
+                            st.info("No valid wagon-zone data available for this selection.")
+                    
+                        # 🔹 FILTER before pitch maps
+                        df_pitch = filter_valid_line_length(df_use)
+                    
+                        if not df_pitch.empty:
+                            display_pitchmaps_from_df(df_pitch, f"vs Bowler Kind: {kind_first}")
+                        else:
+                            st.info("No valid line/length data available for pitch maps.")
+
                 
                 # When bowl_style is chosen
                 if chosen_style and chosen_style != '-- none --':
@@ -8239,23 +8254,36 @@ elif sidebar_option == "Strength vs Weakness":
                     sel_bdf = filter_by_style(bdf)
                 
                     df_use = sel_pf if not sel_pf.empty else sel_bdf
+                    
                     if df_use.empty:
                         st.info(f"No deliveries found for bowler style '{chosen_style}'.")
                     else:
-                        # Optional: Cap first word for style (if you want consistency)
                         style_first = chosen_style
-                
                         st.markdown(f"### Detailed view — Bowler Style: {style_first}")
-                        draw_wagon_if_available(df_use, player_selected)
-                
-                        # Updated caught dismissals label
-                        label = f"#### {player_selected}'s Caught Dismissals against {style_first}"
-                        if chosen_phase != 'Overall':
-                            label += f" in {chosen_phase}"
-                        st.markdown(label)
-                
-                        draw_caught_dismissals_wagon(df_use, player_selected)
-                        display_pitchmaps_from_df(df_use, f"vs Bowler Style: {style_first}")
+                    
+                        # 🔹 FILTER before wagon
+                        df_wagon = filter_valid_wagon(df_use)
+                    
+                        if not df_wagon.empty:
+                            draw_wagon_if_available(df_wagon, player_selected)
+                    
+                            label = f"#### {player_selected}'s Caught Dismissals against {style_first}"
+                            if chosen_phase != 'Overall':
+                                label += f" in {chosen_phase}"
+                            st.markdown(label)
+                    
+                            draw_caught_dismissals_wagon(df_wagon, player_selected)
+                        else:
+                            st.info("No valid wagon-zone data available for this selection.")
+                    
+                        # 🔹 FILTER before pitch maps
+                        df_pitch = filter_valid_line_length(df_use)
+                    
+                        if not df_pitch.empty:
+                            display_pitchmaps_from_df(df_pitch, f"vs Bowler Style: {style_first}")
+                        else:
+                            st.info("No valid line/length data available for pitch maps.")
+
 
 
 
