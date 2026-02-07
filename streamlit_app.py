@@ -791,7 +791,7 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
 # 🔥 NO-CACHE loader
 def load_filtered_data_nocache(selected_tournaments, selected_years, usecols=None):
     tmp_files = []
-
+    st.write("entered")
     for t in selected_tournaments:
         token = TOURNAMENTS.get(t, t).lower()
         path = _strict_file_for_tournament(token)
