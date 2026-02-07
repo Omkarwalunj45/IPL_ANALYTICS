@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go  
 import base64
 from io import BytesIO
+this_will_crash_app
+
 from PIL import Image
 st.set_page_config(layout="wide")
 #Please work Jai Sainath
