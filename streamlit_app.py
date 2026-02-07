@@ -10264,24 +10264,34 @@ elif sidebar_option == "Strength vs Weakness":
 
         
             for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
-                safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-                flat = safe_arr.flatten()
-        
-                if np.all(flat == 0):
+            
+                # Keep NaNs as NaNs (do NOT convert to 0)
+                arr = arr.astype(float)
+            
+                # Mask invalid (NaN) cells → these become WHITE
+                masked_arr = np.ma.masked_invalid(arr)
+            
+                # Flatten only VALID values for color scaling
+                flat = arr[~np.isnan(arr)]
+            
+                if flat.size == 0:
                     vmin, vmax = 0, 1
                 else:
-                    vmin = float(np.nanmin(flat))
-                    vmax = float(np.nanpercentile(flat, 95))
+                    vmin = float(np.min(flat))
+                    vmax = float(np.percentile(flat, 95))
                     if vmax <= vmin:
                         vmax = vmin + 1.0
-        
+            
                 im = ax.imshow(
-                    safe_arr,
+                    masked_arr,
                     origin='lower',
                     cmap=cmap,
                     vmin=vmin,
                     vmax=vmax
                 )
+            
+                ax.set_title(ttl)
+
         
                 ax.set_title(ttl)
                 ax.set_xticks(range(grids['n_cols']))
