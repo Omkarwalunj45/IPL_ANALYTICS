@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go  
 import base64
 from io import BytesIO
-this_will_crash_app
 
 from PIL import Image
 st.set_page_config(layout="wide")
@@ -6543,151 +6542,151 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 else:
                     print("Pitchmap requires both 'line' and 'length' columns in dataset; skipping pitchmaps.")
 
-            # import plotly.express as px
-            # import pandas as pd
-            # import numpy as np
-            # import streamlit as st
+            import plotly.express as px
+            import pandas as pd
+            import numpy as np
+            import streamlit as st
             
-            # st.write("Hope")
-            # def build_shot_tables(df):
-            #     if df.empty:
-            #         return None, None
+            st.write("Hope")
+            def build_shot_tables(df):
+                if df.empty:
+                    return None, None
             
-            #     df = df.dropna(subset=['shot']).copy()
-            #     if df.empty:
-            #         return None, None
+                df = df.dropna(subset=['shot']).copy()
+                if df.empty:
+                    return None, None
             
-            #     df['batruns'] = pd.to_numeric(df['batruns'], errors='coerce').fillna(0).astype(int)
+                df['batruns'] = pd.to_numeric(df['batruns'], errors='coerce').fillna(0).astype(int)
             
-            #     df['out_flag'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
-            #     df['dismissal_clean'] = df.get('dismissal', '').astype(str).str.lower().str.strip()
+                df['out_flag'] = pd.to_numeric(df.get('out', 0), errors='coerce').fillna(0).astype(int)
+                df['dismissal_clean'] = df.get('dismissal', '').astype(str).str.lower().str.strip()
             
-            #     ignore = {
-            #         'run out','runout','retired','retired not out',
-            #         'retired out','obstructing the field'
-            #     }
+                ignore = {
+                    'run out','runout','retired','retired not out',
+                    'retired out','obstructing the field'
+                }
             
-            #     df['is_wkt'] = df.apply(
-            #         lambda r: 1 if (
-            #             r['out_flag'] == 1
-            #             and r['dismissal_clean'] not in ignore
-            #             and r['dismissal_clean'] != ''
-            #         ) else 0,
-            #         axis=1
-            #     )
+                df['is_wkt'] = df.apply(
+                    lambda r: 1 if (
+                        r['out_flag'] == 1
+                        and r['dismissal_clean'] not in ignore
+                        and r['dismissal_clean'] != ''
+                    ) else 0,
+                    axis=1
+                )
             
-            #     total_runs = df['batruns'].sum()
+                total_runs = df['batruns'].sum()
             
-            #     shot_grp = df.groupby('shot').agg(
-            #         runs_by_shot=('batruns','sum'),
-            #         balls=('shot','size'),
-            #         dismissals=('is_wkt','sum')
-            #     ).reset_index()
+                shot_grp = df.groupby('shot').agg(
+                    runs_by_shot=('batruns','sum'),
+                    balls=('shot','size'),
+                    dismissals=('is_wkt','sum')
+                ).reset_index()
             
-            #     shot_grp['% of Runs'] = (
-            #         shot_grp['runs_by_shot'] / total_runs * 100
-            #         if total_runs > 0 else 0
-            #     )
-            #     shot_grp['SR'] = np.where(
-            #         shot_grp['balls'] > 0,
-            #         shot_grp['runs_by_shot'] / shot_grp['balls'] * 100,
-            #         np.nan
-            #     )
+                shot_grp['% of Runs'] = (
+                    shot_grp['runs_by_shot'] / total_runs * 100
+                    if total_runs > 0 else 0
+                )
+                shot_grp['SR'] = np.where(
+                    shot_grp['balls'] > 0,
+                    shot_grp['runs_by_shot'] / shot_grp['balls'] * 100,
+                    np.nan
+                )
             
-            #     control_df = None
-            #     if 'control' in df.columns:
-            #         df['control_num'] = df['control'].astype(str).str.lower().isin(
-            #             ['1','true','yes','controlled','c','ok']
-            #         ).astype(int)
+                control_df = None
+                if 'control' in df.columns:
+                    df['control_num'] = df['control'].astype(str).str.lower().isin(
+                        ['1','true','yes','controlled','c','ok']
+                    ).astype(int)
             
-            #         control_df = df.groupby('shot').agg(
-            #             total=('control_num','size'),
-            #             controlled=('control_num','sum')
-            #         ).reset_index()
+                    control_df = df.groupby('shot').agg(
+                        total=('control_num','size'),
+                        controlled=('control_num','sum')
+                    ).reset_index()
             
-            #         control_df['Control Percentage'] = (
-            #             control_df['controlled'] / control_df['total'] * 100
-            #         )
+                    control_df['Control Percentage'] = (
+                        control_df['controlled'] / control_df['total'] * 100
+                    )
             
-            #     return shot_grp.sort_values('% of Runs'), control_df
-            
-            
-            # # ---------------- MAIN ----------------
-            
-            # pf = filtered_df.copy()
-            # pf['bowl_kind'] = pf['bowl_kind'].astype(str).str.lower().str.strip()
-            
-            # pace_df = pf[pf['bowl_kind'] == 'pace bowler']
-            # spin_df = pf[pf['bowl_kind'] == 'spin bowler']
-            
-            # st.markdown("## Shot Analysis")
-            
-            # tab_pace, tab_spin = st.tabs(["vs Pace", "vs Spin"])
-            
-            # # ========== PACE TAB ==========
-            # with tab_pace:
-            #     c1, c2 = st.columns(2)
-            
-            #     prod, ctrl = build_shot_tables(pace_df)
-            
-            #     with c1:
-            #         st.markdown("### Most Productive Shots")
-            #         if prod is not None:
-            #             fig = px.bar(
-            #                 prod,
-            #                 x='% of Runs', y='shot',
-            #                 orientation='h', color='% of Runs',
-            #                 height=520
-            #             )
-            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-            #             fig.update_yaxes(categoryorder='total ascending')
-            #             st.plotly_chart(fig, use_container_width=True)
-            
-            #     with c2:
-            #         st.markdown("### Control Percentage")
-            #         if ctrl is not None:
-            #             fig = px.bar(
-            #                 ctrl.sort_values('Control Percentage'),
-            #                 x='Control Percentage', y='shot',
-            #                 orientation='h', color='Control Percentage',
-            #                 height=520
-            #             )
-            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-            #             fig.update_yaxes(categoryorder='total ascending')
-            #             st.plotly_chart(fig, use_container_width=True)
+                return shot_grp.sort_values('% of Runs'), control_df
             
             
-            # # ========== SPIN TAB ==========
-            # with tab_spin:
-            #     c1, c2 = st.columns(2)
+            # ---------------- MAIN ----------------
             
-            #     prod, ctrl = build_shot_tables(spin_df)
+            pf = filtered_df.copy()
+            pf['bowl_kind'] = pf['bowl_kind'].astype(str).str.lower().str.strip()
             
-            #     with c1:
-            #         st.markdown("### Most Productive Shots")
-            #         if prod is not None:
-            #             fig = px.bar(
-            #                 prod,
-            #                 x='% of Runs', y='shot',
-            #                 orientation='h', color='% of Runs',
-            #                 height=520
-            #             )
-            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-            #             fig.update_yaxes(categoryorder='total ascending')
-            #             st.plotly_chart(fig, use_container_width=True)
+            pace_df = pf[pf['bowl_kind'] == 'pace bowler']
+            spin_df = pf[pf['bowl_kind'] == 'spin bowler']
             
-            #     with c2:
-            #         st.markdown("### Control Percentage")
-            #         if ctrl is not None:
-            #             fig = px.bar(
-            #                 ctrl.sort_values('Control Percentage'),
-            #                 x='Control Percentage', y='shot',
-            #                 orientation='h', color='Control Percentage',
-            #                 height=520
-            #             )
-            #             fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
-            #             fig.update_yaxes(categoryorder='total ascending')
-            #             st.plotly_chart(fig, use_container_width=True)
+            st.markdown("## Shot Analysis")
+            
+            tab_pace, tab_spin = st.tabs(["vs Pace", "vs Spin"])
+            
+            # ========== PACE TAB ==========
+            with tab_pace:
+                c1, c2 = st.columns(2)
+            
+                prod, ctrl = build_shot_tables(pace_df)
+            
+                with c1:
+                    st.markdown("### Most Productive Shots")
+                    if prod is not None:
+                        fig = px.bar(
+                            prod,
+                            x='% of Runs', y='shot',
+                            orientation='h', color='% of Runs',
+                            height=520
+                        )
+                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+                        fig.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig, use_container_width=True)
+            
+                with c2:
+                    st.markdown("### Control Percentage")
+                    if ctrl is not None:
+                        fig = px.bar(
+                            ctrl.sort_values('Control Percentage'),
+                            x='Control Percentage', y='shot',
+                            orientation='h', color='Control Percentage',
+                            height=520
+                        )
+                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+                        fig.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig, use_container_width=True)
+            
+            
+            # ========== SPIN TAB ==========
+            with tab_spin:
+                c1, c2 = st.columns(2)
+            
+                prod, ctrl = build_shot_tables(spin_df)
+            
+                with c1:
+                    st.markdown("### Most Productive Shots")
+                    if prod is not None:
+                        fig = px.bar(
+                            prod,
+                            x='% of Runs', y='shot',
+                            orientation='h', color='% of Runs',
+                            height=520
+                        )
+                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+                        fig.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig, use_container_width=True)
+            
+                with c2:
+                    st.markdown("### Control Percentage")
+                    if ctrl is not None:
+                        fig = px.bar(
+                            ctrl.sort_values('Control Percentage'),
+                            x='Control Percentage', y='shot',
+                            orientation='h', color='Control Percentage',
+                            height=520
+                        )
+                        fig.update_traces(texttemplate='%{x:.2f}%', textposition='inside')
+                        fig.update_yaxes(categoryorder='total ascending')
+                        st.plotly_chart(fig, use_container_width=True)
 
 
 
