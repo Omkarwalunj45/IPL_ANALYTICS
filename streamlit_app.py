@@ -6620,7 +6620,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             spin_df = pf[pf['bowl_kind'] == 'spin bowler']
             
             st.markdown("## Shot Analysis")
-            
+            fuck u
             tab_pace, tab_spin = st.tabs(["vs Pace", "vs Spin"])
             
             # ========== PACE TAB ==========
