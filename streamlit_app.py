@@ -821,12 +821,12 @@ if df.empty:
 # ============================================================
 
 st.success(
-    f" {len(df):,} Balls Analysed Across| "
-    f"{len(selected_tournaments)} tournament(s) | "
+    f" {len(df):,} Balls Analysed Across "
+    f"{len(selected_tournaments)} tournament(s) from "
     f"{year_range[0]}–{year_range[1]}"
 )
 
-st.write(df.head())
+# st.write(df.head())
 
 DF_gen = df
 
