@@ -10187,7 +10187,13 @@ elif sidebar_option == "Strength vs Weakness":
                 'count': count, 'bounds': bounds, 'dots': dots,
                 'runs': runs, 'econ': econ, 'ctrl_pct': ctrl_pct, 'wkt': wkt, 'n_rows': n_rows, 'n_cols': n_cols
             }
-        
+        from matplotlib.colors import LinearSegmentedColormap
+
+        RYG_CMAP = LinearSegmentedColormap.from_list(
+            "RYG",
+            ["#d7191c", "#ffffbf", "#1a9641"]  # red → yellow → green
+        )
+
         # ---------- display utility (adapted for bowling metrics) ----------
         def display_pitchmaps_from_df(df_src, title_prefix):
             if df_src is None or df_src.empty:
@@ -10216,17 +10222,24 @@ elif sidebar_option == "Strength vs Weakness":
         
             # ---------------- PER-CELL METRICS ----------------
             with np.errstate(divide='ignore', invalid='ignore'):
-                balls_pct   = count / count.sum() * 100.0
+                balls_pct = count / count.sum() * 100.0
                 boundary_pct = np.where(count > 0, bounds / count * 100.0, np.nan)
-                dot_pct      = np.where(count > 0, dots / count * 100.0, np.nan)
-                batting_sr   = np.where(count > 0, runs / count * 100.0, np.nan)
-        
-                # Bowling SR: balls per wicket, only if balls >= 15
+                dot_pct = np.where(count > 0, dots / count * 100.0, np.nan)
+                batting_sr = np.where(count > 0, runs / count * 100.0, np.nan)
+            
+                # ---------- VALIDITY MASK ----------
+                valid_mask = (count >= 15) | (wkt >= 1)
+            
+                # False Shot % (masked if invalid)
+                false_shot_pct = np.where(valid_mask, ctrl, np.nan)
+            
+                # Bowling SR (balls / wicket), masked if invalid
                 bowling_sr = np.where(
-                    (count >= 15) & (wkt > 0),
+                    valid_mask & (wkt > 0),
                     count / wkt,
                     np.nan
                 )
+
         
             xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
             xticks = xticks_base[::-1] if is_lhb else xticks_base
@@ -10241,13 +10254,14 @@ elif sidebar_option == "Strength vs Weakness":
             plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
         
             plot_list = [
-                (balls_pct,    'Balls Bowled (%)',            'Blues'),
-                (boundary_pct, 'Boundary % (per ball)',       'OrRd'),
-                (dot_pct,      'Dot % (per ball)',            'Blues'),
-                (batting_sr,   'Batting SR (runs/ball ×100)', 'Reds'),
-                (ctrl,         'False Shot % (induced)',      'RdYlGn'),
-                (bowling_sr,   'Bowling SR (balls/wicket)',   'RdYlGn_r')
+                (balls_pct,       'Balls Bowled (%)',            'Blues'),
+                (boundary_pct,    'Boundary %',       'OrRd'),
+                (dot_pct,         'Dot %',            'Blues'),
+                (batting_sr,      'Batting SR', 'Reds'),
+                (false_shot_pct,  'False Shot % Induced',      RYG_CMAP),
+                (bowling_sr,      'Bowling SR',   RYG_CMAP)
             ]
+
         
             for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
                 safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
