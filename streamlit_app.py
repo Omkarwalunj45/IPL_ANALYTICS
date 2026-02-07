@@ -6270,7 +6270,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 total_runs  = run_grid.sum() if run_grid.sum() > 0 else 1
             
                 balls_pct = ball_grid / total_balls * 100.0
-                runs_pct  = np.where(ball_grid >= 3, run_grid / total_runs * 100.0, np.nan)
+                runs_pct  = np.where(ball_grid >= 1, run_grid / total_runs * 100.0, np.nan)
                 dot_pct   = np.where(ball_grid > 0, dot_grid / ball_grid * 100.0, np.nan)
                 sr_grid   = np.where(ball_grid > 0, run_grid / ball_grid * 100.0, np.nan)
             
