@@ -921,7 +921,7 @@ selected_tournaments = st.sidebar.multiselect(
     "Choose tournaments",
     list(TOURNAMENTS.keys())
 )
-
+file_signatures = None
 # 🔥 CHANGE: trigger safe mode when >= 4 tournaments
 HEAVY_MODE = len(selected_tournaments) >= 4
 
@@ -930,6 +930,18 @@ if HEAVY_MODE:
 
 # Columns to load (None = load all columns)
 usecols = None
+if not HEAVY_MODE:
+    resolved_files = []
+    for t in selected_tournaments:
+        token = TOURNAMENTS.get(t, t).lower()
+        path = _strict_file_for_tournament(token)
+        if path is None:
+            resolved_files.append((t, None, None, None))
+        else:
+            resolved_files.append(
+                (t, path, os.path.getmtime(path), os.path.getsize(path))
+            )
+    file_signatures = tuple(resolved_files)
 
 # ────────────────────────────────────────────────
 # LOAD DATA
@@ -943,20 +955,21 @@ if not selected_tournaments:
 
 with st.spinner("Loading data…"):
     if HEAVY_MODE:
-        # 🔥 ultra-safe path: NO cache, NO file_signatures
+        # ultra-safe path: no cache, no file_signatures
         df = load_filtered_data_ultra_safe(
             selected_tournaments,
             selected_years,
             usecols=usecols
         )
     else:
-        # 🔥 cached path: file_signatures REQUIRED
+        # cached path: file_signatures GUARANTEED to exist
         df = load_filtered_data_fast(
             selected_tournaments,
             selected_years,
             usecols=usecols,
             file_signatures=file_signatures
         )
+
 
 if df.empty:
     st.warning("No data loaded.")
