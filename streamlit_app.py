@@ -400,7 +400,8 @@ def display_figure_fixed_height_html(fig, height_px=1200, bg='white', container_
     st.markdown(wrapper, unsafe_allow_html=True)
     plt.close(fig)
 
-
+import streamlit as st
+import streamlit.components.v1 as components
 st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)', layout='wide')
 st.markdown("""
 <style>
@@ -623,8 +624,7 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-import streamlit as st
-import streamlit.components.v1 as components
+
 
 
 
