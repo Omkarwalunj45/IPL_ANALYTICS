@@ -10149,7 +10149,7 @@ elif sidebar_option == "Strength vs Weakness":
             
             # ---------------- MAIN ----------------
             
-            pf = filtered_df.copy()
+            # pf = filtered_df.copy()
             pf['bowl_kind'] = pf['bowl_kind'].astype(str).str.lower().str.strip()
             
             pace_df = pf[pf['bowl_kind'] == 'pace bowler']
