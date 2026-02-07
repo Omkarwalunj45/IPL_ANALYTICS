@@ -9055,7 +9055,7 @@ elif sidebar_option == "Strength vs Weakness":
 
     pass
 # Sidebar UI
-else:
+elif sidebar_option == "Integrated Contextual Ratings":
     import io
     import pandas as pd
     import streamlit as st
@@ -9375,7 +9375,7 @@ def execute_ai_query(df, plan):
         return round((yorkers / total) * 100, 2), "Yorker %"
 
     return None, "Metric not supported yet."
-if sidebar_option == "AI Mode":
+elif sidebar_option == "AI Mode":
     st.markdown("## Cricket AI Analyst")
     st.caption("Ask data-backed natural language questions.")
 
