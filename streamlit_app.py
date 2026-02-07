@@ -8501,7 +8501,7 @@ else:
     # ==================== FREE AI MODE WITH HUGGINGFACE (FIXED) ====================
     # This version properly uses your HuggingFace token to avoid rate limits
         
-    DF_gen['phase']=DF_gen['PHASE']
+    # DF_gen['phase']=DF_gen['PHASE']
     import os
     import json
     from datetime import datetime
@@ -8621,7 +8621,7 @@ else:
                     'df': df_ref,
                 }
                 result = eval(code_str, safe_globals)
-                
+                df_ref['phase'] = df_ref['PHASE']
                 if isinstance(result, pd.DataFrame):
                     if len(result) > 50:
                         return {"table": result.head(50), "text": f"Showing first 50 of {len(result)} rows"}
