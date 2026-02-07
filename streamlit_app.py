@@ -8667,16 +8667,48 @@ else:
         # ============================================================
         
         def execute_query(code_str, df_ref):
-            local_env = {"df": df_ref, "pd": pd, "np": np}
+            """Safely execute AI-generated pandas code"""
+        
+            if not code_str or not isinstance(code_str, str):
+                return {"text": "❌ No code generated.", "table": None}
+        
+            code_str = code_str.strip()
+        
+            # 🚨 HARD BLOCK: prevent bad code
+            if not is_valid_python(code_str):
+                return {
+                    "text": "❌ AI generated invalid Python code.\n\nPlease rephrase the question.",
+                    "table": None
+                }
+        
             try:
-                exec(code_str, {}, local_env)
-                # find last dataframe/series created
-                for v in local_env.values():
-                    if isinstance(v, (pd.DataFrame, pd.Series)):
-                        return {"table": v, "text": None}
-                return {"text": "Query executed", "table": None}
+                safe_globals = {
+                    "pd": pd,
+                    "np": np,
+                    "df": df_ref,
+                }
+        
+                result = eval(code_str, safe_globals)
+        
+                if isinstance(result, pd.DataFrame):
+                    if len(result) > 50:
+                        return {
+                            "table": result.head(50),
+                            "text": f"Showing first 50 of {len(result)} rows"
+                        }
+                    return {"table": result, "text": None}
+        
+                if isinstance(result, pd.Series):
+                    return {"table": result.to_frame(), "text": None}
+        
+                return {"text": str(result), "table": None}
+        
             except Exception as e:
-                return {"text": f"❌ Execution error: {e}", "table": None}
+                return {
+                    "text": f"❌ Execution error:\n\n{str(e)}",
+                    "table": None
+                }
+
 
 
         
