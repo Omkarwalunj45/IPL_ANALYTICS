@@ -7562,7 +7562,9 @@ elif sidebar_option == "Strength vs Weakness":
                         
                         # Check dismissal column for wicket tokens
                         if 'dismissal' in row.index:
-                            dval = str(row.get('dismissal', '') or '').lower()
+                            val = row.get('dismissal')
+                            dval = '' if pd.isna(val) else str(val).lower()
+
                             if any(tok in dval for tok in wkt_tokens):
                                 # Already counted above if out flag was set
                                 pass
