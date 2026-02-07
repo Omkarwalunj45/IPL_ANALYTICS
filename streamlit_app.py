@@ -636,6 +636,10 @@ def chunk_list(lst, n):
 # STREAMLIT APP — SAFE TOURNAMENT SELECTION (MAX 5)
 # ============================================================
 
+# ============================================================
+# STREAMLIT APP — SAFE TOURNAMENT SELECTION (MAX 5) + YEAR SLIDER
+# ============================================================
+
 import os
 import glob
 import re
@@ -673,7 +677,10 @@ def _strict_file_for_tournament(token: str):
     files = glob.glob(os.path.join(DATASETS_DIR, "*"))
     files = [f for f in files if os.path.isfile(f)]
 
-    pattern = re.compile(rf"(^|[^a-z0-9]){re.escape(token)}([^a-z0-9]|$)", re.I)
+    pattern = re.compile(
+        rf"(^|[^a-z0-9]){re.escape(token)}([^a-z0-9]|$)",
+        flags=re.IGNORECASE
+    )
 
     matches = [f for f in files if pattern.search(os.path.basename(f).lower())]
     if not matches:
@@ -686,7 +693,28 @@ def _strict_file_for_tournament(token: str):
     return matches[0]
 
 
-def load_data_simple(selected_tournaments):
+def _detect_year_column(df):
+    for c in df.columns:
+        lc = c.lower()
+        if lc in ("year", "season") or lc.endswith("_year"):
+            return c
+        if "date" in lc:
+            return c
+    return None
+
+
+def _extract_years(series):
+    if pd.api.types.is_numeric_dtype(series):
+        return series.astype("Int64")
+
+    dt = pd.to_datetime(series, errors="coerce")
+    if dt.notna().any():
+        return dt.dt.year.astype("Int64")
+
+    return None
+
+
+def load_data_simple(selected_tournaments, selected_years):
     """Simple, safe loader — assumes MAX 5 tournaments only."""
     frames = []
 
@@ -711,6 +739,16 @@ def load_data_simple(selected_tournaments):
             st.error(f"Failed to load {t}: {e}")
             continue
 
+        if df.empty:
+            continue
+
+        # Year filtering
+        year_col = _detect_year_column(df)
+        if year_col:
+            yrs = _extract_years(df[year_col])
+            if yrs is not None:
+                df = df.loc[yrs.isin(selected_years).fillna(False)]
+
         if not df.empty:
             df["tournament"] = t
             frames.append(df)
@@ -721,8 +759,24 @@ def load_data_simple(selected_tournaments):
     return pd.concat(frames, ignore_index=True, sort=False)
 
 # ============================================================
-# SIDEBAR
+# SIDEBAR — YEAR + TOURNAMENTS
 # ============================================================
+
+st.sidebar.header("Select Years")
+
+year_range = st.sidebar.slider(
+    "Year range",
+    min_value=2021,
+    max_value=2026,
+    value=(2021, 2026),
+    step=1
+)
+
+selected_years = list(range(year_range[0], year_range[1] + 1))
+
+st.sidebar.markdown(
+    f"**Selected:** {year_range[0]} – {year_range[1]}"
+)
 
 st.sidebar.header("Select Tournaments")
 
@@ -732,7 +786,7 @@ selected_tournaments = st.sidebar.multiselect(
 )
 
 # ============================================================
-# HARD GUARD (THIS IS THE KEY)
+# HARD GUARD (IMPORTANT)
 # ============================================================
 
 if not selected_tournaments:
@@ -741,21 +795,21 @@ if not selected_tournaments:
 
 if len(selected_tournaments) > MAX_TOURNAMENTS:
     st.error(
-        f"❌ You selected {len(selected_tournaments)} tournaments.\n\n"
+        f"❌ You selected **{len(selected_tournaments)} tournaments**.\n\n"
         f"Please select **MAX {MAX_TOURNAMENTS} tournaments** for analysis.\n\n"
-        f"This limit exists to ensure stability and performance."
+        f"This limit ensures stability and prevents crashes."
     )
     st.stop()
 
 # ============================================================
-# LOAD DATA (SAFE PATH ONLY)
+# LOAD DATA
 # ============================================================
 
 with st.spinner("Loading data…"):
-    df = load_data_simple(selected_tournaments)
+    df = load_data_simple(selected_tournaments, selected_years)
 
 if df.empty:
-    st.error("No data could be loaded.")
+    st.error("No data could be loaded for the selected filters.")
     st.stop()
 
 # ============================================================
@@ -763,8 +817,15 @@ if df.empty:
 # ============================================================
 
 st.success(
-    f"Loaded {len(df):,} rows from {len(selected_tournaments)} tournament(s)"
+    f"Loaded {len(df):,} rows | "
+    f"{len(selected_tournaments)} tournament(s) | "
+    f"{year_range[0]}–{year_range[1]}"
 )
+
+# st.write(df.head())
+
+DF_gen = df
+
 
 
 
