@@ -13,6 +13,54 @@ import uuid
 
 from PIL import Image
 st.set_page_config(layout="wide")
+st.markdown("""
+<style>
+
+/* Selectbox, multiselect, dropdown input */
+[data-baseweb="select"] > div {
+    background-color: #ffffff !important;
+}
+
+/* Dropdown text */
+[data-baseweb="select"] span {
+    color: #000000 !important;
+}
+
+/* Placeholder text */
+[data-baseweb="select"] input {
+    color: #000000 !important;
+}
+
+/* Dropdown menu */
+[data-baseweb="menu"] {
+    background-color: #ffffff !important;
+}
+
+/* Dropdown options */
+[data-baseweb="option"] {
+    color: #000000 !important;
+    background-color: #ffffff !important;
+}
+
+/* Hover */
+[data-baseweb="option"]:hover {
+    background-color: #f2f2f2 !important;
+}
+
+/* Radio buttons */
+[data-baseweb="radio"] span {
+    color: #000000 !important;
+}
+
+/* Multiselect tags */
+[data-baseweb="tag"] {
+    background-color: #e5e7eb !important;
+    color: #000000 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
 #Please work Jai Sainath
 WAGON_ZONES = [
                     "Third Man",
