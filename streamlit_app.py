@@ -8750,7 +8750,7 @@ else:
         - batruns (runs scored off the ball)
         - dismissal (NaN if no wicket)
         - bowl_kind (Pace / Spin)
-        
+        Use year column for year based filtration. Note that there's no season column
         Rules:
         - Respond ONLY with valid Python pandas code
         - Do NOT explain anything
