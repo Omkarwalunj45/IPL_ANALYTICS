@@ -6242,12 +6242,22 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     if rv == 0:
                         dot_grid[le, li] += 1
             
+                    # ---------------- WICKET DETECTION (FIXED) ----------------
                     if 'dismissal' in final_df.columns:
                         d = r.get('dismissal', None)
                         if isinstance(d, str):
                             d_clean = d.strip().lower()
-                            if d_clean in wicket_set:
+                    
+                            if (
+                                'caught' in d_clean
+                                or 'bowled' in d_clean
+                                or 'lbw' in d_clean
+                                or 'leg before wicket' in d_clean
+                                or 'stumped' in d_clean
+                                or 'hit wicket' in d_clean
+                            ):
                                 wkt_grid[le, li] += 1
+
 
             
                 # ---------------- HANDEDNESS ----------------
@@ -6291,7 +6301,6 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                 for ax_idx, (ax, (arr, title, cmap)) in enumerate(zip(axes.flat, plot_items)):
                     masked = np.ma.masked_invalid(arr)
                     flat = arr[~np.isnan(arr)]
-                    st.write("DEBUG – total wickets:", int(wkt_grid.sum()))
                     if flat.size == 0:
                         vmin, vmax = 0, 1
                     else:
