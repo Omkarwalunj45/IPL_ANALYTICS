@@ -9426,6 +9426,48 @@ else:
     # ================= SIDEBAR =================
     st.markdown("## Integrated Contextual Ratings")
 
+    buffer = io.StringIO()
+    df_disp.to_csv(buffer, index=False)
+    buffer.seek(0)
+    st.markdown("""
+      <div style="
+          background: linear-gradient(135deg, #0b1f3a, #0f2f55);
+          border-left: 4px solid #22d3ee;
+          padding: 14px 18px;
+          border-radius: 10px;
+          margin: 14px 0 18px 0;
+          color: #e5e7eb;
+          line-height: 1.5;
+      ">
+      
+      <div style="font-size:15px; font-weight:600; margin-bottom:6px;">
+      What is Integrated Contextual Rating (ICR)?
+      </div>
+      
+      <div style="font-size:14px; color:#cbd5f5;">
+      ICR quantifies a player’s <b>true T20 impact</b> by adjusting performance for role, venue, opposition, and match context —
+      not just what appears on the scorecard.
+      </div>
+      
+      <div style="font-size:14px; color:#cbd5f5; margin-top:6px;">
+      The framework explains <b>70%+ of team win variance</b>, more than any commonly used T20 metric today.
+      </div>
+      
+      <div style="margin-top:10px;">
+      <a href="https://open.substack.com/pub/theunseengame/p/the-unseen-game-icr-metric"
+         target="_blank"
+         style="
+            color:#22d3ee;
+            font-weight:600;
+            text-decoration: underline;
+         ">
+      Read the full ICR methodology & insights →
+      </a>
+      </div>
+      
+      </div>
+      """, unsafe_allow_html=True)
+
     year_choice = st.selectbox("Select Year", ["2023", "2024", "2025"], index=2)
     board_choice = st.radio(
         "Leaderboard",
