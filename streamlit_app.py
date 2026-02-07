@@ -766,8 +766,6 @@ st.success(
     f"Loaded {len(df):,} rows from {len(selected_tournaments)} tournament(s)"
 )
 
-st.write(df.head())
-
 
 
 
