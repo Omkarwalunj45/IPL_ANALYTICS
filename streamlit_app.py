@@ -6415,7 +6415,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             pace_df = pf[pf['bowl_kind'] == 'pace bowler']
             spin_df = pf[pf['bowl_kind'] == 'spin bowler']
             
-            st.markdown("## Shot Analysis"))
+            st.markdown("## Shot Analysis")
             tab_pace, tab_spin = st.tabs(["vs Pace", "vs Spin"])
             
             # ========== PACE TAB ==========
