@@ -885,7 +885,7 @@ with st.spinner("Loading data…"):
             usecols=usecols
         )
     else:
-        st.warning("⚠️ Safe loading mode enabled (3–5 tournaments)")
+        # st.warning("⚠️ Safe loading mode enabled (3–5 tournaments)")
         df = load_filtered_data_ultra_safe(
             selected_tournaments,
             selected_years,
@@ -901,8 +901,8 @@ if df.empty:
 # ============================================================
 
 st.success(
-    f"Loaded {len(df):,} rows | "
-    f"{len(selected_tournaments)} tournaments | "
+    f"{len(df):,} Balls Analysed Across "
+    f"{len(selected_tournaments)} Tournaments from "
     f"{year_range[0]}–{year_range[1]}"
 )
 
