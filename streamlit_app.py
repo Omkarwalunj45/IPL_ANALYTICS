@@ -909,6 +909,37 @@ st.success(
 
 DF_gen = df
 DF_gen['batsman']=DF_gen['bat']
+def assign_phase(over):
+    if pd.isna(over):
+        return 'Unknown'
+    try:
+        over_int = int(float(over))  # handle float or string
+        if 1 <= over_int <= 6:
+            return 'Powerplay'
+        elif 7 <= over_int <= 11:
+            return 'Middle 1'
+        elif 12 <= over_int <= 16:
+            return 'Middle 2'
+        elif 17 <= over_int <= 20:
+            return 'Death'
+        else:
+            return 'Unknown'
+    except:
+        return 'Unknown'
+
+OVER_COL_CANDIDATES = ["over", "overs", "ball_over", "over_number"]
+
+over_col = None
+for c in OVER_COL_CANDIDATES:
+    if c in df.columns:
+        over_col = c
+        break
+
+if over_col is None:
+    st.error("❌ Cannot create phase: no over column found in dataset.")
+    st.stop()
+if "phase" not in df.columns:
+    DF_gen["phase"] = DF_gen[over_col].apply(assign_phase)
 # st.write(DF_gen.head())
 
 
@@ -8621,7 +8652,7 @@ else:
                     'df': df_ref,
                 }
                 result = eval(code_str, safe_globals)
-                df_ref['phase'] = df_ref['PHASE']
+                # df_ref['phase'] = df_ref['PHASE']
                 if isinstance(result, pd.DataFrame):
                     if len(result) > 50:
                         return {"table": result.head(50), "text": f"Showing first 50 of {len(result)} rows"}
