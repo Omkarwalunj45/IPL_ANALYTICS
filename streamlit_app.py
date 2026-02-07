@@ -7652,9 +7652,17 @@ elif sidebar_option == "Strength vs Weakness":
                             length_val = row.get(COL_LENGTH, None)
                             
                             # Get indices from maps
-                            li = LINE_MAP.get(line_val, None) if line_val else None
-                            le = LENGTH_MAP.get(length_val, None) if length_val else None
-                            
+                            if pd.isna(line_val):
+                                li = None
+                            else:
+                                li = LINE_MAP.get(line_val)
+
+                            # le = LENGTH_MAP.get(length_val, None) if length_val else None
+                            if pd.isna(length_val):
+                                le = None
+                            else:
+                                le = LENGTH_MAP.get(length_val)
+
                             if li is not None and le is not None:
                                 # Convert to display names
                                 line_display = line_idx_to_display.get(li, '').lower().strip()
@@ -9331,139 +9339,139 @@ elif sidebar_option == "Integrated Contextual Ratings":
         pass
 
 
-else:
+# else:
     
     
     
     
-    AI_QUERY_SCHEMA = {
-        "player": str,
-        "tournament": list,        # ["IPL"], ["T20I"]
-        "start_year": int,
-        "end_year": int,
-        "phase": list,             # ["Powerplay", "Death"]
-        "bowling_style": list,     # ["Left-arm Fast"]
-        "length": list,            # ["YORKER"]
-        "metric": str              # "strike_rate", "yorker_pct"
-    }
-    def simple_ai_parser(question: str):
-        q = question.lower()
+#     AI_QUERY_SCHEMA = {
+#         "player": str,
+#         "tournament": list,        # ["IPL"], ["T20I"]
+#         "start_year": int,
+#         "end_year": int,
+#         "phase": list,             # ["Powerplay", "Death"]
+#         "bowling_style": list,     # ["Left-arm Fast"]
+#         "length": list,            # ["YORKER"]
+#         "metric": str              # "strike_rate", "yorker_pct"
+#     }
+#     def simple_ai_parser(question: str):
+#         q = question.lower()
     
-        plan = {
-            "player": None,
-            "tournament": [],
-            "start_year": None,
-            "end_year": None,
-            "phase": [],
-            "bowling_style": [],
-            "length": [],
-            "metric": None
-        }
+#         plan = {
+#             "player": None,
+#             "tournament": [],
+#             "start_year": None,
+#             "end_year": None,
+#             "phase": [],
+#             "bowling_style": [],
+#             "length": [],
+#             "metric": None
+#         }
     
-        # --- tournament ---
-        if "ipl" in q:
-            plan["tournament"].append("IPL")
-        if "t20i" in q:
-            plan["tournament"].append("T20I")
+#         # --- tournament ---
+#         if "ipl" in q:
+#             plan["tournament"].append("IPL")
+#         if "t20i" in q:
+#             plan["tournament"].append("T20I")
     
-        # --- phase ---
-        if "powerplay" in q:
-            plan["phase"].append("Powerplay")
-        if "death" in q:
-            plan["phase"].append("Death")
+#         # --- phase ---
+#         if "powerplay" in q:
+#             plan["phase"].append("Powerplay")
+#         if "death" in q:
+#             plan["phase"].append("Death")
     
-        # --- bowling style ---
-        if "left arm" in q:
-            plan["bowling_style"].append("Left-arm Fast")
+#         # --- bowling style ---
+#         if "left arm" in q:
+#             plan["bowling_style"].append("Left-arm Fast")
     
-        # --- length ---
-        if "yorker" in q:
-            plan["length"].append("YORKER")
+#         # --- length ---
+#         if "yorker" in q:
+#             plan["length"].append("YORKER")
     
-        # --- metric ---
-        if "strike rate" in q or "sr" in q:
-            plan["metric"] = "strike_rate"
-        if "yorker %" in q or "yorker percentage" in q:
-            plan["metric"] = "yorker_pct"
+#         # --- metric ---
+#         if "strike rate" in q or "sr" in q:
+#             plan["metric"] = "strike_rate"
+#         if "yorker %" in q or "yorker percentage" in q:
+#             plan["metric"] = "yorker_pct"
     
-        # --- year ---
-        import re
-        years = re.findall(r"(20\d{2})", q)
-        if len(years) >= 1:
-            plan["start_year"] = int(years[0])
-        if len(years) >= 2:
-            plan["end_year"] = int(years[1])
-        elif plan["start_year"]:
-            plan["end_year"] = 2026
+#         # --- year ---
+#         import re
+#         years = re.findall(r"(20\d{2})", q)
+#         if len(years) >= 1:
+#             plan["start_year"] = int(years[0])
+#         if len(years) >= 2:
+#             plan["end_year"] = int(years[1])
+#         elif plan["start_year"]:
+#             plan["end_year"] = 2026
     
-        # --- player ---
-        for name in DF_gen['batsman'].dropna().unique():
-            if name.lower() in q:
-                plan["player"] = name
-                break
+#         # --- player ---
+#         for name in DF_gen['batsman'].dropna().unique():
+#             if name.lower() in q:
+#                 plan["player"] = name
+#                 break
     
-        return plan
+#         return plan
     
-    def execute_ai_query(df, plan):
-        d = df.copy()
+#     def execute_ai_query(df, plan):
+#         d = df.copy()
     
-        if plan["player"]:
-            d = d[d["batsman"] == plan["player"]]
+#         if plan["player"]:
+#             d = d[d["batsman"] == plan["player"]]
     
-        if plan["tournament"]:
-            d = d[d["tournament"].isin(plan["tournament"])]
+#         if plan["tournament"]:
+#             d = d[d["tournament"].isin(plan["tournament"])]
     
-        if plan["start_year"]:
-            d = d[d["year"] >= plan["start_year"]]
+#         if plan["start_year"]:
+#             d = d[d["year"] >= plan["start_year"]]
     
-        if plan["end_year"]:
-            d = d[d["year"] <= plan["end_year"]]
+#         if plan["end_year"]:
+#             d = d[d["year"] <= plan["end_year"]]
     
-        if plan["phase"]:
-            d = d[d["phase"].isin(plan["phase"])]
+#         if plan["phase"]:
+#             d = d[d["phase"].isin(plan["phase"])]
     
-        if plan["bowling_style"]:
-            d = d[d["bowl_style"].isin(plan["bowling_style"])]
+#         if plan["bowling_style"]:
+#             d = d[d["bowl_style"].isin(plan["bowling_style"])]
     
-        if plan["length"]:
-            d = d[d["length"].isin(plan["length"])]
+#         if plan["length"]:
+#             d = d[d["length"].isin(plan["length"])]
     
-        if d.empty:
-            return None, "No data found for this query."
+#         if d.empty:
+#             return None, "No data found for this query."
     
-        # --- metrics ---
-        if plan["metric"] == "strike_rate":
-            runs = d["score"].sum()
-            balls = len(d)
-            return round((runs / balls) * 100, 2), "Strike Rate"
+#         # --- metrics ---
+#         if plan["metric"] == "strike_rate":
+#             runs = d["score"].sum()
+#             balls = len(d)
+#             return round((runs / balls) * 100, 2), "Strike Rate"
     
-        if plan["metric"] == "yorker_pct":
-            total = len(d)
-            yorkers = (d["length"] == "YORKER").sum()
-            return round((yorkers / total) * 100, 2), "Yorker %"
+#         if plan["metric"] == "yorker_pct":
+#             total = len(d)
+#             yorkers = (d["length"] == "YORKER").sum()
+#             return round((yorkers / total) * 100, 2), "Yorker %"
     
-        return None, "Metric not supported yet."
-    st.markdown("## Cricket AI Analyst")
-    st.caption("Ask data-backed natural language questions.")
+#         return None, "Metric not supported yet."
+#     st.markdown("## Cricket AI Analyst")
+#     st.caption("Ask data-backed natural language questions.")
 
-    question = st.text_input(
-        "Ask a cricket question",
-        placeholder="e.g. What is Abhishek Sharma's SR in IPL since 2024 in Powerplay vs left-arm pacers?"
-    )
+#     question = st.text_input(
+#         "Ask a cricket question",
+#         placeholder="e.g. What is Abhishek Sharma's SR in IPL since 2024 in Powerplay vs left-arm pacers?"
+#     )
 
-    if question:
-        with st.spinner("Thinking like a cricket analyst…"):
-            plan = simple_ai_parser(question)
-            result, label = execute_ai_query(DF_gen, plan)
+#     if question:
+#         with st.spinner("Thinking like a cricket analyst…"):
+#             plan = simple_ai_parser(question)
+#             result, label = execute_ai_query(DF_gen, plan)
 
-        st.markdown("### 🔍 Interpreted Query")
-        st.json(plan)
+#         st.markdown("### 🔍 Interpreted Query")
+#         st.json(plan)
 
-        if result is None:
-            st.error(label)
-        else:
-            st.markdown("### 📊 Answer")
-            st.metric(label, result)
+#         if result is None:
+#             st.error(label)
+#         else:
+#             st.markdown("### 📊 Answer")
+#             st.metric(label, result)
 
 # -------------------- end sidebar section --------------------
 
