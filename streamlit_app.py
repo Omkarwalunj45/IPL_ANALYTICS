@@ -2971,7 +2971,7 @@ def build_idf(df_local):
 
 sidebar_option = st.sidebar.radio(
     "Select an option:",
-    ("Player Profile", "Matchup Analysis", "Strength vs Weakness", "Match by Match Analysis","Integrated Contextual Ratings","AI Mode")
+    ("Player Profile", "Matchup Analysis", "Strength vs Weakness", "Match by Match Analysis","Integrated Contextual Ratings")
 )
 
 if df is not None:
@@ -9174,7 +9174,7 @@ elif sidebar_option == "Strength vs Weakness":
 
     pass
 # Sidebar UI
-elif sidebar_option == "Integrated Contextual Ratings":
+else:
     import io
     import pandas as pd
     import streamlit as st
