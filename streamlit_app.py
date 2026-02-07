@@ -5355,19 +5355,30 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
     
             # Display header + compact stats
             st.markdown(f"### Analysis for Batsman: {batsman_selected}")
-            if bowler_selected == "All":
-                st.markdown("Against: All Bowlers")
-            else:
-                st.markdown(f"Against: {bowler_selected}")
-    
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write("**Summary**")
-                st.write(f"Runs: {total_runs}")
-                st.write(f"Balls: {total_balls}")
-            with col2:
-                # st.write("**Rates**")
-                st.write(f"Strike Rate: {strike_rate:.2f}")
+            st.markdown(f"Against: {'All Bowlers' if bowler_selected == 'All' else bowler_selected}")
+            
+            st.markdown("---")
+            
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                st.metric(
+                    label="Runs",
+                    value=total_runs
+                )
+            
+            with c2:
+                st.metric(
+                    label="Balls",
+                    value=total_balls
+                )
+            
+            with c3:
+                st.metric(
+                    label="Strike Rate",
+                    value=f"{strike_rate:.2f}"
+                )
+
     
             # -------------------------
             # Scoring Shots - colorful tabular view
