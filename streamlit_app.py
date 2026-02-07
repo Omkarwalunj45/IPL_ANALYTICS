@@ -8669,11 +8669,10 @@ else:
                 
                 # Use different models based on token availability
                 if hf_token:
-                    # With token: Use better model
-                    API_URL = "https://api-inference.huggingface.co/models/codellama/CodeLlama-7b-Instruct-hf"
+                    API_URL = "https://router.huggingface.co/hf-inference/models/codellama/CodeLlama-7b-Instruct-hf"
                 else:
-                    # Without token: Use free model
-                    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+                    API_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2"
+
                 
                 headers = {"Content-Type": "application/json"}
                 if hf_token:
