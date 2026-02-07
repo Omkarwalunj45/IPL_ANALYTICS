@@ -885,6 +885,7 @@ st.success(
 )
 
 DF_gen = df
+DF_gen['batsman']=DF_ge['bat']
 # st.write(DF_gen.head())
 
   
