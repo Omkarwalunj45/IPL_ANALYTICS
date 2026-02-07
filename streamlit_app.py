@@ -6243,9 +6243,12 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                         dot_grid[le, li] += 1
             
                     if 'dismissal' in final_df.columns:
-                        d = r.get('dismissal', '')
-                        if isinstance(d, str) and d.strip().lower() in wicket_set:
-                            wkt_grid[le, li] += 1
+                        d = r.get('dismissal', None)
+                        if isinstance(d, str):
+                            d_clean = d.strip().lower()
+                            if d_clean in wicket_set:
+                                wkt_grid[le, li] += 1
+
             
                 # ---------------- HANDEDNESS ----------------
                 is_lhb = False
