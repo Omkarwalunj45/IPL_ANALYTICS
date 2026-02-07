@@ -824,7 +824,7 @@ def load_filtered_data_ultra_safe(selected_tournaments, selected_years, usecols=
 # ============================================================
 
 st.sidebar.header("Select Years")
-year_range = st.sidebar.slider("Year range", 2021, 2026, (2021, 2026))
+year_range = st.sidebar.slider("Year range", 2021, 2026, (2023, 2026))
 selected_years = list(range(year_range[0], year_range[1] + 1))
 
 st.sidebar.header("Select Tournaments")
