@@ -928,6 +928,8 @@ HEAVY_MODE = len(selected_tournaments) >= 4
 if HEAVY_MODE:
     st.warning("⚠️ Loading 4 or more tournaments — running in safe (no-cache) mode.")
 
+# Columns to load (None = load all columns)
+usecols = None
 
 # ────────────────────────────────────────────────
 # LOAD DATA
