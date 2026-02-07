@@ -8497,526 +8497,443 @@ elif sidebar_option == 'Integrated Contextual Ratings':
 
 
 else:
-  # ==================== FREE AI MODE WITH OPENAI GPT ====================
-  # Version: FREE (No API costs!) - Uses OpenAI's Free Tier
-  # This version uses GPT-4o-mini which has GENEROUS free limits
-  
-  import os
-  import json
-  from datetime import datetime
-  import re
-  
-  # NOTE: OpenAI is NOT free anymore as of 2024
-  # HOWEVER, I'll provide BOTH options:
-  # 1. OpenAI (if you have credits)
-  # 2. 100% FREE alternatives using open-source models
-  
-  # ============================================================
-  # OPTION 1: OPENAI (Cheap but not free)
-  # ============================================================
-  
-  try:
-      from openai import OpenAI
-      OPENAI_AVAILABLE = True
-  except ImportError:
-      OPENAI_AVAILABLE = False
-  
-  # ============================================================
-  # OPTION 2: FREE ALTERNATIVES - OLLAMA (100% Free, Runs Locally)
-  # ============================================================
-  
-  try:
-      import requests
-      OLLAMA_AVAILABLE = True
-  except ImportError:
-      OLLAMA_AVAILABLE = False
-  
-  # ============================================================
-  # OPTION 3: FREE HUGGING FACE API (Limited but Free)
-  # ============================================================
-  
-  HF_AVAILABLE = True  # Uses requests which is already installed
-  
-  # ============================================================
-  # AI MODE SIDEBAR OPTION
-  # ============================================================
-  
-  st.sidebar.markdown("---")
-  st.sidebar.markdown("## 🤖 AI Analytics Assistant (FREE)")
-  
-  # AI Provider Selection
-  ai_provider = st.sidebar.selectbox(
-      "Choose AI Provider",
-      ["Hugging Face (FREE)", "Ollama (Local - FREE)", "OpenAI (Paid)"],
-      help="Hugging Face is free but rate-limited. Ollama is completely free but requires local setup."
-  )
-  
-  if st.session_state.get('ai_mode', False):
-      st.sidebar.success("✓ AI Mode Active")
-      if st.sidebar.button("Exit AI Mode"):
-          st.session_state.ai_mode = False
-          st.rerun()
-  else:
-      if st.sidebar.button("Launch AI Mode 🚀 (FREE)", type="primary"):
-          st.session_state.ai_mode = True
-          st.rerun()
-  
-  # ============================================================
-  # AI MODE MAIN INTERFACE
-  # ============================================================
-  
-  if st.session_state.get('ai_mode', False):
-      
-      # Header
-      st.markdown(f"""
-      <div style="
-          background: linear-gradient(135deg, #059669, #10b981);
-          padding: 24px;
-          border-radius: 12px;
-          margin-bottom: 24px;
-          box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      ">
-          <h1 style="color: white; margin: 0; font-size: 32px;">
-              🤖 AI Cricket Analytics Assistant (FREE)
-          </h1>
-          <p style="color: #d1fae5; margin: 8px 0 0 0; font-size: 16px;">
-              Powered by {ai_provider} • 100% Free • No API costs
-          </p>
-      </div>
-      """, unsafe_allow_html=True)
-      
-      # Quick stats
-      col1, col2, col3, col4 = st.columns(4)
-      with col1:
-          st.metric("Tournaments", len(selected_tournaments))
-      with col2:
-          st.metric("Total Deliveries", f"{len(df):,}")
-      with col3:
-          st.metric("AI Provider", ai_provider.split()[0])
-      with col4:
-          queries_count = len(st.session_state.get('messages', [])) // 2
-          st.metric("Queries", queries_count)
-      
-      # Initialize session state
-      if 'messages' not in st.session_state:
-          st.session_state.messages = []
-      
-      # ============================================================
-      # DATA CONTEXT BUILDER
-      # ============================================================
-      
-      @st.cache_data
-      def get_data_context():
-          """Build context about available data"""
-          context = {
-              "tournaments": selected_tournaments,
-              "years": selected_years,
-              "total_rows": len(df),
-              "columns": list(df.columns),
-          }
-          
-          if 'bat' in df.columns:
-              context['top_batters'] = df['bat'].value_counts().head(10).index.tolist()
-          if 'bowl' in df.columns:
-              context['top_bowlers'] = df['bowl'].value_counts().head(10).index.tolist()
-          
-          key_cols = ['phase', 'bowl_kind', 'bowl_style', 'line', 'length']
-          context['filters'] = {}
-          for col in key_cols:
-              if col in df.columns:
-                  unique_vals = df[col].dropna().unique().tolist()
-                  if len(unique_vals) <= 30:
-                      context['filters'][col] = unique_vals[:15]
-          
-          return context
-      
-      # ============================================================
-      # QUERY EXECUTOR
-      # ============================================================
-      
-      def execute_query(code_str, df_ref):
-          """Execute generated pandas code safely"""
-          try:
-              safe_globals = {
-                  'pd': pd,
-                  'np': np,
-                  'df': df_ref,
-              }
-              result = eval(code_str, safe_globals)
-              
-              if isinstance(result, pd.DataFrame):
-                  if len(result) > 50:
-                      return {"table": result.head(50), "text": f"Showing first 50 of {len(result)} rows"}
-                  return {"table": result, "text": None}
-              elif isinstance(result, pd.Series):
-                  return {"table": result.to_frame(), "text": None}
-              else:
-                  return {"text": str(result), "table": None}
-          except Exception as e:
-              return {"text": f"❌ Error: {str(e)}", "table": None}
-      
-      # ============================================================
-      # FREE AI HANDLERS
-      # ============================================================
-      
-      def query_huggingface_free(user_question, data_context):
-          """Use Hugging Face Inference API (FREE - Rate limited)"""
-          
-          system_prompt = f"""You are a cricket data analyst. Generate pandas code to answer queries.
-  
-  DATA: {data_context['tournaments']} tournaments, {data_context['years']} years, {data_context['total_rows']:,} deliveries
-  
-  COLUMNS: bat (batter), bowl (bowler), phase (Powerplay/Middle/Death), bowl_kind (Pace/Spin), 
-  bowl_style, line, length, shot, batruns (runs), dismissal (wicket type)
-  
-  TOP PLAYERS: {', '.join(data_context.get('top_batters', [])[:5])}
-  
-  RESPOND WITH:
-  1. Brief explanation
-  2. Python code in ```python code block
-  
-  EXAMPLE:
-  ```python
-  df[df['phase']=='Powerplay'].groupby('bat').agg(runs=('batruns','sum'), balls=('bat','count')).assign(SR=lambda x: x['runs']/x['balls']*100).sort_values('SR', ascending=False).head(10)
-  ```"""
-  
-          try:
-              # Using free Hugging Face API with Mistral model
-              API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
-              
-              # Get token from secrets or environment (optional - works without it but rate limited)
-              hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN")
-              
-              headers = {}
-              if hf_token:
-                  headers["Authorization"] = f"Bearer {hf_token}"
-              
-              payload = {
-                  "inputs": f"<s>[INST] {system_prompt}\n\nUser question: {user_question} [/INST]",
-                  "parameters": {
-                      "max_new_tokens": 500,
-                      "temperature": 0.3,
-                      "return_full_text": False
-                  }
-              }
-              
-              response = requests.post(API_URL, headers=headers, json=payload, timeout=30)
-              
-              if response.status_code == 200:
-                  result = response.json()
-                  if isinstance(result, list) and len(result) > 0:
-                      response_text = result[0].get('generated_text', '')
-                  else:
-                      response_text = str(result)
-                  
-                  # Extract code
-                  code = None
-                  if "```python" in response_text:
-                      code = response_text.split("```python")[1].split("```")[0].strip()
-                  elif "```" in response_text:
-                      code = response_text.split("```")[1].split("```")[0].strip()
-                  
-                  return {"response": response_text, "code": code, "error": False}
-              else:
-                  return {
-                      "response": f"⚠️ API Rate Limit. Try again in a few seconds or get a free HuggingFace token at: https://huggingface.co/settings/tokens",
-                      "code": None,
-                      "error": True
-                  }
-                  
-          except Exception as e:
-              return {"response": f"❌ Error: {str(e)}", "code": None, "error": True}
-      
-      def query_ollama_local(user_question, data_context):
-          """Use Ollama (100% FREE - Runs on your computer)"""
-          
-          system_prompt = f"""You are a cricket data analyst. Generate pandas code.
-  
-  DATA: {data_context['total_rows']:,} deliveries from {', '.join(data_context['tournaments'])}
-  COLUMNS: bat, bowl, phase (Powerplay/Middle/Death), bowl_kind, line, length, batruns, dismissal
-  
-  Generate Python code using df variable. Be concise.
-  
-  Example:
-  df[df['phase']=='Powerplay'].groupby('bat').agg(runs=('batruns','sum')).sort_values('runs', ascending=False).head(10)"""
-  
-          try:
-              # Check if Ollama is running
-              response = requests.post(
-                  "http://localhost:11434/api/generate",
-                  json={
-                      "model": "codellama:7b",  # Or "mistral", "llama2"
-                      "prompt": f"{system_prompt}\n\nQuestion: {user_question}\n\nCode:",
-                      "stream": False,
-                      "options": {
-                          "temperature": 0.3,
-                          "num_predict": 300
-                      }
-                  },
-                  timeout=30
-              )
-              
-              if response.status_code == 200:
-                  result = response.json()
-                  response_text = result.get('response', '')
-                  
-                  # Extract code
-                  code = None
-                  if "```python" in response_text:
-                      code = response_text.split("```python")[1].split("```")[0].strip()
-                  elif "```" in response_text:
-                      code = response_text.split("```")[1].split("```")[0].strip()
-                  else:
-                      # Assume entire response is code
-                      code = response_text.strip()
-                  
-                  return {"response": response_text, "code": code, "error": False}
-              else:
-                  return {
-                      "response": "❌ **Ollama not running!**\n\nInstall Ollama: https://ollama.ai\nThen run: `ollama run codellama:7b`",
-                      "code": None,
-                      "error": True
-                  }
-          except requests.exceptions.ConnectionError:
-              return {
-                  "response": "❌ **Ollama not installed or not running**\n\n**Setup:**\n1. Download: https://ollama.ai\n2. Install\n3. Run: `ollama run codellama:7b`\n4. Refresh this page",
-                  "code": None,
-                  "error": True
-              }
-          except Exception as e:
-              return {"response": f"❌ Error: {str(e)}", "code": None, "error": True}
-      
-      def query_openai(user_question, data_context):
-          """Use OpenAI (PAID - ~$0.001 per query with GPT-4o-mini)"""
-          
-          api_key = os.environ.get("OPENAI_API_KEY") or st.secrets.get("OPENAI_API_KEY")
-          
-          if not api_key:
-              return {
-                  "response": "⚠️ **OpenAI API Key Required**\n\nGet key: https://platform.openai.com/api-keys\n\nAdd to `.streamlit/secrets.toml`:\n```\nOPENAI_API_KEY = \"sk-...\"\n```",
-                  "code": None,
-                  "error": True
-              }
-          
-          if not OPENAI_AVAILABLE:
-              return {
-                  "response": "❌ Install OpenAI: `pip install openai`",
-                  "code": None,
-                  "error": True
-              }
-          
-          try:
-              client = OpenAI(api_key=api_key)
-              
-              system_prompt = f"""You are a cricket data analyst. Generate pandas code to answer queries.
-  
-  DATA CONTEXT:
-  - Tournaments: {', '.join(data_context['tournaments'])}
-  - Years: {min(data_context['years'])} - {max(data_context['years'])}
-  - Total Deliveries: {data_context['total_rows']:,}
-  - Top Batters: {', '.join(data_context.get('top_batters', [])[:5])}
-  
-  COLUMNS:
-  bat (batter name), bowl (bowler), phase (Powerplay/Middle/Death), 
-  bowl_kind (Pace/Spin), bowl_style, line, length, shot, batruns (runs), dismissal
-  
-  RESPOND WITH:
-  1. Explanation
-  2. Python code in ```python block
-  
-  EXAMPLE:
-  ```python
-  df[df['phase']=='Powerplay'].groupby('bat').agg(runs=('batruns','sum'), balls=('bat','count')).assign(SR=lambda x: (x['runs']/x['balls'])*100).sort_values('SR', ascending=False).head(10)
-  ```"""
-              
-              response = client.chat.completions.create(
-                  model="gpt-4o-mini",  # Cheapest model: $0.15/1M input, $0.60/1M output
-                  messages=[
-                      {"role": "system", "content": system_prompt},
-                      {"role": "user", "content": user_question}
-                  ],
-                  temperature=0.3,
-                  max_tokens=800
-              )
-              
-              response_text = response.choices[0].message.content
-              
-              # Extract code
-              code = None
-              if "```python" in response_text:
-                  code = response_text.split("```python")[1].split("```")[0].strip()
-              elif "```" in response_text:
-                  code = response_text.split("```")[1].split("```")[0].strip()
-              
-              return {"response": response_text, "code": code, "error": False}
-              
-          except Exception as e:
-              return {"response": f"❌ Error: {str(e)}", "code": None, "error": True}
-      
-      # ============================================================
-      # MAIN QUERY HANDLER
-      # ============================================================
-      
-      def handle_ai_query(user_question, data_context, provider):
-          """Route to appropriate AI provider"""
-          
-          if provider.startswith("Hugging Face"):
-              return query_huggingface_free(user_question, data_context)
-          elif provider.startswith("Ollama"):
-              return query_ollama_local(user_question, data_context)
-          elif provider.startswith("OpenAI"):
-              return query_openai(user_question, data_context)
-          else:
-              return {"response": "Unknown provider", "code": None, "error": True}
-      
-      # ============================================================
-      # EXAMPLE QUERIES
-      # ============================================================
-      
-      st.markdown("### 💡 Quick Examples")
-      
-      tab1, tab2 = st.tabs(["⚡ Batting", "🎯 Bowling"])
-      
-      with tab1:
-          batting_queries = [
-              "Top 10 strike rates in powerplay",
-              "Virat Kohli average in death overs",
-              "Highest boundary percentage against spin",
-          ]
-          for eq in batting_queries:
-              if st.button(eq, key=f"bat_{eq}", use_container_width=True):
-                  st.session_state.example_query = eq
-      
-      with tab2:
-          bowling_queries = [
-              "Best economy rates in death overs",
-              "Bowlers with most yorker percentage",
-              "Jasprit Bumrah wicket rate",
-          ]
-          for eq in bowling_queries:
-              if st.button(eq, key=f"bowl_{eq}", use_container_width=True):
-                  st.session_state.example_query = eq
-      
-      st.markdown("---")
-      
-      # ============================================================
-      # CHAT INTERFACE
-      # ============================================================
-      
-      # Display chat history
-      for i, message in enumerate(st.session_state.messages):
-          with st.chat_message(message["role"]):
-              st.markdown(message["content"])
-              
-              if message.get("code"):
-                  with st.expander("📝 Generated Code"):
-                      st.code(message["code"], language="python")
-              
-              if message.get("result"):
-                  result = message["result"]
-                  if result.get("table") is not None:
-                      st.dataframe(result["table"], use_container_width=True)
-                  if result.get("text"):
-                      st.info(result["text"])
-      
-      # Chat input
-      user_input = st.chat_input("💬 Ask about your cricket data...")
-      
-      if st.session_state.get('example_query'):
-          user_input = st.session_state.example_query
-          st.session_state.example_query = None
-      
-      if user_input:
-          # Add user message
-          st.session_state.messages.append({"role": "user", "content": user_input})
-          
-          with st.chat_message("user"):
-              st.markdown(user_input)
-          
-          # Get AI response
-          with st.chat_message("assistant"):
-              with st.spinner(f"🤔 Thinking with {ai_provider}..."):
-                  data_context = get_data_context()
-                  ai_response = handle_ai_query(user_input, data_context, ai_provider)
-                  
-                  st.markdown(ai_response["response"])
-                  
-                  if ai_response["code"] and not ai_response.get("error"):
-                      with st.expander("📝 Generated Code", expanded=True):
-                          st.code(ai_response["code"], language="python")
-                      
-                      with st.spinner("⚙️ Running query..."):
-                          result = execute_query(ai_response["code"], df)
-                          ai_response["result"] = result
-                      
-                      if result.get("table") is not None:
-                          st.dataframe(result["table"], use_container_width=True)
-                      if result.get("text"):
-                          st.info(result["text"])
-          
-          # Save assistant message
-          st.session_state.messages.append({
-              "role": "assistant",
-              "content": ai_response["response"],
-              "code": ai_response.get("code"),
-              "result": ai_response.get("result")
-          })
-      
-      # ============================================================
-      # SIDEBAR INFO
-      # ============================================================
-      
-      st.sidebar.markdown("---")
-      st.sidebar.markdown("### 🆓 Provider Info")
-      
-      if ai_provider.startswith("Hugging Face"):
-          st.sidebar.info("""
-          **Hugging Face (FREE)**
-          - ✅ No installation needed
-          - ✅ Works immediately
-          - ⚠️ Rate limited (slow)
-          - 💡 Get free token for more requests
-          
-          **Get Token:**
-          1. huggingface.co/settings/tokens
-          2. Create token
-          3. Add to secrets.toml
-          """)
-      
-      elif ai_provider.startswith("Ollama"):
-          st.sidebar.success("""
-          **Ollama (100% FREE)**
-          - ✅ Completely free
-          - ✅ Unlimited queries
-          - ✅ Runs on your computer
-          - ⚠️ Requires setup
-          
-          **Setup:**
-          1. Download: ollama.ai
-          2. Install
-          3. Run: `ollama run codellama:7b`
-          """)
-      
-      elif ai_provider.startswith("OpenAI"):
-          st.sidebar.warning("""
-          **OpenAI (PAID)**
-          - 💰 ~$0.001 per query
-          - ✅ Very accurate
-          - ✅ Fast responses
-          
-          **Get Key:**
-          platform.openai.com/api-keys
-          """)
-      
-      st.sidebar.markdown("---")
-      col_a, col_b = st.sidebar.columns(2)
-      
-      with col_a:
-          if st.button("🗑️ Clear", use_container_width=True):
-              st.session_state.messages = []
-              st.rerun()
-      
-      st.stop()
-  
-  # ==================== END FREE AI MODE ====================
-
+    # ==================== FREE AI MODE WITH HUGGINGFACE (FIXED) ====================
+    # This version properly uses your HuggingFace token to avoid rate limits
+    
+    import os
+    import json
+    from datetime import datetime
+    import re
+    
+    try:
+        import requests
+        REQUESTS_AVAILABLE = True
+    except ImportError:
+        REQUESTS_AVAILABLE = False
+        st.error("Please install requests: pip install requests")
+    
+    # ============================================================
+    # AI MODE SIDEBAR OPTION
+    # ============================================================
+    
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("## 🤖 AI Analytics Assistant (FREE)")
+    
+    # Show token status
+    hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
+    if hf_token:
+        st.sidebar.success("✓ HuggingFace Token: Active")
+    else:
+        st.sidebar.warning("⚠️ No HF Token (slower)")
+    
+    if st.session_state.get('ai_mode', False):
+        st.sidebar.success("✓ AI Mode Active")
+        if st.sidebar.button("Exit AI Mode"):
+            st.session_state.ai_mode = False
+            st.rerun()
+    else:
+        if st.sidebar.button("Launch AI Mode 🚀 (FREE)", type="primary"):
+            st.session_state.ai_mode = True
+            st.rerun()
+    
+    # ============================================================
+    # AI MODE MAIN INTERFACE
+    # ============================================================
+    
+    if st.session_state.get('ai_mode', False):
+        
+        # Header
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, #059669, #10b981);
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        ">
+            <h1 style="color: white; margin: 0; font-size: 32px;">
+                🤖 AI Cricket Analytics Assistant (FREE)
+            </h1>
+            <p style="color: #d1fae5; margin: 8px 0 0 0; font-size: 16px;">
+                Powered by Hugging Face • 100% Free • No API costs
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Quick stats
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Tournaments", len(selected_tournaments))
+        with col2:
+            st.metric("Total Deliveries", f"{len(df):,}")
+        with col3:
+            token_status = "With Token ✓" if hf_token else "No Token"
+            st.metric("HF Status", token_status)
+        with col4:
+            queries_count = len(st.session_state.get('messages', [])) // 2
+            st.metric("Queries", queries_count)
+        
+        # Initialize session state
+        if 'messages' not in st.session_state:
+            st.session_state.messages = []
+        
+        # ============================================================
+        # DATA CONTEXT BUILDER
+        # ============================================================
+        
+        @st.cache_data
+        def get_data_context():
+            """Build context about available data"""
+            context = {
+                "tournaments": selected_tournaments,
+                "years": selected_years,
+                "total_rows": len(df),
+                "columns": list(df.columns),
+            }
+            
+            if 'bat' in df.columns:
+                context['top_batters'] = df['bat'].value_counts().head(10).index.tolist()
+            if 'bowl' in df.columns:
+                context['top_bowlers'] = df['bowl'].value_counts().head(10).index.tolist()
+            
+            key_cols = ['phase', 'bowl_kind', 'bowl_style', 'line', 'length']
+            context['filters'] = {}
+            for col in key_cols:
+                if col in df.columns:
+                    unique_vals = df[col].dropna().unique().tolist()
+                    if len(unique_vals) <= 30:
+                        context['filters'][col] = unique_vals[:15]
+            
+            return context
+        
+        # ============================================================
+        # QUERY EXECUTOR
+        # ============================================================
+        
+        def execute_query(code_str, df_ref):
+            """Execute generated pandas code safely"""
+            try:
+                safe_globals = {
+                    'pd': pd,
+                    'np': np,
+                    'df': df_ref,
+                }
+                result = eval(code_str, safe_globals)
+                
+                if isinstance(result, pd.DataFrame):
+                    if len(result) > 50:
+                        return {"table": result.head(50), "text": f"Showing first 50 of {len(result)} rows"}
+                    return {"table": result, "text": None}
+                elif isinstance(result, pd.Series):
+                    return {"table": result.to_frame(), "text": None}
+                else:
+                    return {"text": str(result), "table": None}
+            except Exception as e:
+                return {"text": f"❌ Error: {str(e)}", "table": None}
+        
+        # ============================================================
+        # HUGGINGFACE AI HANDLER (IMPROVED)
+        # ============================================================
+        
+        def query_huggingface(user_question, data_context):
+            """Use Hugging Face Inference API with token support"""
+            
+            # Build concise system prompt
+            system_prompt = f"""Generate pandas code for cricket data analysis.
+    
+    Dataset: {data_context['total_rows']:,} deliveries from {', '.join(data_context['tournaments'])}
+    
+    Columns:
+    - bat: batter name
+    - bowl: bowler name  
+    - phase: Powerplay, Middle, Death
+    - bowl_kind: Pace, Spin
+    - batruns: runs scored
+    - dismissal: wicket type (NaN if no wicket)
+    
+    Top players: {', '.join(data_context.get('top_batters', [])[:3])}
+    
+    Respond ONLY with Python code. No explanation.
+    
+    Example query: "top 10 strike rates"
+    Example code:
+    df.groupby('bat').agg(runs=('batruns','sum'), balls=('bat','count')).assign(SR=lambda x: (x['runs']/x['balls'])*100).sort_values('SR', ascending=False).head(10)
+    
+    Query: {user_question}
+    Code:"""
+    
+            try:
+                # Get token from secrets or environment
+                hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
+                
+                # Use different models based on token availability
+                if hf_token:
+                    # With token: Use better model
+                    API_URL = "https://api-inference.huggingface.co/models/codellama/CodeLlama-7b-Instruct-hf"
+                else:
+                    # Without token: Use free model
+                    API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+                
+                headers = {"Content-Type": "application/json"}
+                if hf_token:
+                    headers["Authorization"] = f"Bearer {hf_token}"
+                
+                payload = {
+                    "inputs": system_prompt,
+                    "parameters": {
+                        "max_new_tokens": 300,
+                        "temperature": 0.1,
+                        "return_full_text": False,
+                        "do_sample": False
+                    },
+                    "options": {
+                        "wait_for_model": True
+                    }
+                }
+                
+                response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    # Parse response
+                    if isinstance(result, list) and len(result) > 0:
+                        response_text = result[0].get('generated_text', '')
+                    elif isinstance(result, dict):
+                        response_text = result.get('generated_text', '') or result.get('result', '')
+                    else:
+                        response_text = str(result)
+                    
+                    # Extract code
+                    code = None
+                    
+                    # Try to find code in various formats
+                    if "```python" in response_text:
+                        code = response_text.split("```python")[1].split("```")[0].strip()
+                    elif "```" in response_text:
+                        code = response_text.split("```")[1].split("```")[0].strip()
+                    else:
+                        # Assume the whole response is code
+                        code = response_text.strip()
+                    
+                    # Clean up code
+                    if code:
+                        # Remove common prefixes
+                        for prefix in ["Code:", "Python:", "Answer:"]:
+                            if code.startswith(prefix):
+                                code = code[len(prefix):].strip()
+                        
+                        # Remove markdown
+                        code = code.replace("```python", "").replace("```", "").strip()
+                    
+                    # Generate explanation
+                    explanation = f"I generated code to answer: '{user_question}'"
+                    
+                    return {
+                        "response": explanation,
+                        "code": code,
+                        "error": False
+                    }
+                
+                elif response.status_code == 503:
+                    return {
+                        "response": "⏳ **Model is loading...**\n\nHuggingFace models take 20-30 seconds to wake up.\n\nPlease wait and try again in 30 seconds.",
+                        "code": None,
+                        "error": True
+                    }
+                
+                elif response.status_code == 429:
+                    if hf_token:
+                        return {
+                            "response": "⚠️ **Rate limit reached (even with token)**\n\nPlease wait 1-2 minutes before trying again.",
+                            "code": None,
+                            "error": True
+                        }
+                    else:
+                        return {
+                            "response": "⚠️ **Rate Limit Hit**\n\nGet a FREE HuggingFace token for 10x more requests:\n\n1. Go to: https://huggingface.co/settings/tokens\n2. Create token\n3. Add to `.streamlit/secrets.toml`:\n```\nHUGGINGFACE_TOKEN = \"hf_your_token\"\n```\n4. Restart app",
+                            "code": None,
+                            "error": True
+                        }
+                
+                else:
+                    return {
+                        "response": f"❌ API Error (Status {response.status_code})\n\n{response.text[:200]}",
+                        "code": None,
+                        "error": True
+                    }
+                    
+            except requests.exceptions.Timeout:
+                return {
+                    "response": "⏱️ **Request timed out**\n\nThe model is busy. Please try again in a minute.",
+                    "code": None,
+                    "error": True
+                }
+            except Exception as e:
+                return {
+                    "response": f"❌ Error: {str(e)}",
+                    "code": None,
+                    "error": True
+                }
+        
+        # ============================================================
+        # EXAMPLE QUERIES
+        # ============================================================
+        
+        st.markdown("### 💡 Quick Examples")
+        
+        tab1, tab2 = st.tabs(["⚡ Batting", "🎯 Bowling"])
+        
+        with tab1:
+            batting_queries = [
+                "Top 10 strike rates in powerplay",
+                "Highest boundary percentage against spin",
+                "Top 5 run scorers in death overs",
+            ]
+            for eq in batting_queries:
+                if st.button(eq, key=f"bat_{eq}", use_container_width=True):
+                    st.session_state.example_query = eq
+        
+        with tab2:
+            bowling_queries = [
+                "Best economy rates in death overs",
+                "Bowlers with most yorker percentage",
+                "Top 10 wicket takers",
+            ]
+            for eq in bowling_queries:
+                if st.button(eq, key=f"bowl_{eq}", use_container_width=True):
+                    st.session_state.example_query = eq
+        
+        st.markdown("---")
+        
+        # ============================================================
+        # CHAT INTERFACE
+        # ============================================================
+        
+        # Display chat history
+        for i, message in enumerate(st.session_state.messages):
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                
+                if message.get("code"):
+                    with st.expander("📝 Generated Code", expanded=False):
+                        st.code(message["code"], language="python")
+                
+                if message.get("result"):
+                    result = message["result"]
+                    if result.get("table") is not None:
+                        st.dataframe(result["table"], use_container_width=True)
+                    if result.get("text"):
+                        st.info(result["text"])
+        
+        # Chat input
+        user_input = st.chat_input("💬 Ask about your cricket data...")
+        
+        if st.session_state.get('example_query'):
+            user_input = st.session_state.example_query
+            st.session_state.example_query = None
+        
+        if user_input:
+            # Add user message
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            
+            with st.chat_message("user"):
+                st.markdown(user_input)
+            
+            # Get AI response
+            with st.chat_message("assistant"):
+                with st.spinner("🤔 Thinking..."):
+                    data_context = get_data_context()
+                    ai_response = query_huggingface(user_input, data_context)
+                    
+                    st.markdown(ai_response["response"])
+                    
+                    if ai_response["code"] and not ai_response.get("error"):
+                        with st.expander("📝 Generated Code", expanded=True):
+                            st.code(ai_response["code"], language="python")
+                        
+                        with st.spinner("⚙️ Running query..."):
+                            result = execute_query(ai_response["code"], df)
+                            ai_response["result"] = result
+                        
+                        if result.get("table") is not None:
+                            st.dataframe(result["table"], use_container_width=True)
+                        if result.get("text"):
+                            st.info(result["text"])
+            
+            # Save assistant message
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": ai_response["response"],
+                "code": ai_response.get("code"),
+                "result": ai_response.get("result")
+            })
+        
+        # ============================================================
+        # SIDEBAR INFO
+        # ============================================================
+        
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 🔑 HuggingFace Token")
+        
+        if hf_token:
+            st.sidebar.success("""
+            ✅ **Token Active**
+            
+            You have 10x more requests!
+            
+            Rate limit: ~1,000/hour
+            """)
+        else:
+            st.sidebar.warning("""
+            ⚠️ **No Token Set**
+            
+            You're using the free tier with limits.
+            
+            **Get more requests (FREE):**
+            1. Visit: huggingface.co/settings/tokens
+            2. Create token (free!)
+            3. See instructions below ⬇️
+            """)
+            
+            with st.sidebar.expander("📝 How to add token"):
+                st.markdown("""
+                **Step 1:** Create `.streamlit/secrets.toml` in your project:
+                
+                ```toml
+                HUGGINGFACE_TOKEN = "hf_your_token_here"
+                ```
+                
+                **Step 2:** Restart Streamlit
+                
+                **For Streamlit Cloud:**
+                - Settings → Secrets
+                - Paste the above
+                - Save
+                """)
+        
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("### 💡 Tips")
+        st.sidebar.info("""
+        **For best results:**
+        - Be specific with player names
+        - Mention phase (Powerplay/Death)
+        - Start simple, add filters
+        - If error, rephrase question
+        """)
+        
+        st.sidebar.markdown("---")
+        col_a, col_b = st.sidebar.columns(2)
+        
+        with col_a:
+            if st.button("🗑️ Clear", use_container_width=True):
+                st.session_state.messages = []
+                st.rerun()
+        
+        with col_b:
+            if st.button("🔄 Refresh", use_container_width=True):
+                st.rerun()
+        
+        st.stop()
+    
+    # ==================== END FREE AI MODE ====================
