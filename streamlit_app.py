@@ -8684,7 +8684,7 @@ else:
         """
         
             payload = {
-                "model": "mistralai/Mistral-7B-Instruct-v0.2",
+                "model": "meta-llama/Meta-Llama-3-8B-Instruct",
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_question}
@@ -8692,6 +8692,7 @@ else:
                 "temperature": 0.1,
                 "max_tokens": 300
             }
+
         
             try:
                 response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
