@@ -1145,28 +1145,28 @@ with loading_box:
             # ========================= End loader =========================
             
             
-            # Use loaded data
-            df = st.session_state.loaded_df
-            if df.empty:
-                st.warning("Loaded dataset is empty. Please adjust selection.")
-                st.stop()
-            if "tournament" not in df.columns:
-                st.error("Loaded data missing 'tournament' column.")
-                st.stop()
-            
-            df = df[df["tournament"].isin(selected_tournaments)].copy()
-            if df.empty:
-                st.warning("No data after filtering.")
-                st.stop()
-            
-            st.sidebar.success(
-                f"✅ Data Loaded\n\n"
-                f"📊 {len(df):,} rows\n"
-                f"🏆 {len(df['tournament'].unique())} tournaments\n"
-                f"📅 {selected_years[0]}-{selected_years[-1]}"
-            )
-            
-            DF_gen = df
+# Use loaded data
+df = st.session_state.loaded_df
+if df.empty:
+    st.warning("Loaded dataset is empty. Please adjust selection.")
+    st.stop()
+if "tournament" not in df.columns:
+    st.error("Loaded data missing 'tournament' column.")
+    st.stop()
+
+df = df[df["tournament"].isin(selected_tournaments)].copy()
+if df.empty:
+    st.warning("No data after filtering.")
+    st.stop()
+
+st.sidebar.success(
+    f"✅ Data Loaded\n\n"
+    f"📊 {len(df):,} rows\n"
+    f"🏆 {len(df['tournament'].unique())} tournaments\n"
+    f"📅 {selected_years[0]}-{selected_years[-1]}"
+)
+
+DF_gen = df
 
 
 
