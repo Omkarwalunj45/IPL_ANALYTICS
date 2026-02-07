@@ -852,7 +852,7 @@ if len(selected_tournaments) > MAX_TOURNAMENTS:
             font-size:15px;
             line-height:1.5;
         ">
-        <b>🔎 Focused analysis works best with fewer tournaments.</b><br><br>
+        <b> Focused analysis works best with fewer tournaments.</b><br><br>
 
         Please select <b>{MAX_TOURNAMENTS} tournaments or fewer</b> to unlock:
         <ul style="margin-top:8px;">
@@ -862,7 +862,7 @@ if len(selected_tournaments) > MAX_TOURNAMENTS:
         </ul>
 
         <span style="color:#475569;">
-        💡 Tip: Use fewer tournaments for <b>tactical match-ups</b>, and broader selections for <b>high-level trends</b>.
+         Tip: Use fewer tournaments for <b>tactical match-ups</b>, and broader selections for <b>high-level trends</b>.
         </span>
         </div>
         """,
