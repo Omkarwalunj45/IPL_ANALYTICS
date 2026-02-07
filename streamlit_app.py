@@ -842,12 +842,34 @@ if not selected_tournaments:
     st.stop()
 
 if len(selected_tournaments) > MAX_TOURNAMENTS:
-    st.error(
-        f"❌ You selected {len(selected_tournaments)} tournaments.\n\n"
-        f"Please select **at most {MAX_TOURNAMENTS} tournaments**.\n\n"
-        f"This limit ensures stability and performance."
+    st.markdown(
+        f"""
+        <div style="
+            background:#f0f7ff;
+            padding:16px;
+            border-radius:12px;
+            border-left:6px solid #2563eb;
+            font-size:15px;
+            line-height:1.5;
+        ">
+        <b>🔎 Focused analysis works best with fewer tournaments.</b><br><br>
+
+        Please select <b>{MAX_TOURNAMENTS} tournaments or fewer</b> to unlock:
+        <ul style="margin-top:8px;">
+            <li>clearer pitch maps</li>
+            <li>more meaningful wagon patterns</li>
+            <li>sharper tactical insights without cross-league noise</li>
+        </ul>
+
+        <span style="color:#475569;">
+        💡 Tip: Use fewer tournaments for <b>tactical match-ups</b>, and broader selections for <b>high-level trends</b>.
+        </span>
+        </div>
+        """,
+        unsafe_allow_html=True
     )
     st.stop()
+
 
 # ============================================================
 # LOAD DATA (MODE SWITCH)
