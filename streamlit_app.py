@@ -6297,7 +6297,8 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     (dot_pct,   "Dot %", "Blues"),
                     (sr_grid,   "Strike Rate", "Reds")
                 ]
-            
+                st.write("DEBUG – total wickets:", int(wkt_grid.sum()))
+
                 for ax_idx, (ax, (arr, title, cmap)) in enumerate(zip(axes.flat, plot_items)):
                     masked = np.ma.masked_invalid(arr)
                     flat = arr[~np.isnan(arr)]
