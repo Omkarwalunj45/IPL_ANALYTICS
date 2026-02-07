@@ -626,21 +626,24 @@ st.markdown("""
 
 # streamlit_safe_loader.py
 # Full, self-contained loader + sidebar gating that blocks execution until ALL data loaded.
-
+# streamlit_app_with_icr_and_strict_loader.py
 import os
 import glob
 import re
 import hashlib
 import gc
+import io
+from datetime import datetime
 import pandas as pd
 import numpy as np
 import streamlit as st
-from datetime import datetime
-import time
 
-# ────────────────────────────────────────────────
-# CONFIG
-# ────────────────────────────────────────────────
+# ----------------------------
+# Basic helpers & config
+# ----------------------------
+def chunk_list(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
 
 DATASETS_DIR = "Datasets"
 CACHE_DIR = ".cache_data"
@@ -660,18 +663,9 @@ TOURNAMENTS = {
     "BBL": "IPL_APP_BBL",
 }
 
-# ────────────────────────────────────────────────
-# HELPERS
-# ────────────────────────────────────────────────
-
-def chunk_list(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
-
 def _hash_args(tournaments, years, usecols, file_signatures):
-    """Create a deterministic cache key that includes file signatures to avoid stale cache."""
     tpart = "|".join(sorted(tournaments)) if tournaments else "none"
-    key = tpart + "|" + f"{min(years)}-{max(years)}"
+    key = tpart + "|" + (f"{min(years)}-{max(years)}" if years else "none")
     if usecols:
         key += "|" + ",".join(sorted(usecols))
     if file_signatures:
@@ -682,43 +676,26 @@ def _hash_args(tournaments, years, usecols, file_signatures):
     return hashlib.md5(key.encode()).hexdigest()
 
 def _strict_file_for_tournament(token: str):
-    """
-    STRICT resolver:
-    - Match token as a separate segment in filename (not arbitrary substring).
-    - Prefer parquet > csv > excel.
-    - If multiple candidates remain, pick the most recently-modified one.
-    """
     if not token:
         return None
-
     token = token.lower()
     files = glob.glob(os.path.join(DATASETS_DIR, "*"))
     files = [f for f in files if os.path.isfile(f)]
-
     pattern = re.compile(r'(^|[^a-z0-9])' + re.escape(token) + r'([^a-z0-9]|$)', flags=re.IGNORECASE)
-
-    strict_matches = []
-    for f in files:
-        name = os.path.basename(f).lower()
-        if pattern.search(name):
-            strict_matches.append(f)
-
+    strict_matches = [f for f in files if pattern.search(os.path.basename(f).lower())]
     valid = strict_matches or []
     if not valid:
         for f in files:
             name = os.path.basename(f).lower()
             if token in name:
                 valid.append(f)
-
     if not valid:
         return None
-
     def sort_key(fpath):
         ext = os.path.splitext(fpath)[1].lower()
         priority = 0 if ext == ".parquet" else 1 if ext == ".csv" else 2
         mtime = -os.path.getmtime(fpath)
         return (priority, mtime)
-
     valid.sort(key=sort_key)
     return valid[0]
 
@@ -727,99 +704,381 @@ def _detect_year_column(df):
         lc = c.lower()
         if lc == "year" or lc == "season" or lc.endswith("_year"):
             return c
-
     for c in df.columns:
         if "year" in c.lower():
             return c
-
     for c in df.columns:
         if "date" in c.lower() or "match_date" in c.lower() or "start" in c.lower():
             return c
-
     return None
 
 def _extract_years(series):
     if pd.api.types.is_numeric_dtype(series):
         return series.astype("Int64")
-
-    dt = pd.to_datetime(series, errors="coerce")
+    dt = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
     if dt.notna().any():
         return dt.dt.year.astype("Int64")
-
     s = series.astype(str).str.extract(r"\b((?:19|20)\d{2})\b")[0]
     if s.notna().any():
         return s.astype("Int64")
-
     return None
 
-# ────────────────────────────────────────────────
-# SIDEBAR CONTROLS
-# ────────────────────────────────────────────────
+# ----------------------------
+# Cached loader (batched + cached)
+# ----------------------------
+@st.cache_data(ttl=24 * 3600, max_entries=6, show_spinner=False)
+def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, file_signatures=None):
+    """
+    Load data for the given tournaments and years in batches, return concatenated DataFrame.
+    """
+    if not selected_tournaments:
+        return pd.DataFrame()
 
+    cache_key = _hash_args(tuple(selected_tournaments), selected_years or [], usecols, file_signatures)
+    cache_path = os.path.join(CACHE_DIR, f"merged_{cache_key}.parquet")
+
+    if os.path.exists(cache_path):
+        try:
+            return pd.read_parquet(cache_path)
+        except Exception:
+            pass
+
+    BATCH_SIZE = 3
+    all_frames = []
+    tournament_batches = list(chunk_list(selected_tournaments, BATCH_SIZE))
+
+    for tournament_batch in tournament_batches:
+        batch_frames = []
+        for t in tournament_batch:
+            token = TOURNAMENTS.get(t, t).lower()
+            path = _strict_file_for_tournament(token)
+            if path is None:
+                continue
+            ext = os.path.splitext(path)[1].lower()
+            try:
+                if ext == ".parquet":
+                    df = pd.read_parquet(path, columns=usecols)
+                elif ext == ".csv":
+                    file_size_mb = os.path.getsize(path) / (1024 * 1024)
+                    if file_size_mb > 120:  # big CSV -> chunk
+                        chunks = []
+                        chunk_size = 100000
+                        for chunk in pd.read_csv(path, usecols=usecols, low_memory=False, chunksize=chunk_size):
+                            year_col = _detect_year_column(chunk)
+                            if year_col:
+                                yrs = _extract_years(chunk[year_col])
+                                if yrs is not None:
+                                    mask = yrs.isin(selected_years).fillna(False)
+                                    chunk = chunk.loc[mask]
+                            if not chunk.empty:
+                                chunks.append(chunk)
+                        if chunks:
+                            df = pd.concat(chunks, ignore_index=True)
+                            del chunks
+                            gc.collect()
+                        else:
+                            continue
+                    else:
+                        df = pd.read_csv(path, usecols=usecols, low_memory=False)
+                else:
+                    df = pd.read_excel(path, usecols=usecols)
+            except MemoryError:
+                continue
+            except Exception:
+                continue
+
+            if df is None or df.empty:
+                continue
+
+            year_col = _detect_year_column(df)
+            if year_col:
+                yrs = _extract_years(df[year_col])
+                if yrs is not None:
+                    mask = yrs.isin(selected_years).fillna(False)
+                    df = df.loc[mask]
+
+            df["tournament"] = t
+            if df.empty:
+                continue
+
+            batch_frames.append(df)
+            del df
+            gc.collect()
+
+        if batch_frames:
+            try:
+                batch_merged = pd.concat(batch_frames, ignore_index=True, sort=False)
+                all_frames.append(batch_merged)
+                del batch_frames
+                gc.collect()
+            except MemoryError:
+                continue
+
+    if not all_frames:
+        return pd.DataFrame()
+
+    try:
+        merged = pd.concat(all_frames, ignore_index=True, sort=False)
+        del all_frames
+        gc.collect()
+    except MemoryError:
+        return pd.DataFrame()
+
+    if "tournament" not in merged.columns:
+        merged["tournament"] = np.nan
+
+    # optimize object columns
+    for col in merged.select_dtypes(include=['object']).columns:
+        try:
+            num_unique = merged[col].nunique()
+            if num_unique > 0 and num_unique < len(merged) * 0.5:
+                merged[col] = merged[col].astype('category')
+        except Exception:
+            pass
+
+    try:
+        merged.to_parquet(cache_path, index=False)
+    except Exception:
+        pass
+
+    return merged
+
+# ----------------------------
+# ICR helper: title case values
+# ----------------------------
+def title_case_df_values(df, exclude_cols=None):
+    """
+    Title-case (First Letter Caps) all string values in the dataframe,
+    except columns listed in exclude_cols.
+    """
+    if exclude_cols is None:
+        exclude_cols = []
+    df_out = df.copy()
+    for col in df_out.columns:
+        if col in exclude_cols:
+            continue
+        # operate only on object/string dtype
+        if df_out[col].dtype == object:
+            df_out[col] = (
+                df_out[col]
+                .astype(str)
+                .str.strip()
+                .str.title()
+            )
+    return df_out
+
+# ----------------------------
+# QUIET ICR compute using the CSVs you referenced
+# We'll try to read the CSVs and harmonize headers exactly as your snippet.
+# This function returns a dict with prepared frames (icr_23, icr_24, icr_25, bicr_23, bicr_24, bicr_25)
+# ----------------------------
+def prepare_icr_frames_quiet():
+    # file paths expected (you provided these names)
+    paths = {
+        "icr_25": os.path.join(DATASETS_DIR, "Batting ICR IPL 2025.csv"),
+        "bicr_25": os.path.join(DATASETS_DIR, "Bowling ICR IPL 2025.csv"),
+        "icr_24": os.path.join(DATASETS_DIR, "icr_2024 (1).csv"),
+        "bicr_24": os.path.join(DATASETS_DIR, "bicr_2024.csv"),
+        "icr_23": os.path.join(DATASETS_DIR, "icr_2023.csv"),
+        "bicr_23": os.path.join(DATASETS_DIR, "bicr_2023.csv"),
+    }
+
+    # placeholders
+    icr_25 = pd.DataFrame(); bicr_25 = pd.DataFrame()
+    icr_24 = pd.DataFrame(); bicr_24 = pd.DataFrame()
+    icr_23 = pd.DataFrame(); bicr_23 = pd.DataFrame()
+
+    # load if file exists, else empty df
+    try:
+        if os.path.exists(paths["icr_25"]):
+            icr_25 = pd.read_csv(paths["icr_25"])
+    except Exception:
+        icr_25 = pd.DataFrame()
+    try:
+        if os.path.exists(paths["bicr_25"]):
+            bicr_25 = pd.read_csv(paths["bicr_25"])
+    except Exception:
+        bicr_25 = pd.DataFrame()
+    try:
+        if os.path.exists(paths["icr_24"]):
+            icr_24 = pd.read_csv(paths["icr_24"])
+    except Exception:
+        icr_24 = pd.DataFrame()
+    try:
+        if os.path.exists(paths["bicr_24"]):
+            bicr_24 = pd.read_csv(paths["bicr_24"])
+    except Exception:
+        bicr_24 = pd.DataFrame()
+    try:
+        if os.path.exists(paths["icr_23"]):
+            icr_23 = pd.read_csv(paths["icr_23"])
+    except Exception:
+        icr_23 = pd.DataFrame()
+    try:
+        if os.path.exists(paths["bicr_23"]):
+            bicr_23 = pd.read_csv(paths["bicr_23"])
+    except Exception:
+        bicr_23 = pd.DataFrame()
+
+    # prepare percentile columns (your snippet)
+    try:
+        if not icr_24.empty and "icr_percentile_final" in icr_24.columns:
+            icr_24["ICR percentile"] = icr_24["icr_percentile_final"]
+    except Exception:
+        pass
+    try:
+        if not icr_23.empty and "icr_percentile_final" in icr_23.columns:
+            icr_23["ICR percentile"] = icr_23["icr_percentile_final"]
+    except Exception:
+        pass
+    try:
+        if not bicr_24.empty and "icr_percentile_final" in bicr_24.columns:
+            bicr_24["BICR percentile"] = bicr_24["icr_percentile_final"]
+    except Exception:
+        pass
+    try:
+        if not bicr_23.empty and "icr_percentile_final" in bicr_23.columns:
+            bicr_23["BICR percentile"] = bicr_23["icr_percentile_final"]
+    except Exception:
+        pass
+
+    # Now select columns as in your snippet and harmonize headers
+    try:
+        if not icr_25.empty:
+            icr_25 = icr_25[["batter", "Team", "Role", "matches", "ICR percentile"]].copy()
+    except Exception:
+        icr_25 = pd.DataFrame()
+    try:
+        if not bicr_25.empty:
+            bicr_25 = bicr_25[["Bowler", "Team", "Role", "Matches", "BICR percentile"]].copy()
+    except Exception:
+        bicr_25 = pd.DataFrame()
+    try:
+        if not icr_24.empty:
+            icr_24 = icr_24[["player", "team_bat", "comp_group", "n1", "ICR percentile"]].copy()
+    except Exception:
+        icr_24 = pd.DataFrame()
+    try:
+        if not icr_23.empty:
+            icr_23 = icr_23[["player", "team_bat", "comp_group", "n1", "ICR percentile"]].copy()
+    except Exception:
+        icr_23 = pd.DataFrame()
+    try:
+        if not bicr_24.empty:
+            bicr_24 = bicr_24[["player", "team_bowl", "comp_group", "n1", "BICR percentile"]].copy()
+    except Exception:
+        bicr_24 = pd.DataFrame()
+    try:
+        if not bicr_23.empty:
+            bicr_23 = bicr_23[["player", "team_bowl", "comp_group", "n1", "BICR percentile"]].copy()
+    except Exception:
+        bicr_23 = pd.DataFrame()
+
+    # Header harmonisation
+    BAT_COL_RENAME = {
+        "batter": "Batter",
+        "player": "Batter",
+        "Team": "Team",
+        "team_bat": "Team",
+        "Role": "Role",
+        "comp_group": "Role",
+        "matches": "Matches",
+        "n1": "Matches",
+        "ICR percentile": "ICR Percentile"
+    }
+    BOWL_COL_RENAME = {
+        "Bowler": "Bowler",
+        "player": "Bowler",
+        "Team": "Team",
+        "team_bowl": "Team",
+        "Role": "Role",
+        "comp_group": "Role",
+        "Matches": "Matches",
+        "n1": "Matches",
+        "BICR percentile": "BICR Percentile"
+    }
+
+    try:
+        icr_25.rename(columns=BAT_COL_RENAME, inplace=True)
+    except Exception:
+        pass
+    try:
+        icr_24.rename(columns=BAT_COL_RENAME, inplace=True)
+    except Exception:
+        pass
+    try:
+        icr_23.rename(columns=BAT_COL_RENAME, inplace=True)
+    except Exception:
+        pass
+
+    try:
+        bicr_25.rename(columns=BOWL_COL_RENAME, inplace=True)
+    except Exception:
+        pass
+    try:
+        bicr_24.rename(columns=BOWL_COL_RENAME, inplace=True)
+    except Exception:
+        pass
+    try:
+        bicr_23.rename(columns=BOWL_COL_RENAME, inplace=True)
+    except Exception:
+        pass
+
+    # Return a dict of frames (may be empty)
+    return {
+        "icr_25": icr_25,
+        "icr_24": icr_24,
+        "icr_23": icr_23,
+        "bicr_25": bicr_25,
+        "bicr_24": bicr_24,
+        "bicr_23": bicr_23
+    }
+
+# ----------------------------
+# Sidebar + loader gating
+# ----------------------------
 st.sidebar.header("Select Years")
-
 if "year_range" not in st.session_state:
     st.session_state.year_range = (2021, 2026)
 
 years = st.sidebar.slider(
     "Select year range",
-    min_value=2021,
-    max_value=2026,
+    min_value=2000,
+    max_value=datetime.now().year,
     value=st.session_state.year_range,
     step=1,
-    key="year_slider_key",
-    label_visibility="visible"
+    key="year_slider_key"
 )
-
 st.session_state.year_range = years
 selected_years = list(range(years[0], years[1] + 1))
 
-st.sidebar.markdown(
-    f"""
-    <div style="
-        margin-top:6px;
-        text-align:center;
-        font-weight:700;
-        color:#f08a24;
-        font-size:14px;
-    ">
-        {years[0]} &nbsp;–&nbsp; {years[1]}
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+usecols = None  # safe default
 
-# ------------------------------
-# Persistent loader + control
-# ------------------------------
-# session state flags (initialize)
+# session-state flags
+if "load_requested" not in st.session_state:
+    st.session_state.load_requested = False
 if "is_loading" not in st.session_state:
     st.session_state.is_loading = False
 if "data_loaded" not in st.session_state:
     st.session_state.data_loaded = False
 if "loaded_df" not in st.session_state:
     st.session_state.loaded_df = None
-
-# ------------------------------------------------------------------
-# Sidebar: tournament selection + explicit Load button
-# Controls are disabled while a load is in progress (is_loading=True)
-# ------------------------------------------------------------------
-
-st.sidebar.header("Select Tournaments")
-
-# Select All / Clear All buttons - disabled when loading
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    if st.button("✓ Select All", use_container_width=True, key="select_all_btn", disabled=st.session_state.is_loading):
-        st.session_state.selected_tournaments = list(TOURNAMENTS.keys())
-        st.rerun()
-with col2:
-    if st.button("✗ Clear All", use_container_width=True, key="clear_all_btn", disabled=st.session_state.is_loading):
-        st.session_state.selected_tournaments = []
-        st.rerun()
-
+if "icr_prepared" not in st.session_state:
+    st.session_state.icr_prepared = False
+if "icr_frames" not in st.session_state:
+    st.session_state.icr_frames = {}
 if "selected_tournaments" not in st.session_state:
     st.session_state.selected_tournaments = []
+
+# Tournament selection area (disabled while loading)
+st.sidebar.header("Select Tournaments")
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    if st.sidebar.button("✓ Select All", use_container_width=True, disabled=st.session_state.is_loading):
+        st.session_state.selected_tournaments = list(TOURNAMENTS.keys())
+with col2:
+    if st.sidebar.button("✗ Clear All", use_container_width=True, disabled=st.session_state.is_loading):
+        st.session_state.selected_tournaments = []
 
 selected_tournaments = st.sidebar.multiselect(
     "Choose tournaments to load (select one or more)",
@@ -828,236 +1087,277 @@ selected_tournaments = st.sidebar.multiselect(
     key="tournament_select_key",
     disabled=st.session_state.is_loading
 )
-# persist back into session_state
 st.session_state.selected_tournaments = selected_tournaments
 
-# quick heuristic: All-leagues mode when >=7 selections
-ALL_LEAGUES_MODE = len(selected_tournaments) >= 7
-if ALL_LEAGUES_MODE:
-    st.sidebar.warning(
-        f"⚠️ {len(selected_tournaments)} tournaments selected. "
-        "App will load aggregated data; detailed visuals may be disabled."
+if len(selected_tournaments) >= 7:
+    st.sidebar.warning(f"⚠️ {len(selected_tournaments)} tournaments selected. App may take longer to load.")
+
+# explicit Load button
+if st.sidebar.button("Load Selected Tournaments", use_container_width=True, disabled=st.session_state.is_loading):
+    st.session_state.load_requested = True
+
+# Quick access to ICR panel even when no load: user can view it independently later
+st.sidebar.markdown(" ")
+st.sidebar.markdown("**ICR**")
+if st.sidebar.button("Open ICR Panel (view only)"):
+    st.session_state.show_icr_ui = True
+else:
+    # preserve previous flag if exists
+    if "show_icr_ui" not in st.session_state:
+        st.session_state.show_icr_ui = False
+
+# ----------------------------
+# Execution gating
+# ----------------------------
+# If user hasn't requested a load and no loaded data -> instruct user and stop (prevents partial downstream execution)
+if not st.session_state.load_requested and not st.session_state.data_loaded:
+    st.info("Data not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
+    # But still allow user to open ICR panel without loading all tournaments
+    if st.session_state.show_icr_ui:
+        # prepare icr frames now if not prepared (this path is used when user clicks "Open ICR Panel")
+        if not st.session_state.icr_prepared:
+            st.session_state.icr_frames = prepare_icr_frames_quiet()
+            st.session_state.icr_prepared = True
+        # show the ICR UI (same as your code)
+        st.markdown("## Integrated Contextual Ratings")
+        year_choice = st.selectbox("Select Year", ["2023", "2024", "2025"], index=2)
+        board_choice = st.radio("Leaderboard", ["Batting Leaderboard", "Bowling Leaderboard"], index=0)
+        show_top_n = st.number_input("Show Top N Rows (0 = All)", min_value=0, value=50, step=10)
+
+        df_map = {}
+        rating_label = "ICR Percentile"
+        if board_choice.startswith("Bat"):
+            df_map = {
+                "2023": st.session_state.icr_frames.get("icr_23", pd.DataFrame()),
+                "2024": st.session_state.icr_frames.get("icr_24", pd.DataFrame()),
+                "2025": st.session_state.icr_frames.get("icr_25", pd.DataFrame())
+            }
+            rating_label = "ICR Percentile"
+        else:
+            df_map = {
+                "2023": st.session_state.icr_frames.get("bicr_23", pd.DataFrame()),
+                "2024": st.session_state.icr_frames.get("bicr_24", pd.DataFrame()),
+                "2025": st.session_state.icr_frames.get("bicr_25", pd.DataFrame())
+            }
+            rating_label = "BICR Percentile"
+
+        df_show = df_map.get(year_choice)
+        st.markdown("---")
+        st.markdown(f"### {board_choice} — {year_choice}")
+        if df_show is None or df_show.empty:
+            st.warning("No ICR data available for the selected year.")
+        else:
+            df_disp = df_show.copy()
+            if year_choice in ["2023", "2024"]:
+                if board_choice.startswith("Bat"):
+                    exclude = ["ICR Percentile", "Matches"]
+                else:
+                    exclude = ["BICR Percentile", "Matches"]
+                df_disp = title_case_df_values(df_disp, exclude_cols=exclude)
+            # sort by percentile
+            if rating_label in df_disp.columns:
+                df_disp[rating_label] = pd.to_numeric(df_disp[rating_label], errors="coerce")
+                df_disp = df_disp.sort_values(rating_label, ascending=False)
+            st.markdown(f"**Source:** IPL {year_choice} — {rating_label}")
+            if show_top_n > 0:
+                df_disp = df_disp.head(int(show_top_n))
+            st.dataframe(df_disp.reset_index(drop=True), use_container_width=True)
+            # download
+            buffer = io.StringIO()
+            df_disp.to_csv(buffer, index=False)
+            buffer.seek(0)
+            st.download_button(
+                label="Download CSV",
+                data=buffer.getvalue().encode("utf-8"),
+                file_name=f"{board_choice.replace(' ', '_')}_{year_choice}.csv",
+                mime="text/csv"
+            )
+    st.stop()
+
+# If we've reached here: either load was requested OR data has been loaded previously.
+# When load requested but not yet loaded -> run the quiet ICR diversion, then perform the full blocking load.
+if st.session_state.load_requested and not st.session_state.data_loaded:
+    # Defensive: require selection
+    if not selected_tournaments:
+        st.error("No tournaments selected. Please select tournaments to load.")
+        st.session_state.load_requested = False
+        st.stop()
+
+    # Resolve files for the selected tournaments
+    resolved_files = []
+    missing = []
+    for t in selected_tournaments:
+        token = TOURNAMENTS.get(t, t).lower()
+        path = _strict_file_for_tournament(token)
+        if path is None:
+            missing.append(t)
+            resolved_files.append((t, None, None, None))
+        else:
+            try:
+                mtime = os.path.getmtime(path)
+                size = os.path.getsize(path)
+            except Exception:
+                mtime, size = None, None
+            resolved_files.append((t, path, mtime, size))
+    file_signatures = tuple(resolved_files)
+
+    # QUIET ICR DIVERSION: prepare the ICR frames but do NOT display them yet
+    if not st.session_state.icr_prepared:
+        try:
+            st.session_state.icr_frames = prepare_icr_frames_quiet()
+        except Exception:
+            st.session_state.icr_frames = {}
+        st.session_state.icr_prepared = True
+
+    # Full blocking load (batched + cached)
+    st.session_state.is_loading = True
+    placeholder = st.empty()
+    try:
+        with placeholder.container():
+            st.info(f"🔄 Loading {len(selected_tournaments)} tournament(s)... please wait.")
+            progress_bar = st.progress(0)
+            status = st.empty()
+
+            start_time = datetime.now()
+            df_loaded = load_filtered_data_fast(selected_tournaments, selected_years, usecols, file_signatures=file_signatures)
+            elapsed = (datetime.now() - start_time).total_seconds()
+
+            progress_bar.progress(100)
+            status.success(f"✅ Loaded in {elapsed:.1f}s")
+            import time
+            time.sleep(0.25)
+
+        # validation
+        if df_loaded is None or not isinstance(df_loaded, pd.DataFrame) or df_loaded.empty:
+            placeholder.empty()
+            st.error("Loaded data is empty or invalid after loading. Try fewer tournaments / narrower year range.")
+            st.session_state.is_loading = False
+            st.session_state.load_requested = False
+            st.stop()
+
+        if "tournament" not in df_loaded.columns:
+            placeholder.empty()
+            st.error("Loaded data does not contain a 'tournament' column.")
+            st.session_state.is_loading = False
+            st.session_state.load_requested = False
+            st.stop()
+
+        # Save into session_state and mark as loaded
+        st.session_state.loaded_df = df_loaded.copy()
+        st.session_state.data_loaded = True
+        st.session_state.is_loading = False
+        st.session_state.load_requested = False
+
+        placeholder.empty()
+
+    except MemoryError:
+        placeholder.empty()
+        st.session_state.is_loading = False
+        st.session_state.load_requested = False
+        st.error("Out of Memory while loading datasets. Select fewer tournaments or a narrower year range.")
+        st.stop()
+    except Exception as e:
+        placeholder.empty()
+        st.session_state.is_loading = False
+        st.session_state.load_requested = False
+        st.error(f"Error loading data: {str(e)}")
+        st.stop()
+
+# ----------------------------
+# Data loaded successfully — safe downstream processing & show ICR UI
+# ----------------------------
+if st.session_state.data_loaded and isinstance(st.session_state.loaded_df, pd.DataFrame):
+    df = st.session_state.loaded_df.copy()
+    if "tournament" in df.columns:
+        df = df[df["tournament"].isin(selected_tournaments)].copy()
+    if df is None or df.empty:
+        st.warning("After filtering, no rows remain. Adjust selection.")
+        st.stop()
+
+    st.sidebar.success(
+        f"✅ Data Loaded Successfully\n\n"
+        f"📊 {len(df):,} rows\n"
+        f"🏆 {len(df['tournament'].unique())} tournament(s)\n"
+        f"📅 Years: {selected_years[0]}-{selected_years[-1]}"
     )
 
-# Explicit Load button (disabled while loading)
-if st.sidebar.button("Load Selected Tournaments", use_container_width=True, key="load_selected_btn", disabled=st.session_state.is_loading):
-    # Mark loading start and rerun so UI reflects disabled state
-    st.session_state.is_loading = True
-    st.session_state.data_loaded = False
-    st.session_state.loaded_df = None
-    st.rerun()
+    # Expose DF to downstream app code (your existing pipeline can read DF_gen)
+    DF_gen = df
 
-# If loading, perform the blocking load with incremental progress
-if st.session_state.is_loading and not st.session_state.data_loaded:
-    loading_placeholder = st.container()
-    with loading_placeholder:
-        st.info(f"🔄 Loading {len(selected_tournaments)} tournament(s)... Please wait, do not interact with the app.")
-        progress_bar = st.progress(0)
-        status_text = st.empty()
+    # Now show the ICR panel (same UI you gave), using the prepared frames
+    st.markdown("## Integrated Contextual Ratings")
+    # ensure prepared
+    if not st.session_state.icr_prepared:
+        st.session_state.icr_frames = prepare_icr_frames_quiet()
+        st.session_state.icr_prepared = True
 
-        # Build file_signatures
-        resolved_files = []
-        for t in selected_tournaments:
-            token = TOURNAMENTS.get(t, t).lower()
-            path = _strict_file_for_tournament(token)
-            if path is None:
-                resolved_files.append((t, None, None, None))
-            else:
-                try:
-                    mtime = os.path.getmtime(path)
-                    size = os.path.getsize(path)
-                except Exception:
-                    mtime, size = None, None
-                resolved_files.append((t, path, mtime, size))
+    year_choice = st.selectbox("Select Year", ["2023", "2024", "2025"], index=2)
+    board_choice = st.radio("Leaderboard", ["Batting Leaderboard", "Bowling Leaderboard"], index=0)
+    show_top_n = st.number_input("Show Top N Rows (0 = All)", min_value=0, value=50, step=10)
 
-        file_signatures = tuple(resolved_files)
-
-        # Cache setup
-        usecols = None  # Define here, can customize if needed
-        cache_key = _hash_args(tuple(selected_tournaments), selected_years, usecols, file_signatures)
-        cache_path = os.path.join(CACHE_DIR, f"merged_{cache_key}.parquet")
-
-        start_time = datetime.now()
-
-        if os.path.exists(cache_path):
-            try:
-                df_loaded = pd.read_parquet(cache_path)
-                status_text.success("✅ Loaded from cache")
-                progress_bar.progress(1.0)
-            except Exception:
-                df_loaded = pd.DataFrame()
-                status_text.error("❌ Failed to load from cache")
-        else:
-            # Inline batch loading with progress
-            BATCH_SIZE = 3
-            all_frames = []
-            tournament_batches = list(chunk_list(selected_tournaments, BATCH_SIZE))
-            num_batches = len(tournament_batches)
-            loaded_batches = 0
-
-            if num_batches == 0:
-                df_loaded = pd.DataFrame()
-            else:
-                for batch_idx, tournament_batch in enumerate(tournament_batches):
-                    status_text.text(f"Processing batch {batch_idx + 1}/{num_batches}...")
-                    batch_frames = []
-                    for t in tournament_batch:
-                        token = TOURNAMENTS.get(t, t).lower()
-                        path = _strict_file_for_tournament(token)
-                        if path is None:
-                            continue
-
-                        ext = os.path.splitext(path)[1].lower()
-
-                        df = None
-                        try:
-                            if ext == ".parquet":
-                                df = pd.read_parquet(path, columns=usecols)
-
-                            elif ext == ".csv":
-                                file_size_mb = os.path.getsize(path) / (1024 * 1024)
-                                if file_size_mb > 100:
-                                    chunks = []
-                                    chunk_size = 100000
-                                    for chunk in pd.read_csv(path, usecols=usecols, low_memory=False, chunksize=chunk_size):
-                                        year_col = _detect_year_column(chunk)
-                                        if year_col:
-                                            yrs = _extract_years(chunk[year_col])
-                                            if yrs is not None:
-                                                mask = yrs.isin(selected_years).fillna(False)
-                                                chunk = chunk.loc[mask]
-                                        if not chunk.empty:
-                                            chunks.append(chunk)
-                                    if chunks:
-                                        df = pd.concat(chunks, ignore_index=True)
-                                        del chunks
-                                        gc.collect()
-                                    else:
-                                        continue
-                                else:
-                                    df = pd.read_csv(path, usecols=usecols, low_memory=False)
-
-                            else:
-                                df = pd.read_excel(path, usecols=usecols)
-
-                        except MemoryError as mem_err:
-                            status_text.warning(f"Memory error loading {t}: {str(mem_err)}")
-                            continue
-                        except Exception as exc:
-                            status_text.warning(f"Error loading {t}: {str(exc)}")
-                            continue
-
-                        if df is None or df.empty:
-                            continue
-
-                        year_col = _detect_year_column(df)
-                        if year_col:
-                            yrs = _extract_years(df[year_col])
-                            if yrs is not None:
-                                mask = yrs.isin(selected_years).fillna(False)
-                                df = df.loc[mask]
-
-                        if df.empty:
-                            continue
-
-                        df["tournament"] = t
-
-                        batch_frames.append(df.copy())  # Copy to avoid reference issues
-                        del df
-                        gc.collect()
-
-                    if batch_frames:
-                        try:
-                            batch_merged = pd.concat(batch_frames, ignore_index=True, sort=False)
-                            all_frames.append(batch_merged.copy())
-                            del batch_frames, batch_merged
-                            gc.collect()
-                            loaded_batches += 1
-                        except MemoryError as mem_err:
-                            status_text.warning(f"Memory error concatenating batch {batch_idx + 1}: {str(mem_err)}")
-                            continue
-
-                    # Update progress per batch
-                    progress = (batch_idx + 1) / num_batches
-                    progress_bar.progress(progress)
-
-                if not all_frames:
-                    df_loaded = pd.DataFrame()
-                else:
-                    try:
-                        df_loaded = pd.concat(all_frames, ignore_index=True, sort=False)
-                        del all_frames
-                        gc.collect()
-                    except MemoryError as mem_err:
-                        status_text.error(f"Memory error in final concat: {str(mem_err)}")
-                        df_loaded = pd.DataFrame()
-
-                if "tournament" not in df_loaded.columns:
-                    df_loaded["tournament"] = np.nan
-
-                # Optimize dtypes
-                for col in df_loaded.select_dtypes(include=['object']).columns:
-                    num_unique = df_loaded[col].nunique()
-                    if num_unique > 0 and num_unique < len(df_loaded) * 0.5:
-                        try:
-                            df_loaded[col] = df_loaded[col].astype('category')
-                        except:
-                            pass
-
-                # Cache the result if successful
-                if not df_loaded.empty:
-                    try:
-                        df_loaded.to_parquet(cache_path, index=False)
-                        status_text.success("✅ Cached the loaded data")
-                    except Exception as exc:
-                        status_text.warning(f"Failed to cache: {str(exc)}")
-
-        elapsed = (datetime.now() - start_time).total_seconds()
-        if not df_loaded.empty:
-            status_text.success(f"✅ Loaded in {elapsed:.1f}s | Batches loaded: {loaded_batches}/{num_batches}")
-        else:
-            status_text.error("❌ No data loaded. Check selections or files.")
-        time.sleep(1.5)  # Allow user to see final status
-
-    # Store and mark done only if loaded successfully
-    if not df_loaded.empty:
-        st.session_state.loaded_df = df_loaded
-        st.session_state.data_loaded = True
-    st.session_state.is_loading = False
-
-    loading_placeholder.empty()
-    st.rerun()
-
-# Stop if not loaded
-if not st.session_state.data_loaded:
-    if st.session_state.is_loading:
-        st.info("Loading in progress...")
+    if board_choice.startswith("Bat"):
+        df_map = {
+            "2023": st.session_state.icr_frames.get("icr_23", pd.DataFrame()),
+            "2024": st.session_state.icr_frames.get("icr_24", pd.DataFrame()),
+            "2025": st.session_state.icr_frames.get("icr_25", pd.DataFrame())
+        }
+        rating_label = "ICR Percentile"
     else:
-        st.info("Data not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
-    st.stop()
+        df_map = {
+            "2023": st.session_state.icr_frames.get("bicr_23", pd.DataFrame()),
+            "2024": st.session_state.icr_frames.get("bicr_24", pd.DataFrame()),
+            "2025": st.session_state.icr_frames.get("bicr_25", pd.DataFrame())
+        }
+        rating_label = "BICR Percentile"
 
-# Use loaded data
-df = st.session_state.loaded_df
-if df.empty:
-    st.warning("Loaded dataset is empty. Please adjust selection.")
-    st.stop()
-if "tournament" not in df.columns:
-    st.error("Loaded data missing 'tournament' column.")
-    st.stop()
+    df_show = df_map.get(year_choice)
 
-df = df[df["tournament"].isin(selected_tournaments)].copy()
-if df.empty:
-    st.warning("No data after filtering.")
+    st.markdown("---")
+    st.markdown(f"### {board_choice} — {year_choice}")
+
+    if df_show is None or df_show.empty:
+        st.warning("No data available.")
+    else:
+        df_disp = df_show.copy()
+
+        if year_choice in ["2023", "2024"]:
+            if board_choice.startswith("Bat"):
+                exclude = ["ICR Percentile", "Matches"]
+            else:
+                exclude = ["BICR Percentile", "Matches"]
+            df_disp = title_case_df_values(df_disp, exclude_cols=exclude)
+
+        # sort by percentile
+        if rating_label in df_disp.columns:
+            df_disp[rating_label] = pd.to_numeric(df_disp[rating_label], errors="coerce")
+            df_disp = df_disp.sort_values(rating_label, ascending=False)
+
+        st.markdown(f"**Source:** IPL {year_choice} — {rating_label}")
+
+        if show_top_n > 0:
+            df_disp = df_disp.head(int(show_top_n))
+
+        st.dataframe(df_disp.reset_index(drop=True), use_container_width=True)
+
+        # download
+        buffer = io.StringIO()
+        df_disp.to_csv(buffer, index=False)
+        buffer.seek(0)
+        st.download_button(
+            label="Download CSV",
+            data=buffer.getvalue().encode("utf-8"),
+            file_name=f"{board_choice.replace(' ', '_')}_{year_choice}.csv",
+            mime="text/csv"
+        )
+
+    # Continue with the rest of your app downstream, using DF_gen safely...
+    st.markdown("### Data Summary")
+    st.write(f"Rows loaded: {len(DF_gen):,}")
+    st.write("Tournaments:", sorted(DF_gen['tournament'].unique().tolist()))
+
+else:
+    st.info("Waiting for data to finish loading.")
     st.stop()
-
-st.sidebar.success(
-    f"✅ Data Loaded\n\n"
-    f"📊 {len(df):,} rows\n"
-    f"🏆 {len(df['tournament'].unique())} tournaments\n"
-    f"📅 {selected_years[0]}-{selected_years[-1]}"
-)
-
-DF_gen = df
 
 
 
