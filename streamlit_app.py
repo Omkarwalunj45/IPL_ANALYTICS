@@ -662,7 +662,7 @@ os.makedirs(DATASETS_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 CHUNK_ROWS = 200_000
-MAX_TOURNAMENTS = 5
+MAX_TOURNAMENTS = 4
 
 TOURNAMENTS = {
     "IPL": "IPL_APP_IPL",
