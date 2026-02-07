@@ -906,7 +906,7 @@ selected_tournaments = st.sidebar.multiselect(
 )
 
 st.session_state.selected_tournaments = selected_tournaments
-
+# ALL_LEAGUES_MODE = len(selected_tournaments) >= 7
 # ────────────────────────────────────────────────
 # LOAD DATA
 # ────────────────────────────────────────────────
