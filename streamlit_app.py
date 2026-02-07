@@ -6288,10 +6288,10 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     (sr_grid,   "Strike Rate", "Reds")
                 ]
             
-                for ax, (arr, title, cmap) in zip(axes.flat, plot_items):
+                for ax_idx, (ax, (arr, title, cmap)) in enumerate(zip(axes.flat, plot_items)):
                     masked = np.ma.masked_invalid(arr)
                     flat = arr[~np.isnan(arr)]
-            
+                    st.write("DEBUG – total wickets:", int(wkt_grid.sum()))
                     if flat.size == 0:
                         vmin, vmax = 0, 1
                     else:
@@ -6314,18 +6314,24 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             
                     # W annotation only for first two plots
                     # W annotation ONLY for Balls Bowled %
-                    if title == "Balls Bowled (%)":
+                    # W annotation ONLY for Balls Bowled % (first subplot)
+                    if ax_idx == 0:
                         for i in range(N_ROWS):
                             for j in range(N_COLS):
                                 if wkt_grid[i, j] > 0:
                                     ax.text(
                                         j, i, "W",
                                         ha='center', va='center',
-                                        fontsize=14, weight='bold',
+                                        fontsize=14,
+                                        weight='bold',
                                         color='gold',
-                                        bbox=dict(facecolor='black', alpha=0.6,
-                                                  boxstyle='round,pad=0.2')
+                                        bbox=dict(
+                                            facecolor='black',
+                                            alpha=0.6,
+                                            boxstyle='round,pad=0.2'
+                                        )
                                     )
+
 
             
                     fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
