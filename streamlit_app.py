@@ -1107,6 +1107,7 @@ with loading_box:
                     pass
 
             # atomic cache write
+            # atomic cache write
             if not df_loaded.empty:
                 tmp_parquet = cache_path + f".{uuid.uuid4().hex}.tmp"
                 try:
@@ -1119,30 +1120,27 @@ with loading_box:
                         df_loaded.to_parquet(cache_path, index=False)
                     except Exception as exc2:
                         status.warning(f"Fallback cache write failed: {exc2}")
-            
+        
             elapsed = time.time() - start_ts
             status.success(
                 f"✅ Load finished in {elapsed:.1f}s | batches {loaded_batches}/{num_batches}"
             )
             progress.progress(100)
-            
+        
             # -------------------------------
             # 🔐 FINAL LOAD SIGNAL (CRITICAL)
             # -------------------------------
             st.session_state.loaded_df = df_loaded
             st.session_state.data_loaded = True
+        
+        finally:
+            # cleanup ALWAYS runs
             st.session_state.is_loading = False
-            
-            # cleanup
             _remove_lock(lock_path)
             time.sleep(0.3)
             loading_box.empty()
-            
-            # 🚫 DO NOT RERUN
-            # Streamlit will naturally proceed on next interaction
-
-
-            # ========================= End loader =========================
+        
+        # ========================= End loader =========================
             
             
 # Use loaded data
