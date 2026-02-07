@@ -822,6 +822,7 @@ if "tournament" not in df.columns:
 DF_gen = df
 
 st.success(f"Successfully loaded {len(DF_gen):,} rows from {len(selected_tournaments)} leagues.")
+  
 
 
 
