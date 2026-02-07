@@ -8541,8 +8541,8 @@ elif sidebar_option == "Strength vs Weakness":
                 bowl_styles_present = unique_vals_union('bowl_style')
             
                 # UI controls
-                st.markdown("## Batter — Bowler Kind / Style exploration")
-                st.write("Select a Bowler Kind (value as stored) or select a Bowler Style (value as stored).")
+                st.markdown("## Batter vs Bowler Kind/Style Performance")
+                st.write("Select a Bowler Kind or select a Bowler Style")
                 # ── At the top of your page / sidebar (where selectboxes are defined) ──
                 
                 # Initialize session state if not present
@@ -9203,312 +9203,7 @@ elif sidebar_option == "Strength vs Weakness":
                         st.pyplot(fig)
                     finally:
                         plt.close(fig)
-                # def build_pitch_grids(df_src):
-                #     """
-                #     Build pitch grids for visualization.
-                #     Assumes df_src has 'line' and 'length' columns.
-                #     Returns dict with various aggregated grids.
-                #     """
-                #     # Define line and length categories
-                #     line_order = ['wide down leg', 'down leg', 'on stumps', 'outside off', 'wide out off']
-                #     length_order = ['short', 'back of length', 'good', 'full', 'yorker', 'full toss']
-                    
-                #     # Normalize line and length
-                #     df = df_src.copy()
-                #     df['line_norm'] = df.get('line', '').astype(str).str.lower().str.strip()
-                #     df['length_norm'] = df.get('length', '').astype(str).str.lower().str.strip()
-                    
-                #     # Filter valid lines and lengths
-                #     df = df[df['line_norm'].isin(line_order) & df['length_norm'].isin(length_order)]
-                    
-                #     n_cols = len(line_order)
-                #     n_rows = len(length_order)
-                    
-                #     # Initialize grids
-                #     count = np.zeros((n_rows, n_cols), dtype=int)
-                #     runs = np.zeros((n_rows, n_cols), dtype=int)
-                #     bounds = np.zeros((n_rows, n_cols), dtype=int)
-                #     dots = np.zeros((n_rows, n_cols), dtype=int)
-                #     wkt = np.zeros((n_rows, n_cols), dtype=int)
-                #     controlled = np.zeros((n_rows, n_cols), dtype=int)
-                    
-                #     # Map categories to indices
-                #     line_to_idx = {line: idx for idx, line in enumerate(line_order)}
-                #     length_to_idx = {length: idx for idx, length in enumerate(length_order)}
-                    
-                #     # Populate grids
-                #     for _, row in df.iterrows():
-                #         i = length_to_idx.get(row['length_norm'])
-                #         j = line_to_idx.get(row['line_norm'])
-                        
-                #         if i is None or j is None:
-                #             continue
-                        
-                #         count[i, j] += 1
-                #         runs[i, j] += int(row.get('runs', 0))
-                        
-                #         # Boundaries (4s and 6s)
-                #         if int(row.get('runs', 0)) in [4, 6]:
-                #             bounds[i, j] += 1
-                        
-                #         # Dots
-                #         if int(row.get('runs', 0)) == 0:
-                #             dots[i, j] += 1
-                        
-                #         # Wickets
-                #         if int(row.get('out', 0)) == 1:
-                #             wkt[i, j] += 1
-                        
-                #         # Control (shots played in control)
-                #         if row.get('control', '').lower() in ['yes', '1', 'true']:
-                #             controlled[i, j] += 1
-                    
-                #     # Calculate metrics
-                #     sr = np.zeros((n_rows, n_cols), dtype=float)
-                #     ctrl_pct = np.zeros((n_rows, n_cols), dtype=float)
-                    
-                #     mask = count > 0
-                #     sr[mask] = (runs[mask] / count[mask]) * 100.0
-                #     ctrl_pct[mask] = ((count[mask] - controlled[mask]) / count[mask]) * 100.0  # False shot %
-                    
-                #     return {
-                #         'count': count,
-                #         'runs': runs,
-                #         'bounds': bounds,
-                #         'dots': dots,
-                #         'wkt': wkt,
-                #         'sr': sr,
-                #         'ctrl_pct': ctrl_pct,
-                #         'n_rows': n_rows,
-                #         'n_cols': n_cols
-                #     }
-                
-                
-                # def display_pitchmaps_from_df(df_src, bdf_full, title_prefix, player_selected, runs_col, COL_BAT, 
-                #                                 bowl_kind=None, bowl_style=None):
-                #     """
-                #     Display pitch maps with 6 panels including RAA.
-                    
-                #     Parameters:
-                #     -----------
-                #     df_src : DataFrame
-                #         Filtered data for the selected player
-                #     bdf_full : DataFrame
-                #         Full benchmark dataset with ALL batters
-                #     title_prefix : str
-                #         Title for the visualization
-                #     player_selected : str
-                #         Name of player being analyzed
-                #     runs_col : str
-                #         Column name for runs
-                #     COL_BAT : str
-                #         Column name for batter identifier
-                #     bowl_kind : str, optional
-                #         Bowling kind filter applied to df_src
-                #     bowl_style : str, optional
-                #         Bowling style filter applied to df_src
-                #     """
-                #     if df_src is None or df_src.empty:
-                #         st.info(f"No deliveries to show for {title_prefix}")
-                #         return
-                
-                #     grids = build_pitch_grids(df_src)
-                
-                #     bh_col_name = 'bat_hand'  # Adjust if different
-                #     is_lhb = False
-                #     if bh_col_name in df_src.columns:
-                #         hands = df_src[bh_col_name].dropna().astype(str).str.strip().unique()
-                #         if any(h.upper().startswith('L') for h in hands):
-                #             is_lhb = True
-                
-                #     def maybe_flip(arr):
-                #         return np.fliplr(arr) if is_lhb else arr.copy()
-                
-                #     count = maybe_flip(grids['count'])
-                #     bounds = maybe_flip(grids['bounds'])
-                #     dots = maybe_flip(grids['dots'])
-                #     sr = maybe_flip(grids['sr'])
-                #     ctrl = maybe_flip(grids['ctrl_pct'])
-                #     wkt = maybe_flip(grids['wkt'])
-                #     runs = maybe_flip(grids['runs'])
-                
-                #     total = count.sum() if count.sum() > 0 else 1.0
-                #     perc = count.astype(float) / total * 100.0
-                
-                #     # Boundary % = boundaries in cell / balls in cell × 100
-                #     bound_pct = np.zeros_like(bounds, dtype=float)
-                #     mask = count > 0
-                #     bound_pct[mask] = bounds[mask] / count[mask] * 100.0
-                
-                #     # Dot % = dots in cell / balls in cell × 100
-                #     dot_pct = np.zeros_like(dots, dtype=float)
-                #     dot_pct[mask] = dots[mask] / count[mask] * 100.0
-                
-                #     xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
-                #     xticks = xticks_base[::-1] if is_lhb else xticks_base
-                
-                #     n_rows = grids['n_rows']
-                #     if n_rows >= 6:
-                #         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
-                #     else:
-                #         yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker'][:n_rows]
-                
-                #     # RAA per cell - NOW USING FULL BENCHMARK
-                #     raa_grid = np.full((n_rows, grids['n_cols']), np.nan)
-                    
-                #     if 'line' in df_src.columns and 'length' in df_src.columns and bdf_full is not None and isinstance(bdf_full, pd.DataFrame):
-                #         # Pass the FULL benchmark dataset and the filters
-                #         raa_dict = compute_pitchmap_raa(df_src, bdf_full, runs_col=runs_col, COL_BAT=COL_BAT, 
-                #                                         bowl_kind=bowl_kind, bowl_style=bowl_style)
-                
-                #         for i in range(n_rows):
-                #             length_str = yticklabels[i].lower().strip()
-                #             for j in range(grids['n_cols']):
-                #                 line_str = xticks[j].lower().strip()
-                #                 combo = f"{line_str}_{length_str}"
-                #                 raa_grid[i, j] = raa_dict.get(combo, {}).get('RAA', np.nan)
-                        
-                #         # Debugging output
-                #         st.write("### RAA Debug Info:")
-                #         st.write(f"Player: {player_selected}")
-                #         st.write(f"Filters applied: bowl_kind={bowl_kind}, bowl_style={bowl_style}")
-                #         st.write(f"RAA grid shape: {raa_grid.shape}")
-                #         st.write(f"Non-NaN RAA values: {np.sum(~np.isnan(raa_grid))}")
-                #         if np.any(~np.isnan(raa_grid)):
-                #             st.write(f"RAA min: {np.nanmin(raa_grid):.2f}, max: {np.nanmax(raa_grid):.2f}, mean: {np.nanmean(raa_grid):.2f}")
-                        
-                #         # Show RAA values in a table
-                #         raa_df = pd.DataFrame(raa_grid, columns=xticks, index=yticklabels)
-                #         st.write("RAA Values by cell:")
-                #         st.dataframe(raa_df.style.format("{:.1f}"))
-                        
-                #         # Show some combo details
-                #         st.write("Sample combo details:")
-                #         sample_combos = list(raa_dict.items())[:5]
-                #         for combo, data in sample_combos:
-                #             st.write(f"  {combo}: RAA={data['RAA']:.1f}, Player SR={data['player_SR']:.1f}, Benchmark SR={data['benchmark_SR']:.1f}")
-                #     else:
-                #         st.warning("Cannot compute RAA map: missing columns or benchmark data.")
-                
-                #     fig, axes = plt.subplots(3, 2, figsize=(14, 18))
-                #     plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
-                
-                #     plot_list = [
-                #         (perc, 'Balls Bowled', 'Blues', False),
-                #         (bound_pct, 'Boundary %', 'OrRd', False),
-                #         (dot_pct, 'Dot %', 'Blues', False),
-                #         (sr, 'SR', 'Reds', False),
-                #         (ctrl, 'False Shot % (not in control)', 'PuBu', False),
-                #         (raa_grid, 'RAA (vs Top7 Avg)', 'RdYlGn', True)  # Diverging colormap
-                #     ]
-                
-                #     for ax_idx, (ax, (arr, ttl, cmap, is_diverging)) in enumerate(zip(axes.flat, plot_list)):
-                #         safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-                #         flat = safe_arr.flatten()
-                        
-                #         # Different normalization for diverging vs sequential colormaps
-                #         if is_diverging:
-                #             # For RAA: center at 0, use symmetric range
-                #             non_nan_vals = raa_grid[~np.isnan(raa_grid)]
-                #             if len(non_nan_vals) > 0:
-                #                 abs_max = max(abs(np.nanmin(non_nan_vals)), abs(np.nanmax(non_nan_vals)))
-                #                 if abs_max == 0:
-                #                     abs_max = 10.0  # Default range if all zeros
-                #             else:
-                #                 abs_max = 10.0
-                            
-                #             norm = mcolors.TwoSlopeNorm(vmin=-abs_max, vcenter=0, vmax=abs_max)
-                #             im = ax.imshow(safe_arr, origin='lower', cmap=cmap, norm=norm)
-                #         else:
-                #             # For other metrics: use standard normalization
-                #             if np.all(flat == 0):
-                #                 vmin, vmax = 0, 1
-                #             else:
-                #                 vmin = float(np.nanmin(flat))
-                #                 vmax = float(np.nanpercentile(flat, 95))
-                #                 if vmax <= vmin:
-                #                     vmax = vmin + 1.0
-                            
-                #             im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
-                        
-                #         ax.set_title(ttl, fontsize=12, weight='bold')
-                #         ax.set_xticks(range(grids['n_cols']))
-                #         ax.set_yticks(range(grids['n_rows']))
-                #         ax.set_xticklabels(xticks, rotation=45, ha='right', fontsize=9)
-                #         ax.set_yticklabels(yticklabels, fontsize=9)
-                
-                #         ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
-                #         ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
-                #         ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
-                #         ax.tick_params(which='minor', bottom=False, left=False)
-                
-                #         # Add wicket annotations to first plot
-                #         if ax_idx == 0:
-                #             for i in range(grids['n_rows']):
-                #                 for j in range(grids['n_cols']):
-                #                     w_count = int(wkt[i, j])
-                #                     if w_count > 0:
-                #                         w_text = f"{w_count} W" if w_count > 1 else 'W'
-                #                         ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                #                                 bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
-                        
-                #         # Add RAA values as text annotations on RAA plot
-                #         if is_diverging:
-                #             for i in range(grids['n_rows']):
-                #                 for j in range(grids['n_cols']):
-                #                     val = raa_grid[i, j]
-                #                     if not np.isnan(val) and count[i, j] > 0:  # Only show if there were balls
-                #                         # Choose text color based on value
-                #                         if abs(val) > abs_max * 0.5:
-                #                             text_color = 'white'
-                #                         else:
-                #                             text_color = 'black'
-                #                         ax.text(j, i, f'{val:.1f}', ha='center', va='center', 
-                #                                fontsize=8, color=text_color, weight='bold')
-                
-                #         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-                
-                #     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
-                
-                #     # Display using Streamlit
-                #     try:
-                #         st.pyplot(fig)
-                #     except Exception as e:
-                #         st.error(f"Error displaying plot: {e}")
-                #     finally:
-                #         plt.close(fig)
-                
-                
-                # Example usage:
-                # display_pitchmaps_from_df(
-                #     df_src=filtered_player_data,  # Data for ONE player
-                #     bdf_full=full_benchmark_data,  # Data for ALL players
-                #     title_prefix="vs Pace Bowlers",
-                #     player_selected="Abhishek Sharma",
-                #     runs_col='runs',
-                #     COL_BAT='batter',
-                #     bowl_kind='pace bowler',
-                #     bowl_style=None
-                # )
-                                                            
-                # ---------- Wagon chart (existing - runs) ----------
-                # def draw_wagon_if_available(df_wagon, batter_name):
-                #     if 'draw_cricket_field_with_run_totals_requested' in globals() and callable(globals()['draw_cricket_field_with_run_totals_requested']):
-                #         try:
-                #             fig_w = draw_cricket_field_with_run_totals_requested(df_wagon, batter_name)
-                #             safe_fn = globals().get('safe_st_pyplot', None)
-                #             if callable(safe_fn):
-                #                 safe_fn(fig_w, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                #             else:
-                #                 st.pyplot(fig_w)
-                #         except Exception as e:
-                #             st.error(f"Wagon drawing function exists but raised: {e}")
-                #     else:
-                #         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
 
-
-                # Required imports (place near top of your module)
-                ##PROBLEM BIG PROBLEM
                 def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
                   
                     """
@@ -9602,183 +9297,7 @@ elif sidebar_option == "Strength vs Weakness":
                     except Exception as e:
                         st.error(f"Wagon drawing function raised: {e}")
                                 
-                # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
-                #     """
-                #     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
-                #     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
-                #                         False => request true handedness visualization (LHB will appear mirrored).
-                #     This wrapper tries to call the function with the new parameter if available (backwards compatible).
-                #     """
-                #     import matplotlib.pyplot as plt
-                #     import streamlit as st
-                #     import inspect
-               
-                #     # Defensive check
-                #     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
-                #         st.warning("No wagon data available to draw.")
-                #         return
-               
-                #     # Decide handedness (for UI messages / debugging)
-                #     batting_style_val = None
-                #     if 'bat_hand' in df_wagon.columns:
-                #         try:
-                #             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
-                #         except Exception:
-                #             batting_style_val = None
-                #     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-               
-                #     # NEW: For LHB, flip X coordinates in data (assumes 'wagonX' is the column; adjust if different)
-                #     df_wagon_copy = df_wagon.copy()  # Avoid modifying original
-                #     if is_lhb:
-                #         if 'wagonX' in df_wagon_copy.columns:
-                #             df_wagon_copy['wagonX'] = -df_wagon_copy['wagonX']  # Flip X coords (data swap left/right)
-                #         # If using wagonZone (1-8), swap zones symmetrically
-                #         # Assume standard zones: 1 (sq leg) <-> 8 (third man), 2 <-> 7, 3 <-> 6, 4 <-> 5, etc.
-                #         if 'wagonZone' in df_wagon_copy.columns:
-                #             zone_map = {1: 8, 8: 1, 2: 7, 7: 2, 3: 6, 6: 3, 4: 5, 5: 4}  # Symmetric flip
-                #             df_wagon_copy['wagonZone'] = df_wagon_copy['wagonZone'].map(zone_map).fillna(df_wagon_copy['wagonZone'])
-               
-                #     # Check function signature
-                #     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
-                #     if draw_fn is None or not callable(draw_fn):
-                #         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
-                #         return
-               
-                #     try:
-                #         sig = inspect.signature(draw_fn)
-                #         if 'normalize_to_rhb' in sig.parameters:
-                #             # call with the explicit flag (preferred)
-                #             fig = draw_fn(df_wagon_copy, batter_name, normalize_to_rhb=normalize_to_rhb)
-                #         else:
-                #             # older signature: call without flag (maintain legacy behaviour)
-                #             fig = draw_fn(df_wagon_copy, batter_name)
-               
-                #         # If the function returned a Matplotlib fig — display it
-                #         if isinstance(fig, plt.Figure):
-                #             safe_fn = globals().get('safe_st_pyplot', None)
-                #             if callable(safe_fn):
-                #                 try:
-                #                     safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                #                 except Exception:
-                #                     st.pyplot(fig)
-                #             else:
-                #                 st.pyplot(fig)
-                #             return
-               
-                #         # If function returned None, it may have drawn to current fig; capture that
-                #         if fig is None:
-                #             mpl_fig = plt.gcf()
-                #             # If figure has axes and content, display it
-                #             if isinstance(mpl_fig, plt.Figure) and len(mpl_fig.axes) > 0:
-                #                 safe_fn = globals().get('safe_st_pyplot', None)
-                #                 if callable(safe_fn):
-                #                     try:
-                #                         safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                #                     except Exception:
-                #                         st.pyplot(mpl_fig)
-                #                 else:
-                #                     st.pyplot(mpl_fig)
-                #                 return
-               
-                #         # If function returned a Plotly figure (rare), display it
-                #         if 'plotly' in str(type(fig)).lower():
-                #             try:
-                #                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                #             except Exception:
-                #                 pass
-                #             st.plotly_chart(fig, use_container_width=True)
-                #             return
-               
-                #         # Unknown return — just state it
-                #         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
-                #     except Exception as e:
-                #         st.error(f"Wagon drawing function raised: {e}")
 
-                # def draw_wagon_if_available(df_wagon, batter_name, normalize_to_rhb=True):
-                #     """
-                #     Wrapper that calls draw_cricket_field_with_run_totals_requested consistently.
-                #     - normalize_to_rhb: True => request RHB-normalised output (legacy behaviour).
-                #                         False => request true handedness visualization (LHB will appear mirrored).
-                #     This wrapper tries to call the function with the new parameter if available (backwards compatible).
-                #     """
-                #     import matplotlib.pyplot as plt
-                #     import streamlit as st
-                #     import inspect
-                
-                #     # Defensive check
-                #     if not isinstance(df_wagon, pd.DataFrame) or df_wagon.empty:
-                #         st.warning("No wagon data available to draw.")
-                #         return
-                
-                #     # Decide handedness (for UI messages / debugging)
-                #     batting_style_val = None
-                #     if 'bat_hand' in df_wagon.columns:
-                #         try:
-                #             batting_style_val = df_wagon['bat_hand'].dropna().iloc[0]
-                #         except Exception:
-                #             batting_style_val = None
-                #     is_lhb = isinstance(batting_style_val, str) and batting_style_val.strip().upper().startswith('L')
-                
-                #     # Check function signature
-                #     draw_fn = globals().get('draw_cricket_field_with_run_totals_requested', None)
-                #     if draw_fn is None or not callable(draw_fn):
-                #         st.warning("Wagon chart function not found; please ensure `draw_cricket_field_with_run_totals_requested` is defined earlier.")
-                #         return
-                
-                #     try:
-                #         sig = inspect.signature(draw_fn)
-                #         if 'normalize_to_rhb' in sig.parameters:
-                #             # call with the explicit flag (preferred)
-                #             fig = draw_fn(df_wagon, batter_name, normalize_to_rhb=normalize_to_rhb)
-                #         else:
-                #             # older signature: call without flag (maintain legacy behaviour)
-                #             fig = draw_fn(df_wagon, batter_name)
-                
-                #         # If the function returned a Matplotlib fig — display it
-                #         if isinstance(fig, MplFigure):
-                #             safe_fn = globals().get('safe_st_pyplot', None)
-                #             if callable(safe_fn):
-                #                 try:
-                #                     safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                #                 except Exception:
-                #                     st.pyplot(fig)
-                #             else:
-                #                 st.pyplot(fig)
-                #             return
-                
-                #         # If function returned None, it may have drawn to current fig; capture that
-                #         if fig is None:
-                #             mpl_fig = plt.gcf()
-                #             # If figure has axes and content, display it
-                #             if isinstance(mpl_fig, MplFigure) and len(mpl_fig.axes) > 0:
-                #                 safe_fn = globals().get('safe_st_pyplot', None)
-                #                 if callable(safe_fn):
-                #                     try:
-                #                         safe_fn(mpl_fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
-                #                     except Exception:
-                #                         st.pyplot(mpl_fig)
-                #                 else:
-                #                     st.pyplot(mpl_fig)
-                #                 return
-                
-                #         # If function returned a Plotly figure (rare), display it
-                #         if isinstance(fig, go.Figure):
-                #             try:
-                #                 fig.update_yaxes(scaleanchor="x", scaleratio=1)
-                #             except Exception:
-                #                 pass
-                #             st.plotly_chart(fig, use_container_width=True)
-                #             return
-                
-                #         # Unknown return — just state it
-                #         st.warning("Wagon draw function executed but returned an unexpected type; nothing displayed.")
-                #     except Exception as e:
-                #         st.error(f"Wagon drawing function raised: {e}")
-                
-                
-                # -------------------------
-                # 3) Updated draw_caught_dismissals_wagon (Plotly)
-                # -------------------------
                 def draw_caught_dismissals_wagon(df_wagon, batter_name, normalize_to_rhb=True):
                     """
                     Plotly wagon chart for caught dismissals.
@@ -9995,418 +9514,6 @@ elif sidebar_option == "Strength vs Weakness":
                         display_pitchmaps_from_df(df_use, f"vs Bowler Style: {style_first}")
 
 
-            # import plotly.express as px
-            # import pandas as pd
-            # import numpy as np
-            
-            # # Defensive checks
-            # if 'pf' not in globals():
-            #     st.error("Player frame `pf` not found. Filter your DataFrame for the selected batsman into `pf` first.")
-            #     st.stop()
-            
-            # # Ensure required columns exist
-            # if 'batruns' not in pf.columns:
-            #     st.error("Column 'batruns' is required but not found in player frame `pf`.")
-            #     st.stop()
-            # if 'shot' not in pf.columns:
-            #     st.error("Column 'shot' is required but not found in player frame `pf`.")
-            #     st.stop()
-            
-            # # Build working df for this batter (keep rows that have shot info)
-            # df_local = pf.dropna(subset=['shot']).copy()
-            # if df_local.empty:
-            #     st.info("No deliveries with 'shot' recorded for this batsman.")
-            # else:
-            #     # Ensure numeric batruns
-            #     df_local['batruns'] = pd.to_numeric(df_local['batruns'], errors='coerce').fillna(0).astype(int)
-            
-            #     # Compute dismissal flag (is_wkt) if not already present
-            #     if 'is_wkt' not in df_local.columns:
-            #         # compute out_flag and dismissal_clean locally
-            #         df_local['out_flag'] = pd.to_numeric(df_local.get('out', 0), errors='coerce').fillna(0).astype(int)
-            #         df_local['dismissal_clean'] = df_local.get('dismissal', "").astype(str).str.lower().str.strip().replace({'nan':'','none':''})
-            #         special_runout_types = set(['run out','runout','retired','retired not out','retired out','obstructing the field'])
-            #         df_local['is_wkt'] = df_local.apply(
-            #             lambda r: 1 if (int(r.get('out_flag',0)) == 1 and str(r.get('dismissal_clean','')).strip() not in special_runout_types and str(r.get('dismissal_clean','')).strip() != '') else 0,
-            #             axis=1
-            #         )
-            #     else:
-            #         df_local['is_wkt'] = pd.to_numeric(df_local['is_wkt'], errors='coerce').fillna(0).astype(int)
-            
-            #     # Total runs (batruns) by this batter (used for percentage)
-            #     total_runs = df_local['batruns'].sum()
-            
-            #     # Group by shot to compute runs, balls, dismissals
-            #     shot_grp = df_local.groupby('shot').agg(
-            #         runs_by_shot = ('batruns', 'sum'),
-            #         balls = ('shot', 'size'),
-            #         dismissals = ('is_wkt', 'sum')
-            #     ).reset_index()
-            
-            #     # Compute derived metrics
-            #     shot_grp['% of Runs'] = shot_grp['runs_by_shot'].apply(lambda r: (r / total_runs * 100.0) if total_runs > 0 else 0.0)
-            #     shot_grp['SR'] = shot_grp.apply(lambda r: (r['runs_by_shot'] / r['balls'] * 100.0) if r['balls']>0 else np.nan, axis=1)
-            #     # Balls per dismissal: if dismissals == 0 -> NaN (we'll show '-' later)
-            #     shot_grp['BallsPerDismissal'] = shot_grp.apply(lambda r: (r['balls'] / r['dismissals']) if r['dismissals']>0 else np.nan, axis=1)
-            
-            #     # Round nicely for display
-            #     shot_grp['% of Runs'] = shot_grp['% of Runs'].round(2)
-            #     shot_grp['SR'] = shot_grp['SR'].round(2)
-            #     shot_grp['BallsPerDismissal'] = shot_grp['BallsPerDismissal'].round(2)
-            
-            #     # Sort for plotting (so the biggest % of runs appear at top)
-            #     productive_shot_df = shot_grp.sort_values('% of Runs', ascending=True)
-            
-            #     # -------------------------
-            #     # Control % (if control column exists)
-            #     # -------------------------
-            #     control_df = None
-            #     if 'control' in df_local.columns:
-            #         # normalize control (robust coercion to 0/1)
-            #         def _to_control_num(x):
-            #             if pd.isna(x):
-            #                 return 0
-            #             try:
-            #                 n = float(x)
-            #                 return 1 if int(n) != 0 else 0
-            #             except:
-            #                 s = str(x).strip().lower()
-            #                 if s in ('1','true','t','y','yes','controlled','c','ok'):
-            #                     return 1
-            #                 return 0
-            #         df_local['control_num'] = df_local['control'].apply(_to_control_num).astype(int)
-            #         control_grp = df_local.groupby('shot').agg(
-            #             total_shots = ('control_num','size'),
-            #             controlled_shots = ('control_num','sum')
-            #         ).reset_index()
-            #         control_grp['Control Percentage'] = control_grp.apply(
-            #             lambda r: (r['controlled_shots'] / r['total_shots'] * 100.0) if r['total_shots']>0 else 0.0,
-            #             axis=1
-            #         )
-            #         control_grp['Control Percentage'] = control_grp['Control Percentage'].round(2)
-            #         control_df = control_grp.sort_values('Control Percentage', ascending=True)
-            
-            #     # -------------------------
-            #     # Plotting: left = Productive Shots (% of runs) with hover showing SR, Dismissals & BallsPerDismissal
-            #     # -------------------------
-            #     col1, col2 = st.columns(2)
-            
-            #     with col1:
-            #         st.markdown("### Most Productive Shots")
-            #         if productive_shot_df.empty:
-            #             st.info("No shot data to plot.")
-            #         else:
-            #             fig1 = px.bar(
-            #                 productive_shot_df,
-            #                 x='% of Runs',
-            #                 y='shot',
-            #                 orientation='h',
-            #                 color='% of Runs',
-            #                 labels={'shot': 'Shot Type', '% of Runs': '% of Runs'},
-            #                 height=600,
-            #                 hover_data={
-            #                     'runs_by_shot': True,
-            #                     'balls': True,
-            #                     'SR': True,
-            #                     'dismissals': True,
-            #                     'BallsPerDismissal': True,
-            #                     '% of Runs': ':.2f'
-            #                 }
-            #             )
-            #             fig1.update_layout(
-            #                 margin=dict(l=180, r=40, t=40, b=40),
-            #                 xaxis_title='% of Runs',
-            #                 yaxis_title=None,
-            #             )
-            #             # show percentage inside bars with 2 decimals
-            #             fig1.update_traces(texttemplate='%{x:.2f}%', textposition='inside', hovertemplate=None)
-            #             fig1.update_yaxes(categoryorder='total ascending')
-            #             st.plotly_chart(fig1, use_container_width=True)
-            
-            #     # -------------------------
-            #     # Plotting: right = Control % by shot (if available)
-            #     # -------------------------
-            #     with col2:
-            #         st.markdown("### Control Percentage by Shot")
-            #         if control_df is None:
-            #             st.info("No `control` column available for this batter; skipping Control % chart.")
-            #         else:
-            #             fig2 = px.bar(
-            #                 control_df,
-            #                 x='Control Percentage',
-            #                 y='shot',
-            #                 orientation='h',
-            #                 color='Control Percentage',
-            #                 labels={'shot': 'Shot Type', 'Control Percentage': '% Controlled'},
-            #                 height=520,
-            #                 hover_data={'total_shots': True, 'controlled_shots': True, 'Control Percentage': ':.2f'}
-            #             )
-            #             fig2.update_layout(
-            #                 margin=dict(l=160, r=30, t=40, b=40),
-            #                 xaxis_title='Control Percentage',
-            #                 yaxis_title=None,
-            #             )
-            #             fig2.update_traces(texttemplate='%{x:.2f}%', textposition='inside', hovertemplate=None)
-            #             fig2.update_yaxes(categoryorder='total ascending')
-            #             st.plotly_chart(fig2, use_container_width=True)
-                
-            #     # ---------- Underlying numbers (rounded) ----------
-            #     st.markdown("#### Underlying numbers")
-            #     prod_show = productive_shot_df[['shot', 'runs_by_shot', 'balls', 'SR', 'dismissals', 'BallsPerDismissal', '% of Runs']].copy()
-            #     prod_show = prod_show.rename(columns={
-            #         'shot': 'Shot',
-            #         'runs_by_shot': 'Runs (batruns)',
-            #         'balls': 'Balls',
-            #         'SR': 'SR (%)',
-            #         'dismissals': 'Dismissals',
-            #         'BallsPerDismissal': 'Balls per Dismissal',
-            #         '% of Runs': '% of Runs'
-            #     })
-            #     # Replace NaN BallsPerDismissal with '-' for display
-            #     prod_show['Balls per Dismissal'] = prod_show['Balls per Dismissal'].apply(lambda x: '-' if pd.isna(x) else (round(x, 2) if not isinstance(x, str) else x)).astype(str)  # Convert entire column to string
-            #     prod_show['SR (%)'] = prod_show['SR (%)'].apply(lambda x: '-' if pd.isna(x) else round(x,2))
-            #     prod_show['% of Runs'] = prod_show['% of Runs'].round(2)
-            #     prod_show = prod_show.sort_values('% of Runs', ascending=False).reset_index(drop=True)
-                
-            #     st.dataframe(prod_show, use_container_width=True)
-                
-            #     # If control table exists, show it too
-            #     if control_df is not None:
-            #         ctrl_show = control_df[['shot','total_shots','controlled_shots','Control Percentage']].copy()
-            #         ctrl_show = ctrl_show.rename(columns={
-            #             'shot': 'Shot',
-            #             'total_shots': 'Total Shots',
-            #             'controlled_shots': 'Controlled Shots',
-            #             'Control Percentage': '% Controlled'
-            #         })
-            #         st.dataframe(ctrl_show, use_container_width=True)
-            # ---------- end shot productivity snippet ----------
-            # -------------------- 4 pitchmaps: SR and Control % (Pace vs Spin) --------------------
-            # ---------------- Improved pitchmaps: nicer colors + show '-' for empty cells ----------------
-            # ---------------- Light-colour pitchmaps (SR & Control) ----------------
-            # import numpy as np
-            # import matplotlib.pyplot as plt
-            # import matplotlib.patheffects as mpatheffects
-            # from matplotlib.colors import LinearSegmentedColormap
-            # import pandas as pd
-            
-            # # Defensive existence / fallbacks
-            # if 'pf_pace' not in globals() or 'pf_spin' not in globals():
-            #     if 'pf' in globals() and 'COL_BOWL_KIND' in globals():
-            #         pf_pace = pf[pf[COL_BOWL_KIND].astype(str).str.contains('pace', na=False)].copy()
-            #         pf_spin = pf[pf[COL_BOWL_KIND].astype(str).str.contains('spin', na=False)].copy()
-            #     else:
-            #         pf_pace = pd.DataFrame()
-            #         pf_spin = pd.DataFrame()
-            
-            # # column names / maps (use your app's names if different)
-            # COL_LINE = globals().get('COL_LINE', 'line')
-            # COL_LENGTH = globals().get('COL_LENGTH', 'length')
-            # COL_RUNS = globals().get('COL_RUNS', 'batruns')
-            # NOBALL_COL = 'noball'
-            # WIDE_COL = 'wide'
-            # CONTROL_COL = 'control'
-            
-            # LINE_MAP = globals().get('LINE_MAP', {
-            #     'WIDE_OUTSIDE_OFFSTUMP': 0, 'OUTSIDE_OFFSTUMP': 1, 'ON_THE_STUMPS': 2, 'DOWN_LEG': 3, 'WIDE_DOWN_LEG': 4
-            # })
-            # LENGTH_MAP = globals().get('LENGTH_MAP', {
-            #     'SHORT': 0, 'SHORT_OF_A_GOOD_LENGTH': 1, 'GOOD_LENGTH': 2, 'FULL': 3, 'YORKER': 4, 'FULL_TOSS': 4
-            # })
-            
-            # def _is_legal_row(r):
-            #     try:
-            #         if NOBALL_COL in r.index and int(r.get(NOBALL_COL, 0)) != 0:
-            #             return False
-            #     except Exception:
-            #         pass
-            #     try:
-            #         if WIDE_COL in r.index and int(r.get(WIDE_COL, 0)) != 0:
-            #             return False
-            #     except Exception:
-            #         pass
-            #     return True
-            
-            # def build_sr_and_counts(df_local):
-            #     sr_grid = np.full((5,5), np.nan, dtype=float)
-            #     runs_grid = np.zeros((5,5), dtype=float)
-            #     balls_grid = np.zeros((5,5), dtype=int)
-            #     if df_local is None or df_local.shape[0] == 0:
-            #         return sr_grid, balls_grid
-            #     if any(c not in df_local.columns for c in [COL_LINE, COL_LENGTH, COL_RUNS]):
-            #         return sr_grid, balls_grid
-                
-            #     cols = [COL_LINE, COL_LENGTH, COL_RUNS]
-            #     if NOBALL_COL in df_local.columns: cols.append(NOBALL_COL)
-            #     if WIDE_COL in df_local.columns: cols.append(WIDE_COL)
-            #     plot_df = df_local[cols].copy()
-                
-            #     for _, r in plot_df.iterrows():
-            #         if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
-            #             continue
-            #         if not _is_legal_row(r):
-            #             continue
-            #         li = LINE_MAP.get(r[COL_LINE], None)
-            #         le = LENGTH_MAP.get(r[COL_LENGTH], None)
-            #         if li is None or le is None:
-            #             continue
-            #         try:
-            #             runs_here = float(r.get(COL_RUNS, 0) or 0)
-            #         except:
-            #             runs_here = 0.0
-            #         runs_grid[le, li] += runs_here
-            #         balls_grid[le, li] += 1
-                
-            #     mask = balls_grid > 0
-            #     sr_grid[mask] = (runs_grid[mask] / balls_grid[mask]) * 100.0
-            #     sr_grid[mask] = np.round(sr_grid[mask], 2)
-            #     return sr_grid, balls_grid
-            
-            # def _to_control_num(x):
-            #     if pd.isna(x):
-            #         return 0
-            #     try:
-            #         n = float(x)
-            #         if np.isfinite(n):
-            #             return 1 if int(n) != 0 else 0
-            #     except:
-            #         pass
-            #     s = str(x).strip().lower()
-            #     if s in ('1','true','t','y','yes','controlled','c','ok'):
-            #         return 1
-            #     if s in ('0','false','f','n','no','uncontrolled','u'):
-            #         return 0
-            #     return 1 if s != '' else 0
-            
-            # def build_control_and_counts(df_local):
-            #     ctrl_grid = np.full((5,5), np.nan, dtype=float)
-            #     total_grid = np.zeros((5,5), dtype=int)
-            #     controlled_grid = np.zeros((5,5), dtype=int)
-            #     if df_local is None or df_local.shape[0] == 0:
-            #         return ctrl_grid, total_grid
-            #     if any(c not in df_local.columns for c in [COL_LINE, COL_LENGTH]):
-            #         return ctrl_grid, total_grid
-                
-            #     cols = [COL_LINE, COL_LENGTH]
-            #     if CONTROL_COL in df_local.columns: cols.append(CONTROL_COL)
-            #     if NOBALL_COL in df_local.columns: cols.append(NOBALL_COL)
-            #     if WIDE_COL in df_local.columns: cols.append(WIDE_COL)
-            #     plot_df = df_local[cols].copy()
-                
-            #     if CONTROL_COL in plot_df.columns:
-            #         plot_df[CONTROL_COL] = plot_df[CONTROL_COL].apply(_to_control_num).astype(int)
-                
-            #     for _, r in plot_df.iterrows():
-            #         if pd.isna(r[COL_LINE]) or pd.isna(r[COL_LENGTH]):
-            #             continue
-            #         if not _is_legal_row(r):
-            #             continue
-            #         li = LINE_MAP.get(r[COL_LINE], None)
-            #         le = LENGTH_MAP.get(r[COL_LENGTH], None)
-            #         if li is None or le is None:
-            #             continue
-            #         total_grid[le, li] += 1
-            #         if CONTROL_COL in plot_df.columns and int(r.get(CONTROL_COL, 0)) == 1:
-            #             controlled_grid[le, li] += 1
-                
-            #     mask = total_grid > 0
-            #     ctrl_grid[mask] = (controlled_grid[mask] / total_grid[mask]) * 100.0
-            #     ctrl_grid[mask] = np.round(ctrl_grid[mask], 2)
-            #     return ctrl_grid, total_grid
-            
-            # # Create soft/light colormaps
-            # def make_light_cmap(name, colors):
-            #     return LinearSegmentedColormap.from_list(name, colors)
-            
-            # # light skin / pink for SR, light blue for Control
-            # cmap_sr_light = make_light_cmap('sr_light', ['#fff3e6', '#ffd6b3', '#ffc2a8']) # soft skin / peach tones
-            # cmap_ctrl_light = make_light_cmap('ctrl_light', ['#f0f8ff', '#d9efff', '#bfe6ff']) # very light blues
-            
-            # def plot_grid_light(grid, counts_grid, title, cmap, mirror=False, fmt='float', vmax=None):
-            #     disp = np.fliplr(grid) if mirror else grid.copy()
-            #     counts_disp = np.fliplr(counts_grid) if mirror else counts_grid.copy()
-                
-            #     # set NaNs as light gray
-            #     cmap = cmap.copy()
-            #     cmap.set_bad('#f7f7f7')
-                
-            #     finite_vals = disp[np.isfinite(disp)]
-            #     real_vmax = float(np.nanmax(finite_vals)) if finite_vals.size>0 else (vmax if vmax is not None else 1.0)
-            #     vmax_use = float(vmax) if (vmax is not None and vmax>0) else (real_vmax if real_vmax>0 else 1.0)
-                
-            #     fig, ax = plt.subplots(figsize=(6,9), dpi=150)
-            #     im = ax.imshow(disp, origin='lower', cmap=cmap, vmin=0, vmax=vmax_use)
-            #     ax.set_xticks(range(5)); ax.set_yticks(range(5))
-            #     xticks_base = ['Wide Out Off','Outside Off','On Stumps','Down Leg','Wide Down Leg']
-            #     xticks = list(reversed(xticks_base)) if mirror else xticks_base
-            #     ax.set_xticklabels(xticks, rotation=36, ha='right')
-            #     ax.set_yticklabels(['Short','Back of Length','Good','Full','Yorker'])
-                
-            #     for i in range(5):
-            #         for j in range(5):
-            #             val = disp[i,j]
-            #             cnt = int(counts_disp[i,j]) if not np.isnan(counts_disp[i,j]) else 0
-            #             if cnt == 0 or not np.isfinite(val):
-            #                 lab = '-' # no deliveries
-            #                 txt_color = 'black'
-            #             else:
-            #                 if fmt == 'pct':
-            #                     lab = f"{val:.2f}%"
-            #                 elif fmt == 'int':
-            #                     lab = f"{int(val)}"
-            #                 else:
-            #                     lab = f"{val:.2f}"
-            #                 try:
-            #                     intensity = float(val) / float(vmax_use) if vmax_use > 0 else 0.0
-            #                 except:
-            #                     intensity = 0.0
-            #                 txt_color = 'black' if intensity < 0.6 else 'white'
-            #             txt = ax.text(j, i, lab, ha='center', va='center', color=txt_color, fontsize=12, fontweight='bold')
-            #             stroke_col = 'white' if txt_color=='black' else 'black'
-            #             txt.set_path_effects([mpatheffects.Stroke(linewidth=2, foreground=stroke_col), mpatheffects.Normal()])
-                
-            #     cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
-            #     cbar.ax.tick_params(labelsize=9)
-            #     plt.title(title, pad=6, fontsize=12)
-            #     plt.tight_layout(pad=0)
-            #     fig.subplots_adjust(top=0.95, bottom=0.02, left=0.06, right=0.98)
-            #     return fig
-            
-            # # Build grids
-            # sr_pace, counts_pace = build_sr_and_counts(pf_pace)
-            # sr_spin, counts_spin = build_sr_and_counts(pf_spin)
-            # ctrl_pace, total_pace = build_control_and_counts(pf_pace)
-            # ctrl_spin, total_spin = build_control_and_counts(pf_spin)
-            
-            # # vmax choices
-            # vmax_sr = max(np.nanmax(sr_pace[np.isfinite(sr_pace)]) if np.any(np.isfinite(sr_pace)) else 0,
-            #               np.nanmax(sr_spin[np.isfinite(sr_spin)]) if np.any(np.isfinite(sr_spin)) else 0, 10.0)
-            # vmax_ctrl = 100.0
-            
-            # # Display maps
-            # c1, c2 = st.columns([1,1], gap="large")
-            # with c1:
-            #     st.markdown("<div style='font-weight:800;'>Strike Rate — Pace</div>", unsafe_allow_html=True)
-            #     fig_sr_pace = plot_grid_light(sr_pace, counts_pace, f"{player_selected} — SR% vs Pace", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
-            #     display_figure_fixed_height_html(fig_sr_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            # with c2:
-            #     st.markdown("<div style='font-weight:800;'>Strike Rate — Spin</div>", unsafe_allow_html=True)
-            #     fig_sr_spin = plot_grid_light(sr_spin, counts_spin, f"{player_selected} — SR% vs Spin", cmap_sr_light, mirror=is_lhb, fmt='float', vmax=vmax_sr)
-            #     display_figure_fixed_height_html(fig_sr_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            
-            # c3, c4 = st.columns([1,1], gap="large")
-            # with c3:
-            #     st.markdown("<div style='font-weight:800;'> Control % — Pace</div>", unsafe_allow_html=True)
-            #     fig_ctrl_pace = plot_grid_light(ctrl_pace, total_pace, f"{player_selected} — Control% vs Pace", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
-            #     display_figure_fixed_height_html(fig_ctrl_pace, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            # with c4:
-            #     st.markdown("<div style='font-weight:800;'> Control % — Spin</div>", unsafe_allow_html=True)
-            #     fig_ctrl_spin = plot_grid_light(ctrl_spin, total_spin, f"{player_selected} — Control% vs Spin", cmap_ctrl_light, mirror=is_lhb, fmt='pct', vmax=vmax_ctrl)
-            #     display_figure_fixed_height_html(fig_ctrl_spin, height_px=HEIGHT_PITCHMAP_PX, margin_px=0)
-            # # ---------------- end light-colour pitchmaps ----------------
-# ---------------- end improved pitchmaps snippet ----------------
-        
-    # -------------------- end pitchmaps snippet --------------------
 
     else:
         st.markdown(f"<div style='font-size:20px; font-weight:800; color:#111;'> Bowling — {player_selected}</div>", unsafe_allow_html=True)
@@ -11100,25 +10207,31 @@ elif sidebar_option == "Strength vs Weakness":
             def maybe_flip(arr):
                 return np.fliplr(arr) if is_lhb else arr.copy()
         
-            count = maybe_flip(grids['count'])
-            bounds = maybe_flip(grids['bounds'])
-            dots = maybe_flip(grids['dots'])
-            econ = maybe_flip(grids['econ'])
-            ctrl = maybe_flip(grids['ctrl_pct'])
-            wkt = maybe_flip(grids['wkt'])
-            runs = maybe_flip(grids['runs'])
+            count  = maybe_flip(grids['count']).astype(float)
+            bounds = maybe_flip(grids['bounds']).astype(float)
+            dots   = maybe_flip(grids['dots']).astype(float)
+            ctrl   = maybe_flip(grids['ctrl_pct']).astype(float)
+            wkt    = maybe_flip(grids['wkt']).astype(float)
+            runs   = maybe_flip(grids['runs']).astype(float)
         
-            total = count.sum() if count.sum() > 0 else 1.0
-            perc = count.astype(float) / total * 100.0
+            # ---------------- PER-CELL METRICS ----------------
+            with np.errstate(divide='ignore', invalid='ignore'):
+                balls_pct   = count / count.sum() * 100.0
+                boundary_pct = np.where(count > 0, bounds / count * 100.0, np.nan)
+                dot_pct      = np.where(count > 0, dots / count * 100.0, np.nan)
+                batting_sr   = np.where(count > 0, runs / count * 100.0, np.nan)
         
-            # xticks order: for RHB left->right, for LHB reversed (we flipped arrays already,
-            # so choose labels accordingly)
+                # Bowling SR: balls per wicket, only if balls >= 15
+                bowling_sr = np.where(
+                    (count >= 15) & (wkt > 0),
+                    count / wkt,
+                    np.nan
+                )
+        
             xticks_base = ['Wide Out Off', 'Outside Off', 'On Stumps', 'Down Leg', 'Wide Down Leg']
             xticks = xticks_base[::-1] if is_lhb else xticks_base
         
-            # ytick labels depends on n_rows and whether FULL_TOSS exists
             n_rows = grids['n_rows']
-            # prefer to show Full Toss on top if n_rows == 6
             if n_rows >= 6:
                 yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss'][:n_rows]
             else:
@@ -11128,18 +10241,18 @@ elif sidebar_option == "Strength vs Weakness":
             plt.suptitle(f"{player_selected} — {title_prefix}", fontsize=16, weight='bold')
         
             plot_list = [
-                (perc, 'Balls Bowled', 'Blues'),
-                (bounds, 'Boundaries conceded (count)', 'OrRd'),
-                (dots, 'Dot balls (count)', 'Blues'),
-                (econ, 'Econ (runs/6 balls)', 'Reds'),
-                (ctrl, 'False Shot % (induced)', 'PuBu'),
-                (runs, 'Runs conceded (sum)', 'Reds')
+                (balls_pct,    'Balls Bowled (%)',            'Blues'),
+                (boundary_pct, 'Boundary % (per ball)',       'OrRd'),
+                (dot_pct,      'Dot % (per ball)',            'Blues'),
+                (batting_sr,   'Batting SR (runs/ball ×100)', 'Reds'),
+                (ctrl,         'False Shot % (induced)',      'RdYlGn'),
+                (bowling_sr,   'Bowling SR (balls/wicket)',   'RdYlGn_r')
             ]
         
             for ax_idx, (ax, (arr, ttl, cmap)) in enumerate(zip(axes.flat, plot_list)):
                 safe_arr = np.nan_to_num(arr.astype(float), nan=0.0)
-                # autoscale vmax by 95th percentile to reduce outlier effect
                 flat = safe_arr.flatten()
+        
                 if np.all(flat == 0):
                     vmin, vmax = 0, 1
                 else:
@@ -11148,43 +10261,52 @@ elif sidebar_option == "Strength vs Weakness":
                     if vmax <= vmin:
                         vmax = vmin + 1.0
         
-                im = ax.imshow(safe_arr, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+                im = ax.imshow(
+                    safe_arr,
+                    origin='lower',
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax
+                )
+        
                 ax.set_title(ttl)
-                ax.set_xticks(range(grids['n_cols'])); ax.set_yticks(range(grids['n_rows']))
+                ax.set_xticks(range(grids['n_cols']))
+                ax.set_yticks(range(grids['n_rows']))
                 ax.set_xticklabels(xticks, rotation=45, ha='right')
                 ax.set_yticklabels(yticklabels)
         
-                # black minor-grid borders for cells
                 ax.set_xticks(np.arange(-0.5, grids['n_cols'], 1), minor=True)
                 ax.set_yticks(np.arange(-0.5, grids['n_rows'], 1), minor=True)
                 ax.grid(which='minor', color='black', linewidth=0.6, alpha=0.95)
                 ax.tick_params(which='minor', bottom=False, left=False)
         
-                # annotate N W for wicket cells (e.g., '2 W') ONLY in the first plot (% of balls)
+                # wicket annotations only on Balls Bowled plot
                 if ax_idx == 0:
                     for i in range(grids['n_rows']):
                         for j in range(grids['n_cols']):
-                            w_count = int(wkt[i, j])
-                            if w_count > 0:
-                                w_text = f"{w_count} W" if w_count > 1 else 'W'
-                                ax.text(j, i, w_text, ha='center', va='center', fontsize=14, color='gold', weight='bold',
-                                        bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2'))
+                            wc = int(wkt[i, j])
+                            if wc > 0:
+                                ax.text(
+                                    j, i,
+                                    f"{wc} W" if wc > 1 else "W",
+                                    ha='center', va='center',
+                                    fontsize=14, color='gold', weight='bold',
+                                    bbox=dict(facecolor='black', alpha=0.6, boxstyle='round,pad=0.2')
+                                )
         
                 fig.colorbar(im, ax=ax, fraction=0.046, pad=0.02)
         
             plt.tight_layout(rect=[0, 0.03, 1, 0.97])
         
-            # display via safe_st_pyplot if available
             safe_fn = globals().get('safe_st_pyplot', None)
             try:
                 if callable(safe_fn):
                     safe_fn(fig, max_pixels=40_000_000, fallback_set_max=False, use_container_width=True)
                 else:
                     st.pyplot(fig)
-            except Exception:
-                st.pyplot(fig)
             finally:
                 plt.close(fig)
+
         
         # ---------- When user selects a batter hand ----------
         if chosen_hand:
