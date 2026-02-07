@@ -16,48 +16,223 @@ st.set_page_config(layout="wide")
 st.markdown("""
 <style>
 
-/* Selectbox, multiselect, dropdown input */
-[data-baseweb="select"] > div {
-    background-color: #ffffff !important;
+/* ===== APP BACKGROUND ===== */
+.stApp {
+    background-color: #f5f7fa;
+    color: #0f172a;
 }
 
-/* Dropdown text */
-[data-baseweb="select"] span {
-    color: #000000 !important;
+/* ===== SIDEBAR ===== */
+[data-testid="stSidebar"] {
+    background-color: #0b2545;
+    border-right: 1px solid rgba(255,255,255,0.08);
 }
 
-/* Placeholder text */
-[data-baseweb="select"] input {
-    color: #000000 !important;
+[data-testid="stSidebar"] * {
+    color: #e6edf5 !important;
+    font-weight: 500;
 }
 
-/* Dropdown menu */
-[data-baseweb="menu"] {
-    background-color: #ffffff !important;
+/* ===== BANNER ===== */
+.app-banner {
+    background: linear-gradient(135deg, #081c2f, #0b2545);
+    border-radius: 18px;
+    padding: 28px 32px;
+    color: #ffffff;
 }
 
-/* Dropdown options */
-[data-baseweb="option"] {
-    color: #000000 !important;
-    background-color: #ffffff !important;
+/* ===== INPUTS ===== */
+.stSelectbox div[data-baseweb="select"],
+.stMultiSelect div[data-baseweb="select"],
+.stNumberInput input,
+.stTextInput input,
+.stSlider > div {
+    background-color: #fbfdff !important;
+    border: 1px solid #dbe2ea;
+    border-radius: 10px;
+    color: #0f172a !important;
 }
 
-/* Hover */
-[data-baseweb="option"]:hover {
-    background-color: #f2f2f2 !important;
+/* ===== METRIC CARDS ===== */
+[data-testid="stMetric"] {
+    background-color: #fbfdff;
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid #dbe2ea;
 }
 
-/* Radio buttons */
-[data-baseweb="radio"] span {
-    color: #000000 !important;
+/* ===== TABLES & PLOTS ===== */
+[data-testid="stDataFrame"],
+div[data-testid="stPlotlyChart"],
+div[data-testid="stPyplot"] {
+    background-color: #fbfdff;
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid #dbe2ea;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.08);
 }
 
-/* Multiselect tags */
-[data-baseweb="tag"] {
-    background-color: #e5e7eb !important;
-    color: #000000 !important;
+/* ===== HEADINGS ===== */
+h1, h2 {
+    font-weight: 800;
+    color: #0f172a;
 }
 
+h3, h4 {
+    font-weight: 700;
+    color: #0f172a;
+}
+
+/* ===== ORANGE ACCENT ===== */
+.orange-accent {
+    color: #f08a24;
+    font-weight: 700;
+}
+
+/* ===== DIVIDERS ===== */
+hr {
+    border: none;
+    border-top: 1px solid #dbe2ea;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+
+/* ===== Sidebar YEAR / SLIDER LABELS ===== */
+[data-testid="stSidebar"] .stSlider label,
+[data-testid="stSidebar"] .stSlider span,
+[data-testid="stSidebar"] [data-baseweb="slider"] span {
+    color: #f08a24 !important;
+    font-weight: 600;
+}
+
+/* Slider tick values (years) */
+[data-testid="stSidebar"] [data-baseweb="slider"] div {
+    color: #f08a24 !important;
+}
+
+/* Slider value bubble (if visible) */
+[data-testid="stSidebar"] [role="slider"] {
+    color: #f08a24 !important;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+components.html(
+    """
+    <div style="
+        width: 100%;
+        background: linear-gradient(135deg, #0A2540 0%, #0f2f55 60%, #0A2540 100%);
+        padding: 26px 32px;
+        border-radius: 14px;
+        box-shadow: 0 12px 28px rgba(0,0,0,0.22);
+        font-family: Inter, Arial, sans-serif;
+        box-sizing: border-box;
+    ">
+
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:20px;">
+
+            <!-- LEFT: BRAND -->
+            <div>
+                <div style="
+                    font-size: 40px;
+                    font-weight: 800;
+                    color: #F8FAFC;
+                    letter-spacing: 0.4px;
+                    line-height: 1.05;
+                ">
+                    DeepCrease
+                </div>
+
+                <div style="
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: #2DD4BF;
+                    margin-top: 6px;
+                    letter-spacing: 0.4px;
+                ">
+                    Contextual Cricket Intelligence Engine
+                </div>
+
+                <div style="
+                    margin-top: 10px;
+                    font-size: 17px;
+                    font-weight: 500;
+                    color: #FACC15;
+                    letter-spacing: 0.3px;
+                ">
+                    T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
+                </div>
+            </div>
+
+            <!-- RIGHT: NAME + LINKS -->
+            <div style="text-align:right; margin-top:6px;">
+                <div style="
+                    font-size:13px;
+                    font-weight:600;
+                    color:#E5E7EB;
+                ">
+                    Omkar Walunj
+                </div>
+
+                <a href="https://www.linkedin.com/in/omkar-walunj-8256a4280/"
+                   target="_blank"
+                   style="
+                       display:block;
+                       margin-top:4px;
+                       text-decoration:underline;
+                       font-size:12px;
+                       font-weight:500;
+                       color:#94A3B8;
+                   ">
+                    LinkedIn
+                </a>
+
+                <a href="https://substack.com/@theunseengame"
+                   target="_blank"
+                   style="
+                       display:block;
+                       margin-top:2px;
+                       text-decoration:underline;
+                       font-size:12px;
+                       font-weight:500;
+                       color:#94A3B8;
+                   ">
+                    Substack
+                </a>
+            </div>
+
+        </div>
+    </div>
+    """,
+    height=155,
+    scrolling=False
+)
+st.markdown("""
+<style>
+/* ===== Sidebar Background ===== */
+[data-testid="stSidebar"] {
+    background-color: #F8FAFC;
+}
+
+/* Sidebar text (ensure readability) */
+[data-testid="stSidebar"] * {
+    color: #0b2545 !important;   /* deep navy text for contrast */
+    font-weight: 500;
+}
+
+/* Sidebar headers */
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 {
+    color: #023047 !important;
+    font-weight: 700;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -452,228 +627,7 @@ st.set_page_config(page_title='IPL Performance Analysis Portal (Since IPL 2021)'
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.markdown("""
-<style>
 
-/* ===== APP BACKGROUND ===== */
-.stApp {
-    background-color: #f5f7fa;
-    color: #0f172a;
-}
-
-/* ===== SIDEBAR ===== */
-[data-testid="stSidebar"] {
-    background-color: #0b2545;
-    border-right: 1px solid rgba(255,255,255,0.08);
-}
-
-[data-testid="stSidebar"] * {
-    color: #e6edf5 !important;
-    font-weight: 500;
-}
-
-/* ===== BANNER ===== */
-.app-banner {
-    background: linear-gradient(135deg, #081c2f, #0b2545);
-    border-radius: 18px;
-    padding: 28px 32px;
-    color: #ffffff;
-}
-
-/* ===== INPUTS ===== */
-.stSelectbox div[data-baseweb="select"],
-.stMultiSelect div[data-baseweb="select"],
-.stNumberInput input,
-.stTextInput input,
-.stSlider > div {
-    background-color: #fbfdff !important;
-    border: 1px solid #dbe2ea;
-    border-radius: 10px;
-    color: #0f172a !important;
-}
-
-/* ===== METRIC CARDS ===== */
-[data-testid="stMetric"] {
-    background-color: #fbfdff;
-    border-radius: 14px;
-    padding: 14px;
-    border: 1px solid #dbe2ea;
-}
-
-/* ===== TABLES & PLOTS ===== */
-[data-testid="stDataFrame"],
-div[data-testid="stPlotlyChart"],
-div[data-testid="stPyplot"] {
-    background-color: #fbfdff;
-    border-radius: 16px;
-    padding: 16px;
-    border: 1px solid #dbe2ea;
-    box-shadow: 0 6px 18px rgba(15,23,42,0.08);
-}
-
-/* ===== HEADINGS ===== */
-h1, h2 {
-    font-weight: 800;
-    color: #0f172a;
-}
-
-h3, h4 {
-    font-weight: 700;
-    color: #0f172a;
-}
-
-/* ===== ORANGE ACCENT ===== */
-.orange-accent {
-    color: #f08a24;
-    font-weight: 700;
-}
-
-/* ===== DIVIDERS ===== */
-hr {
-    border: none;
-    border-top: 1px solid #dbe2ea;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-st.markdown("""
-<style>
-
-/* ===== Sidebar YEAR / SLIDER LABELS ===== */
-[data-testid="stSidebar"] .stSlider label,
-[data-testid="stSidebar"] .stSlider span,
-[data-testid="stSidebar"] [data-baseweb="slider"] span {
-    color: #f08a24 !important;
-    font-weight: 600;
-}
-
-/* Slider tick values (years) */
-[data-testid="stSidebar"] [data-baseweb="slider"] div {
-    color: #f08a24 !important;
-}
-
-/* Slider value bubble (if visible) */
-[data-testid="stSidebar"] [role="slider"] {
-    color: #f08a24 !important;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-
-components.html(
-    """
-    <div style="
-        width: 100%;
-        background: linear-gradient(135deg, #0A2540 0%, #0f2f55 60%, #0A2540 100%);
-        padding: 26px 32px;
-        border-radius: 14px;
-        box-shadow: 0 12px 28px rgba(0,0,0,0.22);
-        font-family: Inter, Arial, sans-serif;
-        box-sizing: border-box;
-    ">
-
-        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:20px;">
-
-            <!-- LEFT: BRAND -->
-            <div>
-                <div style="
-                    font-size: 40px;
-                    font-weight: 800;
-                    color: #F8FAFC;
-                    letter-spacing: 0.4px;
-                    line-height: 1.05;
-                ">
-                    DeepCrease
-                </div>
-
-                <div style="
-                    font-size: 15px;
-                    font-weight: 600;
-                    color: #2DD4BF;
-                    margin-top: 6px;
-                    letter-spacing: 0.4px;
-                ">
-                    Contextual Cricket Intelligence Engine
-                </div>
-
-                <div style="
-                    margin-top: 10px;
-                    font-size: 17px;
-                    font-weight: 500;
-                    color: #FACC15;
-                    letter-spacing: 0.3px;
-                ">
-                    T20 Performance Analysis Portal <span style="opacity:0.85;">(Since 2021)</span>
-                </div>
-            </div>
-
-            <!-- RIGHT: NAME + LINKS -->
-            <div style="text-align:right; margin-top:6px;">
-                <div style="
-                    font-size:13px;
-                    font-weight:600;
-                    color:#E5E7EB;
-                ">
-                    Omkar Walunj
-                </div>
-
-                <a href="https://www.linkedin.com/in/omkar-walunj-8256a4280/"
-                   target="_blank"
-                   style="
-                       display:block;
-                       margin-top:4px;
-                       text-decoration:underline;
-                       font-size:12px;
-                       font-weight:500;
-                       color:#94A3B8;
-                   ">
-                    LinkedIn
-                </a>
-
-                <a href="https://substack.com/@theunseengame"
-                   target="_blank"
-                   style="
-                       display:block;
-                       margin-top:2px;
-                       text-decoration:underline;
-                       font-size:12px;
-                       font-weight:500;
-                       color:#94A3B8;
-                   ">
-                    Substack
-                </a>
-            </div>
-
-        </div>
-    </div>
-    """,
-    height=155,
-    scrolling=False
-)
-st.markdown("""
-<style>
-/* ===== Sidebar Background ===== */
-[data-testid="stSidebar"] {
-    background-color: #F8FAFC;
-}
-
-/* Sidebar text (ensure readability) */
-[data-testid="stSidebar"] * {
-    color: #0b2545 !important;   /* deep navy text for contrast */
-    font-weight: 500;
-}
-
-/* Sidebar headers */
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
-    color: #023047 !important;
-    font-weight: 700;
-}
-</style>
-""", unsafe_allow_html=True)
 
 def chunk_list(lst, n):
     for i in range(0, len(lst), n):
