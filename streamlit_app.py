@@ -8500,7 +8500,8 @@ elif sidebar_option == 'Integrated Contextual Ratings':
 else:
     # ==================== FREE AI MODE WITH HUGGINGFACE (FIXED) ====================
     # This version properly uses your HuggingFace token to avoid rate limits
-    
+        
+    DF_gen['phase']=DF_gen['PHASE']
     import os
     import json
     from datetime import datetime
