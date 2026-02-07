@@ -7334,7 +7334,7 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     yticklabels = ['Short', 'Back of Length', 'Good', 'Full', 'Yorker', 'Full Toss']
             
                     # 4 rows x 2 cols now
-                    fig, axes = plt.subplots(4, 2, figsize=(24, 32), dpi=200)
+                    fig, axes = plt.subplots(4, 2, figsize=(18, 28), dpi=150)
 
 
                     plt.suptitle(f"{bowler_selected} — Pitchmaps vs LHB / RHB", fontsize=16, weight='bold')
