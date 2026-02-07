@@ -2943,12 +2943,21 @@ if sidebar_option == "Player Profile":
                     ]
                     st.markdown("### Opponentwise Performance")
                     # Apply Streamlit-compatible styling
-                    styled_df = result_df.style.apply(
-                        lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
-                        axis=0
-                    ).format(precision=2)
+                    styled_df = (
+                        result_df
+                        .style
+                        .apply(
+                            lambda row: [
+                                'background-color: #f8f9fa' if row.name % 2 == 0 else ''
+                                for _ in row
+                            ],
+                            axis=1   # 🔥 IMPORTANT: row-wise
+                        )
+                        .format(precision=2)
+                    )
                     
                     st.dataframe(styled_df, use_container_width=True)
+
     
             # Yearwise
             if 'year' in df.columns:
