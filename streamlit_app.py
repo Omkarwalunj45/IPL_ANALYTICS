@@ -8554,6 +8554,23 @@ else:
           return True
       except SyntaxError:
           return False
+    def normalize_ai_code(code: str) -> str:
+        """
+        Fix common AI mistakes:
+        - missing parentheses before chaining
+        - line continuation issues
+        """
+        code = code.strip()
+    
+        # Fix `.sort_values` / `.head` chained on expressions
+        if ".sort_values" in code or ".head(" in code:
+            if not code.startswith("("):
+                code = f"({code})"
+    
+        # Remove stray line continuations
+        code = code.replace("\\\n", " ")
+    
+        return code
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("## 🤖 AI Analytics Assistant (FREE)")
@@ -8658,7 +8675,10 @@ else:
             code_str = code_str.strip()
         
             # 🚨 HARD BLOCK: prevent bad code
+            code_str = normalize_ai_code(code_str)
+            
             if not is_valid_python(code_str):
+
                 return {
                     "text": "❌ AI generated invalid Python code.\n\nPlease rephrase the question.",
                     "table": None
