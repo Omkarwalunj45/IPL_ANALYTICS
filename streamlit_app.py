@@ -2942,7 +2942,13 @@ if sidebar_option == "Player Profile":
                         {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#f7fbff")]},
                     ]
                     st.markdown("### Opponentwise Performance")
-                    st.dataframe(result_df.style.set_table_styles(opp_table_styles), use_container_width=True)
+                    # Apply Streamlit-compatible styling
+                    styled_df = result_df.style.apply(
+                        lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                        axis=0
+                    ).format(precision=2)
+                    
+                    st.dataframe(styled_df, use_container_width=True)
     
             # Yearwise
             if 'year' in df.columns:
@@ -2987,7 +2993,14 @@ if sidebar_option == "Player Profile":
                         {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#fbf7ff")]},
                     ]
                     st.markdown("### Yearwise Performance")
-                    st.dataframe(result_df.style.set_table_styles(year_table_styles), use_container_width=True)
+                    # st.dataframe(result_df.style.set_table_styles(year_table_styles), use_container_width=True)
+                    # Apply Streamlit-compatible styling
+                    styled_df = result_df.style.apply(
+                        lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                        axis=0
+                    ).format(precision=2)
+                    
+                    st.dataframe(styled_df, use_container_width=True)
     
             # -------------------------
             # Venuewise Performance (Batting) — drop in after Yearwise
@@ -3135,7 +3148,14 @@ if sidebar_option == "Player Profile":
                     ]
             
                     st.markdown("### Venuewise Performance")
-                    st.dataframe(result_df.style.set_table_styles(venue_table_styles), use_container_width=True)
+                    # st.dataframe(result_df.style.set_table_styles(venue_table_styles), use_container_width=True)
+                    # Apply Streamlit-compatible styling
+                    styled_df = result_df.style.apply(
+                        lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                        axis=0
+                    ).format(precision=2)
+                    
+                    st.dataframe(styled_df, use_container_width=True)
                 else:
                     st.info("No venuewise batting summary available for this player.")
     
@@ -3183,8 +3203,14 @@ if sidebar_option == "Player Profile":
                         {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#f3fff3")]},
                     ]
                     st.markdown("### Inningwise Performance")
-                    st.dataframe(result_df.reset_index(drop=True).style.set_table_styles(inning_table_styles), use_container_width=True)
-    
+                    # st.dataframe(result_df.reset_index(drop=True).style.set_table_styles(inning_table_styles), use_container_width=True)
+                    # Apply Streamlit-compatible styling
+                    styled_df = result_df.style.apply(
+                        lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                        axis=0
+                    ).format(precision=2)
+                    
+                    st.dataframe(styled_df, use_container_width=True)    
     
     
     
@@ -3481,7 +3507,14 @@ if sidebar_option == "Player Profile":
                 ]
         
                 st.markdown("### Opponentwise Performance")
-                st.dataframe(result_df.style.set_table_styles(opp_table_styles), use_container_width=True)
+                # st.dataframe(result_df.style.set_table_styles(opp_table_styles), use_container_width=True)
+                # Apply Streamlit-compatible styling
+                styled_df = result_df.style.apply(
+                    lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                    axis=0
+                ).format(precision=2)
+                
+                st.dataframe(styled_df, use_container_width=True)
             else:
                 st.info("No opponentwise bowling summary available for this player.")
         
@@ -3528,7 +3561,14 @@ if sidebar_option == "Player Profile":
                 ]
         
                 st.markdown("### Yearwise Bowling Performance")
-                st.dataframe(result_df.style.set_table_styles(year_table_styles), use_container_width=True)
+                # st.dataframe(result_df.style.set_table_styles(year_table_styles), use_container_width=True)
+                # Apply Streamlit-compatible styling
+                styled_df = result_df.style.apply(
+                    lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                    axis=0
+                ).format(precision=2)
+                
+                st.dataframe(styled_df, use_container_width=True)
             else:
                 st.info("No yearwise bowling summary available for this player.")
               
@@ -3679,7 +3719,14 @@ if sidebar_option == "Player Profile":
                 ]
         
                 st.markdown("### Venuewise Performance")
-                st.dataframe(result_df.style.set_table_styles(venue_table_styles), use_container_width=True)
+                # st.dataframe(result_df.style.set_table_styles(venue_table_styles), use_container_width=True)
+                # Apply Streamlit-compatible styling
+                styled_df = result_df.style.apply(
+                    lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                    axis=0
+                ).format(precision=2)
+                
+                st.dataframe(styled_df, use_container_width=True)
             else:
                 st.info("No venuewise bowling summary available for this player.")
         
@@ -3725,7 +3772,14 @@ if sidebar_option == "Player Profile":
                 
         
                 st.markdown("### Inningwise Bowling Performance")
-                st.dataframe(result_df.style.set_table_styles(inning_table_styles), use_container_width=True)
+                # st.dataframe(result_df.style.set_table_styles(inning_table_styles), use_container_width=True)
+                # Apply Streamlit-compatible styling
+                styled_df = result_df.style.apply(
+                    lambda x: ['background-color: #f8f9fa' if i % 2 == 0 else '' for i in range(len(x))],
+                    axis=0
+                ).format(precision=2)
+                
+                st.dataframe(styled_df, use_container_width=True)
             else:
                 st.info("No inningwise bowling summary available for this player.")
 
