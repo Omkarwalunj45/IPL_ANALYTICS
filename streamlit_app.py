@@ -632,24 +632,31 @@ def chunk_list(lst, n):
         yield lst[i:i + n]
 
 
+# ============================================================
+# STREAMLIT SAFE MULTI-TOURNAMENT DATA LOADER (FINAL)
+# ============================================================
+
 import os
 import glob
 import re
-import tempfile
 import hashlib
+import tempfile
 import pandas as pd
 import numpy as np
 import streamlit as st
-from datetime import datetime
 
-# ────────────────────────────────────────────────
+# ============================================================
 # CONFIG
-# ────────────────────────────────────────────────
+# ============================================================
 
 DATASETS_DIR = "Datasets"
 CACHE_DIR = ".cache_data"
+
 os.makedirs(DATASETS_DIR, exist_ok=True)
 os.makedirs(CACHE_DIR, exist_ok=True)
+
+# 🔥 HARD SAFETY CONSTANT (THIS FIXES YOUR LAST ERROR)
+CHUNK_ROWS = 200_000
 
 TOURNAMENTS = {
     "IPL": "IPL_APP_IPL",
@@ -664,60 +671,39 @@ TOURNAMENTS = {
     "BBL": "IPL_APP_BBL",
 }
 
-# ────────────────────────────────────────────────
+# ============================================================
 # HELPERS
-# ────────────────────────────────────────────────
-
-def _hash_args(tournaments, years, usecols, file_signatures):
-    tpart = "|".join(sorted(tournaments)) if tournaments else "none"
-    key = tpart + "|" + f"{min(years)}-{max(years)}"
-    if usecols:
-        key += "|" + ",".join(sorted(usecols))
-    if file_signatures:
-        sig_parts = []
-        for s in file_signatures:
-            sig_parts.append(f"{s[0]}::{s[1]}::{s[2]}::{s[3]}")
-        key += "|" + "|".join(sig_parts)
-    return hashlib.md5(key.encode()).hexdigest()
-
+# ============================================================
 
 def _strict_file_for_tournament(token: str):
-    if not token:
-        return None
-
     token = token.lower()
     files = glob.glob(os.path.join(DATASETS_DIR, "*"))
     files = [f for f in files if os.path.isfile(f)]
 
-    pattern = re.compile(r'(^|[^a-z0-9])' + re.escape(token) + r'([^a-z0-9]|$)', flags=re.IGNORECASE)
+    pattern = re.compile(rf"(^|[^a-z0-9]){re.escape(token)}([^a-z0-9]|$)", re.I)
 
-    valid = [f for f in files if pattern.search(os.path.basename(f).lower())]
+    matches = [f for f in files if pattern.search(os.path.basename(f).lower())]
+    if not matches:
+        matches = [f for f in files if token in os.path.basename(f).lower()]
 
-    if not valid:
-        valid = [f for f in files if token in os.path.basename(f).lower()]
-
-    if not valid:
+    if not matches:
         return None
 
-    def sort_key(fpath):
-        ext = os.path.splitext(fpath)[1].lower()
+    def sort_key(p):
+        ext = os.path.splitext(p)[1].lower()
         priority = 0 if ext == ".parquet" else 1 if ext == ".csv" else 2
-        return (priority, -os.path.getmtime(fpath))
+        return (priority, -os.path.getmtime(p))
 
-    valid.sort(key=sort_key)
-    return valid[0]
+    matches.sort(key=sort_key)
+    return matches[0]
 
 
 def _detect_year_column(df):
     for c in df.columns:
-        lc = c.lower()
-        if lc in ("year", "season") or lc.endswith("_year"):
+        if c.lower() in ("year", "season") or c.lower().endswith("_year"):
             return c
     for c in df.columns:
-        if "year" in c.lower():
-            return c
-    for c in df.columns:
-        if "date" in c.lower() or "start" in c.lower():
+        if "date" in c.lower():
             return c
     return None
 
@@ -725,93 +711,40 @@ def _detect_year_column(df):
 def _extract_years(series):
     if pd.api.types.is_numeric_dtype(series):
         return series.astype("Int64")
-
     dt = pd.to_datetime(series, errors="coerce")
     if dt.notna().any():
         return dt.dt.year.astype("Int64")
-
     s = series.astype(str).str.extract(r"\b((?:19|20)\d{2})\b")[0]
-    if s.notna().any():
-        return s.astype("Int64")
-
-    return None
+    return s.astype("Int64")
 
 
-# ────────────────────────────────────────────────
-# LOADER (CACHED)
-# ────────────────────────────────────────────────
+# ============================================================
+# ULTRA SAFE LOADER (STREAMING, NO CACHE)
+# ============================================================
 
-@st.cache_data(ttl=24 * 3600)
-def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, file_signatures=None):
-
-    if not selected_tournaments:
-        return pd.DataFrame()
-
-    frames = []
-
-    for t in selected_tournaments:
-        token = TOURNAMENTS.get(t, t).lower()
-        path = _strict_file_for_tournament(token)
-        if path is None:
-            continue
-
-        ext = os.path.splitext(path)[1].lower()
-
-        try:
-            if ext == ".parquet":
-                df = pd.read_parquet(path, columns=usecols)
-            elif ext == ".csv":
-                df = pd.read_csv(path, usecols=usecols, low_memory=False)
-            else:
-                df = pd.read_excel(path, usecols=usecols)
-        except Exception:
-            continue
-
-        if df.empty:
-            continue
-
-        year_col = _detect_year_column(df)
-        if year_col:
-            yrs = _extract_years(df[year_col])
-            if yrs is not None:
-                df = df.loc[yrs.isin(selected_years).fillna(False)]
-
-        df["tournament"] = t
-        frames.append(df)
-
-    if not frames:
-        return pd.DataFrame()
-
-    merged_chunks = []
-    for chunk in chunk_list(frames, 3):
-        merged_chunks.append(pd.concat(chunk, ignore_index=True, sort=False))
-    return pd.concat(merged_chunks, ignore_index=True, sort=False)
-
-
-# 🔥 NO-CACHE loader
 def load_filtered_data_ultra_safe(selected_tournaments, selected_years, usecols=None):
-    import tempfile
-
     tmp_files = []
 
     for t in selected_tournaments:
-        token = TOURNAMENTS.get(t, t).lower()
+        token = TOURNAMENTS.get(t, t)
         path = _strict_file_for_tournament(token)
+
         if path is None:
+            st.warning(f"No file found for {t}")
             continue
 
         ext = os.path.splitext(path)[1].lower()
 
-        # ── CSV: true streaming ──
+        # ---- TRUE STREAMING FOR CSV ----
         if ext == ".csv":
             reader = pd.read_csv(
                 path,
                 usecols=usecols,
-                low_memory=False,
-                chunksize=CHUNK_ROWS
+                chunksize=CHUNK_ROWS,
+                low_memory=False
             )
         else:
-            # Parquet / Excel fallback (still risky)
+            # parquet / excel fallback (still chunk-safe because per file)
             reader = [pd.read_parquet(path, columns=usecols)]
 
         for df in reader:
@@ -821,8 +754,7 @@ def load_filtered_data_ultra_safe(selected_tournaments, selected_years, usecols=
             year_col = _detect_year_column(df)
             if year_col:
                 yrs = _extract_years(df[year_col])
-                if yrs is not None:
-                    df = df.loc[yrs.isin(selected_years).fillna(False)]
+                df = df.loc[yrs.isin(selected_years).fillna(False)]
 
             if df.empty:
                 continue
@@ -833,149 +765,74 @@ def load_filtered_data_ultra_safe(selected_tournaments, selected_years, usecols=
             df.to_parquet(tmp.name, index=False)
             tmp_files.append(tmp.name)
 
-            del df   # 🔥 free RAM immediately
+            del df  # 🔥 FREE MEMORY IMMEDIATELY
 
     if not tmp_files:
         return pd.DataFrame()
 
-    # final controlled merge
+    # ---- FINAL MERGE (CONTROLLED) ----
     merged = []
-    for chunk in chunk_list(tmp_files, 3):
-        dfs = [pd.read_parquet(p) for p in chunk]
-        merged.append(pd.concat(dfs, ignore_index=True, sort=False))
-        for p in chunk:
-            os.remove(p)
+    for p in tmp_files:
+        merged.append(pd.read_parquet(p))
+        os.remove(p)
 
     return pd.concat(merged, ignore_index=True, sort=False)
 
-def load_filtered_data_nocache(selected_tournaments, selected_years, usecols=None):
-    tmp_files = []
-    st.write("entered")
-    for t in selected_tournaments:
-        token = TOURNAMENTS.get(t, t).lower()
-        path = _strict_file_for_tournament(token)
-        if path is None:
-            continue
 
-        ext = os.path.splitext(path)[1].lower()
-
-        try:
-            if ext == ".parquet":
-                df = pd.read_parquet(path, columns=usecols)
-            elif ext == ".csv":
-                df = pd.read_csv(path, usecols=usecols, low_memory=False)
-            else:
-                df = pd.read_excel(path, usecols=usecols)
-        except Exception:
-            continue
-
-        if df.empty:
-            continue
-
-        year_col = _detect_year_column(df)
-        if year_col:
-            yrs = _extract_years(df[year_col])
-            if yrs is not None:
-                df = df.loc[yrs.isin(selected_years).fillna(False)]
-
-        if df.empty:
-            del df
-            continue
-
-        df["tournament"] = t
-
-        # 🔥 flush to disk immediately
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".parquet")
-        df.to_parquet(tmp.name, index=False)
-        tmp_files.append(tmp.name)
-
-        del df   # 🔥 CRITICAL: free memory immediately
-
-    if not tmp_files:
-        return pd.DataFrame()
-
-    # final merge (still chunked)
-    merged_chunks = []
-    for chunk in chunk_list(tmp_files, 3):
-        dfs = [pd.read_parquet(p) for p in chunk]
-        merged_chunks.append(pd.concat(dfs, ignore_index=True, sort=False))
-        for p in chunk:
-            os.remove(p)
-
-    return pd.concat(merged_chunks, ignore_index=True, sort=False)
-
-
-
-# ────────────────────────────────────────────────
+# ============================================================
 # SIDEBAR
-# ────────────────────────────────────────────────
+# ============================================================
 
 st.sidebar.header("Select Years")
-
-years = st.sidebar.slider("Year range", 2021, 2026, (2021, 2026))
-selected_years = list(range(years[0], years[1] + 1))
+year_range = st.sidebar.slider("Year range", 2021, 2026, (2021, 2026))
+selected_years = list(range(year_range[0], year_range[1] + 1))
 
 st.sidebar.header("Select Tournaments")
-
 selected_tournaments = st.sidebar.multiselect(
     "Choose tournaments",
     list(TOURNAMENTS.keys())
 )
-file_signatures = None
-# 🔥 CHANGE: trigger safe mode when >= 4 tournaments
+
+# ============================================================
+# MODE SWITCH
+# ============================================================
+
 HEAVY_MODE = len(selected_tournaments) >= 4
+usecols = None  # 🔥 DEFINED ON ALL PATHS
 
 if HEAVY_MODE:
-    st.warning("⚠️ Loading 4 or more tournaments — running in safe (no-cache) mode.")
-
-# Columns to load (None = load all columns)
-usecols = None
-if not HEAVY_MODE:
-    resolved_files = []
-    for t in selected_tournaments:
-        token = TOURNAMENTS.get(t, t).lower()
-        path = _strict_file_for_tournament(token)
-        if path is None:
-            resolved_files.append((t, None, None, None))
-        else:
-            resolved_files.append(
-                (t, path, os.path.getmtime(path), os.path.getsize(path))
-            )
-    file_signatures = tuple(resolved_files)
-
-# ────────────────────────────────────────────────
-# LOAD DATA
-# ────────────────────────────────────────────────
+    st.warning("⚠️ Loading 4 or more tournaments — running in SAFE MODE")
 
 if not selected_tournaments:
-    st.info("Please select tournaments.")
+    st.info("Select tournaments to continue")
     st.stop()
 
-# HEAVY_MODE = len(selected_tournaments) >= 4
+# ============================================================
+# LOAD DATA
+# ============================================================
 
 with st.spinner("Loading data…"):
-    if HEAVY_MODE:
-        # ultra-safe path: no cache, no file_signatures
-        df = load_filtered_data_ultra_safe(
-            selected_tournaments,
-            selected_years,
-            usecols=usecols
-        )
-    else:
-        # cached path: file_signatures GUARANTEED to exist
-        df = load_filtered_data_fast(
-            selected_tournaments,
-            selected_years,
-            usecols=usecols,
-            file_signatures=file_signatures
-        )
-
+    df = load_filtered_data_ultra_safe(
+        selected_tournaments,
+        selected_years,
+        usecols=usecols
+    )
 
 if df.empty:
-    st.warning("No data loaded.")
+    st.error("No data loaded.")
     st.stop()
 
+# ============================================================
+# SUCCESS
+# ============================================================
+
+st.success(
+    f"Loaded {len(df):,} rows from {df['tournament'].nunique()} tournaments"
+)
+
 DF_gen = df
+st.write(DF_gen.head())
+
 
 
 
