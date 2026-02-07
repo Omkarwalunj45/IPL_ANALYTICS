@@ -9823,7 +9823,7 @@ elif sidebar_option == "Strength vs Weakness":
                         st.info(f"No deliveries found for bowler style '{chosen_style}'.")
                     else:
                         # Optional: Cap first word for style (if you want consistency)
-                        style_first = chosen_style.split()[0].capitalize()
+                        style_first = chosen_style
                 
                         st.markdown(f"### Detailed view — Bowler Style: {style_first}")
                         draw_wagon_if_available(df_use, player_selected)
