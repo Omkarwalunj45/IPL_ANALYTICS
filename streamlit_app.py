@@ -8710,7 +8710,7 @@ else:
         
         Example:
         df[df['phase']=='Death'].groupby('bat')['batruns'].sum().sort_values(ascending=False).head(5)
-        
+        Remember SR is (runs/balls)*100
         Question:
         {user_question}
         """
