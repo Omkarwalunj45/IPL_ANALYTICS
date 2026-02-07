@@ -8774,7 +8774,7 @@ else:
         8. If user specifies "at least X balls", apply filter AFTER aggregation
         9. Phases are one of: Powerplay, Middle 1, Middle 2, Death
         10. Output must be valid Python pandas code ONLY
-        
+        11. 
         AVAILABLE COLUMNS:
         - bat : batter name
         - bowl : bowler name
@@ -8785,7 +8785,205 @@ else:
         - dismissal : NaN if not out, else dismissal type
         
         CORRECT TEMPLATE FOR STRIKE RATE:
+        🏏 MATCH & INNINGS CONTEXT
         
+        p_match
+        Unique match identifier
+        
+        inns
+        Inning number (1 or 2)
+        
+        year
+        Season year (e.g. 2023, 2024, 2025)
+        
+        competition
+        Tournament name (IPL, BBL, T20I, etc.)
+        
+        winner
+        Match-winning team
+        
+        👤 BATSMAN INFO
+        
+        bat
+        Name of the batter on strike
+        
+        p_bat
+        Unique player ID for batter
+        
+        team_bat
+        Batting team
+        
+        bat_hand
+        Batting handedness
+        
+        RHB or LHB
+        
+
+        
+        🎯 BOWLER INFO
+        
+        bowl
+        Name of the bowler delivering the ball
+        
+        team_bowl
+        Bowling team
+        
+        bowl_style
+        Bowling arm + style
+        Examples:
+        
+        Right-arm fast
+        
+        Left-arm fast
+        
+        Offbreak
+        
+        Slow left-arm
+        
+        bowl_kind
+        has pace bowler or spin bowler
+        
+        ⏱️ BALL IDENTIFIERS
+        
+        ball
+        Ball number within the over (1–6)
+        
+        ball_id
+        Unique identifier for each delivery
+        (useful for counting balls)
+        
+        over
+        Over number in the innings (1–20)
+        
+        📊 BALL OUTCOME
+        
+        batruns
+        Runs scored off the bat on this delivery
+        (0, 1, 2, 3, 4, 6)
+        
+        ballfaced
+        Indicator for a ball faced by batter
+        (usually = 1 for each delivery faced)
+        
+        bowlruns
+        Total runs conceded by the bowler on this ball
+        (includes extras)
+        
+        outcome
+        Text description of delivery result
+        
+        score
+        Team score after this ball
+        
+        ❌ DISMISSAL INFO
+        
+        out
+        1 if wicket fell on this delivery, else 0
+        
+        dismissal
+        Type of dismissal
+        Examples:
+        
+        caught
+        
+        bowled
+        
+        lbw
+        
+        stumped
+        
+        hit wicket
+        
+        run out
+        
+        p_out
+        Player dismissed (if any)
+        
+        ⚠️ NEVER use dismissal to calculate balls faced or strike rate
+        
+        🧮 EXTRAS
+        
+        noball – No-ball runs
+        
+        wide – Wide ball runs
+        
+        byes – Byes
+        
+        legbyes – Leg byes
+        
+        Extras count toward team runs, not batruns
+        
+        📈 CUMULATIVE PLAYER STATS (AT THAT BALL)
+        
+        cur_bat_runs
+        Batter’s total runs at that point
+        
+        cur_bat_bf
+        Batter’s balls faced till that delivery
+        
+        cur_bowl_ovr
+        Bowler overs bowled till that delivery
+        
+        cur_bowl_wkts
+        Bowler wickets till that delivery
+        
+        cur_bowl_runs
+        Bowler runs conceded till that delivery
+        
+        🧾 INNINGS CONTEXT
+        
+        inns_runs
+        Total innings runs so far
+        
+        inns_wkts
+        Wickets fallen so far
+        
+        inns_balls
+        Balls bowled so far
+        
+        inns_runs_rem
+        Runs remaining (in chase)
+        
+        inns_balls_rem
+        Balls remaining
+        
+        inns_rr
+        Current run rate
+        
+        inns_rrr
+        Required run rate
+        
+        🏟️ VENUE & LOCATION
+        
+        ground
+        Stadium name
+        
+        country
+        Country where match is played
+        
+        🎯 BALL TRACKING / TECHNICAL
+        
+        line
+        Line of delivery
+        (outside off, middle, leg, etc.)
+        
+        length
+        Length of delivery
+        (yorker, full, good, short)
+        
+        wagonX, wagonY
+        Shot coordinates
+        
+        wagonZone
+        Categorical shot direction zone
+        
+        shot
+        Shot type played
+        (drive, pull, cut, sweep, etc.)
+        
+        control
+        Shot control indicator
+        (controlled / mishit)
         df_filtered.groupby('bat').agg(
             runs=('batruns','sum'),
             balls=('batruns','count')
