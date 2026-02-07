@@ -937,6 +937,12 @@ st.sidebar.markdown(
 # Persistent loader + control
 # ------------------------------
 # session state flags (initialize)
+# ------------------------------
+# Persistent loader + control (stable, no experimental_rerun)
+# ------------------------------
+# Initialize session-state flags
+if "load_requested" not in st.session_state:
+    st.session_state.load_requested = False
 if "is_loading" not in st.session_state:
     st.session_state.is_loading = False
 if "data_loaded" not in st.session_state:
@@ -944,23 +950,17 @@ if "data_loaded" not in st.session_state:
 if "loaded_df" not in st.session_state:
     st.session_state.loaded_df = None
 
-# ------------------------------------------------------------------
-# Sidebar: tournament selection + explicit Load button
-# Controls are disabled while a load is in progress (is_loading=True)
-# ------------------------------------------------------------------
-
+# Sidebar controls
 st.sidebar.header("Select Tournaments")
 
-# Select All / Clear All buttons - disabled when loading
+# Select All / Clear All (disabled while loading)
 col1, col2 = st.sidebar.columns(2)
 with col1:
-    if st.button("✓ Select All", use_container_width=True, key="select_all_btn", disabled=st.session_state.is_loading):
+    if st.sidebar.button("✓ Select All", use_container_width=True, key="select_all_btn", disabled=st.session_state.is_loading):
         st.session_state.selected_tournaments = list(TOURNAMENTS.keys())
-        st.experimental_rerun()
 with col2:
-    if st.button("✗ Clear All", use_container_width=True, key="clear_all_btn", disabled=st.session_state.is_loading):
+    if st.sidebar.button("✗ Clear All", use_container_width=True, key="clear_all_btn", disabled=st.session_state.is_loading):
         st.session_state.selected_tournaments = []
-        st.experimental_rerun()
 
 if "selected_tournaments" not in st.session_state:
     st.session_state.selected_tournaments = []
@@ -972,10 +972,11 @@ selected_tournaments = st.sidebar.multiselect(
     key="tournament_select_key",
     disabled=st.session_state.is_loading
 )
-# persist back into session_state
+
+# persist selection
 st.session_state.selected_tournaments = selected_tournaments
 
-# quick heuristic: All-leagues mode when >=7 selections
+# quick heuristic / UI hint
 ALL_LEAGUES_MODE = len(selected_tournaments) >= 7
 if ALL_LEAGUES_MODE:
     st.sidebar.warning(
@@ -983,70 +984,101 @@ if ALL_LEAGUES_MODE:
         "App will load aggregated data; detailed visuals may be disabled."
     )
 
-# Explicit Load button (disabled while loading)
-load_btn_col = st.sidebar
-if load_btn_col.button("Load Selected Tournaments", use_container_width=True, key="load_selected_btn", disabled=st.session_state.is_loading):
-    # Mark loading start and rerun so UI reflects disabled state
-    st.session_state.is_loading = True
-    st.session_state.data_loaded = False
-    st.session_state.loaded_df = None
-    st.experimental_rerun()
+# Load button (request)
+if st.sidebar.button("Load Selected Tournaments", use_container_width=True, key="load_selected_btn", disabled=st.session_state.is_loading):
+    st.session_state.load_requested = True
 
-# If an external event set is already loading (from previous interaction),
-# we now perform the actual blocking load here. This ensures controls were
-# disabled in the UI before heavy work begins.
-if st.session_state.is_loading and not st.session_state.data_loaded:
-    loading_placeholder = st.empty()
+# If user hasn't requested load and there is no loaded df, ask them to load
+if not st.session_state.load_requested and not st.session_state.data_loaded:
+    st.info("Data not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
+    st.stop()
+
+# If load requested and not yet loaded, perform blocking load now.
+# This runs only once per user click because we set data_loaded on success.
+if st.session_state.load_requested and not st.session_state.data_loaded:
+    # Defensive: require at least one selection
+    if not selected_tournaments:
+        st.error("No tournaments selected. Please select tournaments to load.")
+        st.session_state.load_requested = False
+        st.stop()
+
+    # Build resolved_files/file_signatures (same logic you used earlier)
+    resolved_files = []
+    missing = []
+    for t in selected_tournaments:
+        token = TOURNAMENTS.get(t, t).lower()
+        path = _strict_file_for_tournament(token)
+        if path is None:
+            missing.append(t)
+            resolved_files.append((t, None, None, None))
+        else:
+            try:
+                mtime = os.path.getmtime(path)
+                size = os.path.getsize(path)
+            except Exception:
+                mtime, size = None, None
+            resolved_files.append((t, path, mtime, size))
+
+    if missing:
+        st.sidebar.warning(f"No dataset found for: {', '.join(missing)}. Selected tournaments missing files will be skipped.")
+
+    if all(r[1] is None for r in resolved_files):
+        st.error("No data files were found for any selected tournaments. Please add dataset files or change selection.")
+        st.session_state.load_requested = False
+        st.stop()
+
+    file_signatures = tuple(resolved_files)
+
+    # Begin blocking load
+    st.session_state.is_loading = True
+    load_placeholder = st.empty()
     try:
-        with loading_placeholder.container():
+        with load_placeholder.container():
             st.info(f"🔄 Loading {len(selected_tournaments)} tournament(s)... Please wait, do not interact with the app.")
             progress_bar = st.progress(0)
             status_text = st.empty()
 
-            # Build file_signatures (same as before)
-            resolved_files = []
-            missing = []
-            for t in selected_tournaments:
-                token = TOURNAMENTS.get(t, t).lower()
-                path = _strict_file_for_tournament(token)
-                if path is None:
-                    missing.append(t)
-                    resolved_files.append((t, None, None, None))
-                else:
-                    try:
-                        mtime = os.path.getmtime(path)
-                        size = os.path.getsize(path)
-                    except Exception:
-                        mtime, size = None, None
-                    resolved_files.append((t, path, mtime, size))
-
-            file_signatures = tuple(resolved_files)
-
-            # start blocking load (this call returns only when full dataset is ready)
-            start_time = datetime.now()
+            start = datetime.now()
+            # Call your cached loader (it will return quickly if cache exists, otherwise do the heavy work)
             df_loaded = load_filtered_data_fast(selected_tournaments, selected_years, usecols, file_signatures=file_signatures)
-            elapsed = (datetime.now() - start_time).total_seconds()
+            elapsed = (datetime.now() - start).total_seconds()
 
-            # cosmetic progress update
+            # cosmetic update
             progress_bar.progress(100)
             status_text.success(f"✅ Loaded in {elapsed:.1f}s")
 
-            # small pause so user sees success
+            # small pause so the UI shows success briefly
             import time
-            time.sleep(0.4)
+            time.sleep(0.35)
 
-        # store loaded DataFrame to session_state and mark done
+        # Basic validation of returned DF
+        if df_loaded is None or not isinstance(df_loaded, pd.DataFrame) or df_loaded.empty:
+            load_placeholder.empty()
+            st.error("Loaded data is empty or invalid after loading. Try fewer tournaments / a narrower year range.")
+            st.session_state.is_loading = False
+            st.session_state.load_requested = False
+            st.stop()
+
+        if "tournament" not in df_loaded.columns:
+            load_placeholder.empty()
+            st.error("Loaded data does not contain a 'tournament' column.")
+            st.session_state.is_loading = False
+            st.session_state.load_requested = False
+            st.stop()
+
+        # Save into session_state and mark as loaded
         st.session_state.loaded_df = df_loaded
         st.session_state.data_loaded = True
         st.session_state.is_loading = False
+        st.session_state.load_requested = False
 
-        # clear the loading UI and rerun so the rest of the app proceeds with loaded_df
-        loading_placeholder.empty()
-        st.experimental_rerun()
+        # Clear placeholder
+        load_placeholder.empty()
 
     except MemoryError:
-        loading_placeholder.empty()
+        load_placeholder.empty()
         st.session_state.is_loading = False
+        st.session_state.load_requested = False
         st.error(
             "❌ **Out of Memory!** The selected tournaments/years are too large.\n\n"
             "Solutions:\n"
@@ -1057,29 +1089,23 @@ if st.session_state.is_loading and not st.session_state.data_loaded:
         st.stop()
 
     except Exception as e:
-        loading_placeholder.empty()
+        load_placeholder.empty()
         st.session_state.is_loading = False
+        st.session_state.load_requested = False
         st.error(f"❌ Error loading data: {str(e)}")
         st.stop()
 
-# If data is loaded in session state, use it (and validate)
+# At this point either data_loaded == True OR load not requested (handled above)
 if st.session_state.data_loaded and isinstance(st.session_state.loaded_df, pd.DataFrame):
-    df = st.session_state.loaded_df
-    # Defensive validation
-    if df is None or df.empty:
-        st.warning("Loaded dataset is empty after loading. Please adjust selection.")
-        st.stop()
-    if "tournament" not in df.columns:
-        st.error("Loaded data does not contain a 'tournament' column.")
-        st.stop()
+    # final defensive filtering and assignment for downstream code
+    df = st.session_state.loaded_df.copy()
+    df = df[df["tournament"].isin(selected_tournaments)].copy() if "tournament" in df.columns else df.copy()
 
-    # re-filter to selected tournaments (defensive)
-    df = df[df["tournament"].isin(selected_tournaments)].copy()
-    if df.empty:
+    if df is None or df.empty:
         st.warning("After filtering by selected tournaments and years, no rows remain.")
         st.stop()
 
-    # Success banner (sidebar)
+    # Provide sidebar success and expose global DF_gen
     st.sidebar.success(
         f"✅ Data Loaded Successfully\n\n"
         f"📊 {len(df):,} total rows\n"
@@ -1087,13 +1113,13 @@ if st.session_state.data_loaded and isinstance(st.session_state.loaded_df, pd.Da
         f"📅 Years: {selected_years[0]}-{selected_years[-1]}"
     )
 
-    # expose DF_gen as before
     DF_gen = df
 
 else:
-    # If not loaded yet, show a hint and stop execution of downstream code
-    st.info("Data not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
+    # Shouldn't reach here (guard), but in case show friendly message
+    st.info("Data is not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
     st.stop()
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════
