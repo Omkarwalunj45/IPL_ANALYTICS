@@ -6389,20 +6389,30 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
                     np.nan
                 )
             
+                # ---------------- Control % (STRICT 0/1 ONLY) ----------------
                 control_df = None
                 if 'control' in df.columns:
-                    df['control_num'] = df['control'].astype(str).str.lower().isin(
-                        ['1','true','yes','controlled','c','ok']
-                    ).astype(int)
-            
-                    control_df = df.groupby('shot').agg(
-                        total=('control_num','size'),
-                        controlled=('control_num','sum')
-                    ).reset_index()
-            
-                    control_df['Control Percentage'] = (
-                        control_df['controlled'] / control_df['total'] * 100
-                    )
+                    # Convert to numeric, coerce junk → NaN
+                    df['control_num'] = pd.to_numeric(df['control'], errors='coerce')
+                
+                    # Keep ONLY valid 0 or 1
+                    df_ctrl = df[df['control_num'].isin([0, 1])].copy()
+                
+                    if not df_ctrl.empty:
+                        control_grp = df_ctrl.groupby('shot').agg(
+                            total_shots=('control_num', 'size'),
+                            controlled_shots=('control_num', 'sum')
+                        ).reset_index()
+                
+                        control_grp['Control Percentage'] = (
+                            control_grp['controlled_shots']
+                            / control_grp['total_shots'] * 100.0
+                        ).round(2)
+                
+                        control_df = control_grp.sort_values(
+                            'Control Percentage', ascending=True
+                        )
+
             
                 return shot_grp.sort_values('% of Runs'), control_df
             
