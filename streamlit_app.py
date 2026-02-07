@@ -8637,144 +8637,91 @@ else:
         # ============================================================
         
         def query_huggingface(user_question, data_context):
-            """Use Hugging Face Inference API with token support"""
-            
-            # Build concise system prompt
-            system_prompt = f"""Generate pandas code for cricket data analysis.
-    
-    Dataset: {data_context['total_rows']:,} deliveries from {', '.join(data_context['tournaments'])}
-    
-    Columns:
-    - bat: batter name
-    - bowl: bowler name  
-    - phase: Powerplay, Middle, Death
-    - bowl_kind: Pace, Spin
-    - batruns: runs scored
-    - dismissal: wicket type (NaN if no wicket)
-    
-    Top players: {', '.join(data_context.get('top_batters', [])[:3])}
-    
-    Respond ONLY with Python code. No explanation.
-    
-    Example query: "top 10 strike rates"
-    Example code:
-    df.groupby('bat').agg(runs=('batruns','sum'), balls=('bat','count')).assign(SR=lambda x: (x['runs']/x['balls'])*100).sort_values('SR', ascending=False).head(10)
-    
-    Query: {user_question}
-    Code:"""
-    
-            try:
-                # Get token from secrets or environment
-                hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
-                
-                # Use different models based on token availability
-                if hf_token:
-                    API_URL = "https://router.huggingface.co/hf-inference/models/codellama/CodeLlama-7b-Instruct-hf"
-                else:
-                    API_URL = "https://router.huggingface.co/hf-inference/models/mistralai/Mistral-7B-Instruct-v0.2"
-
-                
-                headers = {"Content-Type": "application/json"}
-                if hf_token:
-                    headers["Authorization"] = f"Bearer {hf_token}"
-                
-                payload = {
-                    "inputs": system_prompt,
-                    "parameters": {
-                        "max_new_tokens": 300,
-                        "temperature": 0.1,
-                        "return_full_text": False,
-                        "do_sample": False
-                    },
-                    "options": {
-                        "wait_for_model": True
-                    }
-                }
-                
-                response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    
-                    # Parse response
-                    if isinstance(result, list) and len(result) > 0:
-                        response_text = result[0].get('generated_text', '')
-                    elif isinstance(result, dict):
-                        response_text = result.get('generated_text', '') or result.get('result', '')
-                    else:
-                        response_text = str(result)
-                    
-                    # Extract code
-                    code = None
-                    
-                    # Try to find code in various formats
-                    if "```python" in response_text:
-                        code = response_text.split("```python")[1].split("```")[0].strip()
-                    elif "```" in response_text:
-                        code = response_text.split("```")[1].split("```")[0].strip()
-                    else:
-                        # Assume the whole response is code
-                        code = response_text.strip()
-                    
-                    # Clean up code
-                    if code:
-                        # Remove common prefixes
-                        for prefix in ["Code:", "Python:", "Answer:"]:
-                            if code.startswith(prefix):
-                                code = code[len(prefix):].strip()
-                        
-                        # Remove markdown
-                        code = code.replace("```python", "").replace("```", "").strip()
-                    
-                    # Generate explanation
-                    explanation = f"I generated code to answer: '{user_question}'"
-                    
-                    return {
-                        "response": explanation,
-                        "code": code,
-                        "error": False
-                    }
-                
-                elif response.status_code == 503:
-                    return {
-                        "response": "⏳ **Model is loading...**\n\nHuggingFace models take 20-30 seconds to wake up.\n\nPlease wait and try again in 30 seconds.",
-                        "code": None,
-                        "error": True
-                    }
-                
-                elif response.status_code == 429:
-                    if hf_token:
-                        return {
-                            "response": "⚠️ **Rate limit reached (even with token)**\n\nPlease wait 1-2 minutes before trying again.",
-                            "code": None,
-                            "error": True
-                        }
-                    else:
-                        return {
-                            "response": "⚠️ **Rate Limit Hit**\n\nGet a FREE HuggingFace token for 10x more requests:\n\n1. Go to: https://huggingface.co/settings/tokens\n2. Create token\n3. Add to `.streamlit/secrets.toml`:\n```\nHUGGINGFACE_TOKEN = \"hf_your_token\"\n```\n4. Restart app",
-                            "code": None,
-                            "error": True
-                        }
-                
-                else:
-                    return {
-                        "response": f"❌ API Error (Status {response.status_code})\n\n{response.text[:200]}",
-                        "code": None,
-                        "error": True
-                    }
-                    
-            except requests.exceptions.Timeout:
+            """
+            HuggingFace Chat API (OpenAI compatible) — 2025 working version
+            """
+        
+            hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
+        
+            if not hf_token:
                 return {
-                    "response": "⏱️ **Request timed out**\n\nThe model is busy. Please try again in a minute.",
+                    "response": "❌ HuggingFace token missing. Add it to secrets.",
                     "code": None,
                     "error": True
                 }
+        
+            API_URL = "https://router.huggingface.co/v1/chat/completions"
+        
+            headers = {
+                "Authorization": f"Bearer {hf_token}",
+                "Content-Type": "application/json"
+            }
+        
+            system_prompt = f"""
+        You are a cricket data analyst.
+        
+        The dataframe is called `df`.
+        
+        Important columns:
+        - bat (batter name)
+        - bowl (bowler name)
+        - phase (Powerplay, Middle, Death)
+        - batruns (runs scored off the ball)
+        - dismissal (NaN if no wicket)
+        - bowl_kind (Pace / Spin)
+        
+        Rules:
+        - Respond ONLY with valid Python pandas code
+        - Do NOT explain anything
+        - Do NOT use markdown
+        - Assume df already exists
+        
+        Example:
+        df[df['phase']=='Death'].groupby('bat')['batruns'].sum().sort_values(ascending=False).head(5)
+        
+        Question:
+        {user_question}
+        """
+        
+            payload = {
+                "model": "mistralai/Mistral-7B-Instruct-v0.2",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_question}
+                ],
+                "temperature": 0.1,
+                "max_tokens": 300
+            }
+        
+            try:
+                response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+        
+                if response.status_code != 200:
+                    return {
+                        "response": f"❌ API Error ({response.status_code})\n\n{response.text}",
+                        "code": None,
+                        "error": True
+                    }
+        
+                data = response.json()
+                code = data["choices"][0]["message"]["content"].strip()
+        
+                # clean accidental formatting
+                code = code.replace("```python", "").replace("```", "").strip()
+        
+                return {
+                    "response": "✅ Query interpreted and executed",
+                    "code": code,
+                    "error": False
+                }
+        
             except Exception as e:
                 return {
-                    "response": f"❌ Error: {str(e)}",
+                    "response": f"❌ Exception: {str(e)}",
                     "code": None,
                     "error": True
                 }
+
         
         # ============================================================
         # EXAMPLE QUERIES
