@@ -643,11 +643,12 @@ def chunk_list(lst, n):
 # ============================================================
 # STREAMLIT APP — SAFE TOURNAMENT SELECTION (MAX 5) + YEAR SLIDER
 # ============================================================
-
 import os
 import glob
 import re
+import tempfile
 import pandas as pd
+import numpy as np
 import streamlit as st
 
 # ============================================================
@@ -655,9 +656,13 @@ import streamlit as st
 # ============================================================
 
 DATASETS_DIR = "Datasets"
-os.makedirs(DATASETS_DIR, exist_ok=True)
+CACHE_DIR = ".cache_data"
 
-MAX_TOURNAMENTS = 4
+os.makedirs(DATASETS_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
+
+CHUNK_ROWS = 200_000
+MAX_TOURNAMENTS = 5
 
 TOURNAMENTS = {
     "IPL": "IPL_APP_IPL",
@@ -681,10 +686,7 @@ def _strict_file_for_tournament(token: str):
     files = glob.glob(os.path.join(DATASETS_DIR, "*"))
     files = [f for f in files if os.path.isfile(f)]
 
-    pattern = re.compile(
-        rf"(^|[^a-z0-9]){re.escape(token)}([^a-z0-9]|$)",
-        flags=re.IGNORECASE
-    )
+    pattern = re.compile(rf"(^|[^a-z0-9]){re.escape(token)}([^a-z0-9]|$)", re.I)
 
     matches = [f for f in files if pattern.search(os.path.basename(f).lower())]
     if not matches:
@@ -693,16 +695,21 @@ def _strict_file_for_tournament(token: str):
     if not matches:
         return None
 
-    matches.sort(key=lambda p: -os.path.getmtime(p))
+    def sort_key(p):
+        ext = os.path.splitext(p)[1].lower()
+        priority = 0 if ext == ".parquet" else 1 if ext == ".csv" else 2
+        return (priority, -os.path.getmtime(p))
+
+    matches.sort(key=sort_key)
     return matches[0]
 
 
 def _detect_year_column(df):
     for c in df.columns:
-        lc = c.lower()
-        if lc in ("year", "season") or lc.endswith("_year"):
+        if c.lower() in ("year", "season") or c.lower().endswith("_year"):
             return c
-        if "date" in lc:
+    for c in df.columns:
+        if "date" in c.lower():
             return c
     return None
 
@@ -710,17 +717,56 @@ def _detect_year_column(df):
 def _extract_years(series):
     if pd.api.types.is_numeric_dtype(series):
         return series.astype("Int64")
-
     dt = pd.to_datetime(series, errors="coerce")
     if dt.notna().any():
         return dt.dt.year.astype("Int64")
+    s = series.astype(str).str.extract(r"\b((?:19|20)\d{2})\b")[0]
+    return s.astype("Int64")
 
-    return None
 
+# ============================================================
+# FAST LOADER (<= 2 tournaments)
+# ============================================================
 
-def load_data_simple(selected_tournaments, selected_years):
-    """Simple, safe loader — assumes MAX 5 tournaments only."""
+def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None):
     frames = []
+
+    for t in selected_tournaments:
+        token = TOURNAMENTS.get(t, t)
+        path = _strict_file_for_tournament(token)
+        if path is None:
+            continue
+
+        ext = os.path.splitext(path)[1].lower()
+
+        if ext == ".parquet":
+            df = pd.read_parquet(path, columns=usecols)
+        elif ext == ".csv":
+            df = pd.read_csv(path, usecols=usecols, low_memory=False)
+        else:
+            df = pd.read_excel(path, usecols=usecols)
+
+        year_col = _detect_year_column(df)
+        if year_col:
+            yrs = _extract_years(df[year_col])
+            df = df.loc[yrs.isin(selected_years).fillna(False)]
+
+        if not df.empty:
+            df["tournament"] = t
+            frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+
+    return pd.concat(frames, ignore_index=True, sort=False)
+
+
+# ============================================================
+# ULTRA SAFE LOADER (3–5 tournaments)
+# ============================================================
+
+def load_filtered_data_ultra_safe(selected_tournaments, selected_years, usecols=None):
+    tmp_files = []
 
     for t in selected_tournaments:
         token = TOURNAMENTS.get(t, t)
@@ -732,88 +778,100 @@ def load_data_simple(selected_tournaments, selected_years):
 
         ext = os.path.splitext(path)[1].lower()
 
-        try:
-            if ext == ".parquet":
-                df = pd.read_parquet(path)
-            elif ext == ".csv":
-                df = pd.read_csv(path, low_memory=False)
-            else:
-                df = pd.read_excel(path)
-        except Exception as e:
-            st.error(f"Failed to load {t}: {e}")
-            continue
+        if ext == ".csv":
+            reader = pd.read_csv(
+                path,
+                usecols=usecols,
+                chunksize=CHUNK_ROWS,
+                low_memory=False
+            )
+        else:
+            reader = [pd.read_parquet(path, columns=usecols)]
 
-        if df.empty:
-            continue
+        for df in reader:
+            if df.empty:
+                continue
 
-        # Year filtering
-        year_col = _detect_year_column(df)
-        if year_col:
-            yrs = _extract_years(df[year_col])
-            if yrs is not None:
+            year_col = _detect_year_column(df)
+            if year_col:
+                yrs = _extract_years(df[year_col])
                 df = df.loc[yrs.isin(selected_years).fillna(False)]
 
-        if not df.empty:
-            df["tournament"] = t
-            frames.append(df)
+            if df.empty:
+                continue
 
-    if not frames:
+            df["tournament"] = t
+
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".parquet")
+            df.to_parquet(tmp.name, index=False)
+            tmp_files.append(tmp.name)
+
+            del df
+
+    if not tmp_files:
         return pd.DataFrame()
 
-    return pd.concat(frames, ignore_index=True, sort=False)
+    merged = []
+    for p in tmp_files:
+        merged.append(pd.read_parquet(p))
+        os.remove(p)
+
+    return pd.concat(merged, ignore_index=True, sort=False)
+
 
 # ============================================================
-# SIDEBAR — YEAR + TOURNAMENTS
+# SIDEBAR
 # ============================================================
 
 st.sidebar.header("Select Years")
-
-year_range = st.sidebar.slider(
-    "Year range",
-    min_value=2021,
-    max_value=2026,
-    value=(2021, 2026),
-    step=1
-)
-
+year_range = st.sidebar.slider("Year range", 2021, 2026, (2021, 2026))
 selected_years = list(range(year_range[0], year_range[1] + 1))
 
-st.sidebar.markdown(
-    f"**Selected:** {year_range[0]} – {year_range[1]}"
-)
-
 st.sidebar.header("Select Tournaments")
-
 selected_tournaments = st.sidebar.multiselect(
     f"Choose tournaments (MAX {MAX_TOURNAMENTS})",
-    options=list(TOURNAMENTS.keys())
+    list(TOURNAMENTS.keys())
 )
 
 # ============================================================
-# HARD GUARD (IMPORTANT)
+# HARD GUARDS
 # ============================================================
 
 if not selected_tournaments:
-    st.info("Please select tournaments to proceed.")
+    st.info("Please select tournaments to continue.")
     st.stop()
 
 if len(selected_tournaments) > MAX_TOURNAMENTS:
     st.error(
-        f"❌ You selected **{len(selected_tournaments)} tournaments**.\n\n"
-        f"Please select **MAX {MAX_TOURNAMENTS} tournaments** for analysis.\n\n"
-        f"This limit ensures stability and prevents crashes."
+        f"❌ You selected {len(selected_tournaments)} tournaments.\n\n"
+        f"Please select **at most {MAX_TOURNAMENTS} tournaments**.\n\n"
+        f"This limit ensures stability and performance."
     )
     st.stop()
 
 # ============================================================
-# LOAD DATA
+# LOAD DATA (MODE SWITCH)
 # ============================================================
 
+usecols = None
+
 with st.spinner("Loading data…"):
-    df = load_data_simple(selected_tournaments, selected_years)
+    if len(selected_tournaments) <= 2:
+        df = load_filtered_data_fast(
+            selected_tournaments,
+            selected_years,
+            usecols=usecols
+        )
+    else:
+        st.warning("⚠️ Safe loading mode enabled (3–5 tournaments)")
+        df = load_filtered_data_ultra_safe(
+            selected_tournaments,
+            selected_years,
+            usecols=usecols
+        )
 
 if df.empty:
-    st.error("No data could be loaded for the selected filters.")
+    st.error("No data loaded.")
     st.stop()
 
 # ============================================================
@@ -821,14 +879,13 @@ if df.empty:
 # ============================================================
 
 st.success(
-    f" {len(df):,} Balls Analysed Across "
-    f"{len(selected_tournaments)} tournament(s) from "
+    f"Loaded {len(df):,} rows | "
+    f"{len(selected_tournaments)} tournaments | "
     f"{year_range[0]}–{year_range[1]}"
 )
 
-# st.write(df.head())
-
 DF_gen = df
+# st.write(DF_gen.head())
 
   
 
@@ -9271,120 +9328,118 @@ elif sidebar_option == "Integrated Contextual Ratings":
         pass
 
 
-
-
-
-
-AI_QUERY_SCHEMA = {
-    "player": str,
-    "tournament": list,        # ["IPL"], ["T20I"]
-    "start_year": int,
-    "end_year": int,
-    "phase": list,             # ["Powerplay", "Death"]
-    "bowling_style": list,     # ["Left-arm Fast"]
-    "length": list,            # ["YORKER"]
-    "metric": str              # "strike_rate", "yorker_pct"
-}
-def simple_ai_parser(question: str):
-    q = question.lower()
-
-    plan = {
-        "player": None,
-        "tournament": [],
-        "start_year": None,
-        "end_year": None,
-        "phase": [],
-        "bowling_style": [],
-        "length": [],
-        "metric": None
-    }
-
-    # --- tournament ---
-    if "ipl" in q:
-        plan["tournament"].append("IPL")
-    if "t20i" in q:
-        plan["tournament"].append("T20I")
-
-    # --- phase ---
-    if "powerplay" in q:
-        plan["phase"].append("Powerplay")
-    if "death" in q:
-        plan["phase"].append("Death")
-
-    # --- bowling style ---
-    if "left arm" in q:
-        plan["bowling_style"].append("Left-arm Fast")
-
-    # --- length ---
-    if "yorker" in q:
-        plan["length"].append("YORKER")
-
-    # --- metric ---
-    if "strike rate" in q or "sr" in q:
-        plan["metric"] = "strike_rate"
-    if "yorker %" in q or "yorker percentage" in q:
-        plan["metric"] = "yorker_pct"
-
-    # --- year ---
-    import re
-    years = re.findall(r"(20\d{2})", q)
-    if len(years) >= 1:
-        plan["start_year"] = int(years[0])
-    if len(years) >= 2:
-        plan["end_year"] = int(years[1])
-    elif plan["start_year"]:
-        plan["end_year"] = 2026
-
-    # --- player ---
-    for name in DF_gen['batsman'].dropna().unique():
-        if name.lower() in q:
-            plan["player"] = name
-            break
-
-    return plan
-
-def execute_ai_query(df, plan):
-    d = df.copy()
-
-    if plan["player"]:
-        d = d[d["batsman"] == plan["player"]]
-
-    if plan["tournament"]:
-        d = d[d["tournament"].isin(plan["tournament"])]
-
-    if plan["start_year"]:
-        d = d[d["year"] >= plan["start_year"]]
-
-    if plan["end_year"]:
-        d = d[d["year"] <= plan["end_year"]]
-
-    if plan["phase"]:
-        d = d[d["phase"].isin(plan["phase"])]
-
-    if plan["bowling_style"]:
-        d = d[d["bowl_style"].isin(plan["bowling_style"])]
-
-    if plan["length"]:
-        d = d[d["length"].isin(plan["length"])]
-
-    if d.empty:
-        return None, "No data found for this query."
-
-    # --- metrics ---
-    if plan["metric"] == "strike_rate":
-        runs = d["score"].sum()
-        balls = len(d)
-        return round((runs / balls) * 100, 2), "Strike Rate"
-
-    if plan["metric"] == "yorker_pct":
-        total = len(d)
-        yorkers = (d["length"] == "YORKER").sum()
-        return round((yorkers / total) * 100, 2), "Yorker %"
-
-    return None, "Metric not supported yet."
-
-
 else:
+    
+    
+    
+    
+    AI_QUERY_SCHEMA = {
+        "player": str,
+        "tournament": list,        # ["IPL"], ["T20I"]
+        "start_year": int,
+        "end_year": int,
+        "phase": list,             # ["Powerplay", "Death"]
+        "bowling_style": list,     # ["Left-arm Fast"]
+        "length": list,            # ["YORKER"]
+        "metric": str              # "strike_rate", "yorker_pct"
+    }
+    def simple_ai_parser(question: str):
+        q = question.lower()
+    
+        plan = {
+            "player": None,
+            "tournament": [],
+            "start_year": None,
+            "end_year": None,
+            "phase": [],
+            "bowling_style": [],
+            "length": [],
+            "metric": None
+        }
+    
+        # --- tournament ---
+        if "ipl" in q:
+            plan["tournament"].append("IPL")
+        if "t20i" in q:
+            plan["tournament"].append("T20I")
+    
+        # --- phase ---
+        if "powerplay" in q:
+            plan["phase"].append("Powerplay")
+        if "death" in q:
+            plan["phase"].append("Death")
+    
+        # --- bowling style ---
+        if "left arm" in q:
+            plan["bowling_style"].append("Left-arm Fast")
+    
+        # --- length ---
+        if "yorker" in q:
+            plan["length"].append("YORKER")
+    
+        # --- metric ---
+        if "strike rate" in q or "sr" in q:
+            plan["metric"] = "strike_rate"
+        if "yorker %" in q or "yorker percentage" in q:
+            plan["metric"] = "yorker_pct"
+    
+        # --- year ---
+        import re
+        years = re.findall(r"(20\d{2})", q)
+        if len(years) >= 1:
+            plan["start_year"] = int(years[0])
+        if len(years) >= 2:
+            plan["end_year"] = int(years[1])
+        elif plan["start_year"]:
+            plan["end_year"] = 2026
+    
+        # --- player ---
+        for name in DF_gen['batsman'].dropna().unique():
+            if name.lower() in q:
+                plan["player"] = name
+                break
+    
+        return plan
+    
+    def execute_ai_query(df, plan):
+        d = df.copy()
+    
+        if plan["player"]:
+            d = d[d["batsman"] == plan["player"]]
+    
+        if plan["tournament"]:
+            d = d[d["tournament"].isin(plan["tournament"])]
+    
+        if plan["start_year"]:
+            d = d[d["year"] >= plan["start_year"]]
+    
+        if plan["end_year"]:
+            d = d[d["year"] <= plan["end_year"]]
+    
+        if plan["phase"]:
+            d = d[d["phase"].isin(plan["phase"])]
+    
+        if plan["bowling_style"]:
+            d = d[d["bowl_style"].isin(plan["bowling_style"])]
+    
+        if plan["length"]:
+            d = d[d["length"].isin(plan["length"])]
+    
+        if d.empty:
+            return None, "No data found for this query."
+    
+        # --- metrics ---
+        if plan["metric"] == "strike_rate":
+            runs = d["score"].sum()
+            balls = len(d)
+            return round((runs / balls) * 100, 2), "Strike Rate"
+    
+        if plan["metric"] == "yorker_pct":
+            total = len(d)
+            yorkers = (d["length"] == "YORKER").sum()
+            return round((yorkers / total) * 100, 2), "Yorker %"
+    
+        return None, "Metric not supported yet."
     st.markdown("## Cricket AI Analyst")
     st.caption("Ask data-backed natural language questions.")
 
