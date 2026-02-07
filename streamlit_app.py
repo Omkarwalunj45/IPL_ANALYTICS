@@ -657,7 +657,7 @@ import streamlit as st
 DATASETS_DIR = "Datasets"
 os.makedirs(DATASETS_DIR, exist_ok=True)
 
-MAX_TOURNAMENTS = 5
+MAX_TOURNAMENTS = 4
 
 TOURNAMENTS = {
     "IPL": "IPL_APP_IPL",
