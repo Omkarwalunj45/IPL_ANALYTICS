@@ -1119,25 +1119,28 @@ with loading_box:
                         df_loaded.to_parquet(cache_path, index=False)
                     except Exception as exc2:
                         status.warning(f"Fallback cache write failed: {exc2}")
-
+            
             elapsed = time.time() - start_ts
-            status.success(f"✅ Load finished in {elapsed:.1f}s | batches {loaded_batches}/{num_batches}")
+            status.success(
+                f"✅ Load finished in {elapsed:.1f}s | batches {loaded_batches}/{num_batches}"
+            )
             progress.progress(100)
-
-            # persist into session state and clear loader lock
+            
+            # -------------------------------
+            # 🔐 FINAL LOAD SIGNAL (CRITICAL)
+            # -------------------------------
             st.session_state.loaded_df = df_loaded
             st.session_state.data_loaded = True
-
-        except Exception as exc:
-            status.error(f"❌ Unexpected error during load: {exc}")
-            st.session_state.data_loaded = False
-
-        finally:
-            _remove_lock(lock_path)
             st.session_state.is_loading = False
+            
+            # cleanup
+            _remove_lock(lock_path)
             time.sleep(0.3)
             loading_box.empty()
-            st.experimental_rerun()
+            
+            # 🚫 DO NOT RERUN
+            # Streamlit will naturally proceed on next interaction
+
 
 # ========================= End loader =========================
 
