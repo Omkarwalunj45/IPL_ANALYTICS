@@ -9268,6 +9268,13 @@ elif sidebar_option == "Integrated Contextual Ratings":
             file_name=f"{board_choice.replace(' ', '_')}_{year_choice}.csv",
             mime="text/csv"
         )
+        pass
+
+
+
+
+
+
 AI_QUERY_SCHEMA = {
     "player": str,
     "tournament": list,        # ["IPL"], ["T20I"]
@@ -9375,6 +9382,8 @@ def execute_ai_query(df, plan):
         return round((yorkers / total) * 100, 2), "Yorker %"
 
     return None, "Metric not supported yet."
+
+
 else:
     st.markdown("## Cricket AI Analyst")
     st.caption("Ask data-backed natural language questions.")
