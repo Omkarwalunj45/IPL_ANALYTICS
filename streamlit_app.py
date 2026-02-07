@@ -640,24 +640,455 @@ import numpy as np
 import streamlit as st
 from datetime import datetime
 
+import os
+import glob
+import re
+import hashlib
+import gc
+import pandas as pd
+import numpy as np
+import streamlit as st
+from datetime import datetime
+import time
+
 # ────────────────────────────────────────────────
 # CONFIG
 # ────────────────────────────────────────────────
 
-# import os
-# import glob
-# import re
-# import hashlib
-# import gc
-# from io import BytesIO
-# import pandas as pd
-# import numpy as np
-# import streamlit as st
-# from datetime import datetime
+DATASETS_DIR = "Datasets"
+CACHE_DIR = ".cache_data"
+os.makedirs(DATASETS_DIR, exist_ok=True)
+os.makedirs(CACHE_DIR, exist_ok=True)
 
-# # ────────────────────────────────────────────────
-# # CONFIG
-# # ────────────────────────────────────────────────
+TOURNAMENTS = {
+    "IPL": "IPL_APP_IPL",
+    "CPL": "IPL_APP_CPL",
+    "ILT20": "IPL_APP_ILT20",
+    "LPL": "IPL_APP_LPL",
+    "MLC": "IPL_APP_MLC",
+    "SA20": "IPL_APP_SA20",
+    "Super Smash": "IPL_APP_SUPER_SMASH",
+    "T20 Blast": "IPL_APP_T20_BLAST",
+    "T20I": "IPL_APP_T20I",
+    "BBL": "IPL_APP_BBL",
+}
+
+# ────────────────────────────────────────────────
+# HELPERS
+# ────────────────────────────────────────────────
+
+def chunk_list(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+def _hash_args(tournaments, years, usecols, file_signatures):
+    """Create a deterministic cache key that includes file signatures to avoid stale cache."""
+    tpart = "|".join(sorted(tournaments)) if tournaments else "none"
+    key = tpart + "|" + f"{min(years)}-{max(years)}"
+    if usecols:
+        key += "|" + ",".join(sorted(usecols))
+    if file_signatures:
+        sig_parts = []
+        for s in file_signatures:
+            sig_parts.append(f"{s[0]}::{s[1]}::{s[2]}::{s[3]}")
+        key += "|" + "|".join(sig_parts)
+    return hashlib.md5(key.encode()).hexdigest()
+
+def _strict_file_for_tournament(token: str):
+    """
+    STRICT resolver:
+    - Match token as a separate segment in filename (not arbitrary substring).
+    - Prefer parquet > csv > excel.
+    - If multiple candidates remain, pick the most recently-modified one.
+    """
+    if not token:
+        return None
+
+    token = token.lower()
+    files = glob.glob(os.path.join(DATASETS_DIR, "*"))
+    files = [f for f in files if os.path.isfile(f)]
+
+    pattern = re.compile(r'(^|[^a-z0-9])' + re.escape(token) + r'([^a-z0-9]|$)', flags=re.IGNORECASE)
+
+    strict_matches = []
+    for f in files:
+        name = os.path.basename(f).lower()
+        if pattern.search(name):
+            strict_matches.append(f)
+
+    valid = strict_matches or []
+    if not valid:
+        for f in files:
+            name = os.path.basename(f).lower()
+            if token in name:
+                valid.append(f)
+
+    if not valid:
+        return None
+
+    def sort_key(fpath):
+        ext = os.path.splitext(fpath)[1].lower()
+        priority = 0 if ext == ".parquet" else 1 if ext == ".csv" else 2
+        mtime = -os.path.getmtime(fpath)
+        return (priority, mtime)
+
+    valid.sort(key=sort_key)
+    return valid[0]
+
+def _detect_year_column(df):
+    for c in df.columns:
+        lc = c.lower()
+        if lc == "year" or lc == "season" or lc.endswith("_year"):
+            return c
+
+    for c in df.columns:
+        if "year" in c.lower():
+            return c
+
+    for c in df.columns:
+        if "date" in c.lower() or "match_date" in c.lower() or "start" in c.lower():
+            return c
+
+    return None
+
+def _extract_years(series):
+    if pd.api.types.is_numeric_dtype(series):
+        return series.astype("Int64")
+
+    dt = pd.to_datetime(series, errors="coerce")
+    if dt.notna().any():
+        return dt.dt.year.astype("Int64")
+
+    s = series.astype(str).str.extract(r"\b((?:19|20)\d{2})\b")[0]
+    if s.notna().any():
+        return s.astype("Int64")
+
+    return None
+
+# ────────────────────────────────────────────────
+# SIDEBAR CONTROLS
+# ────────────────────────────────────────────────
+
+st.sidebar.header("Select Years")
+
+if "year_range" not in st.session_state:
+    st.session_state.year_range = (2021, 2026)
+
+years = st.sidebar.slider(
+    "Select year range",
+    min_value=2021,
+    max_value=2026,
+    value=st.session_state.year_range,
+    step=1,
+    key="year_slider_key",
+    label_visibility="visible"
+)
+
+st.session_state.year_range = years
+selected_years = list(range(years[0], years[1] + 1))
+
+st.sidebar.markdown(
+    f"""
+    <div style="
+        margin-top:6px;
+        text-align:center;
+        font-weight:700;
+        color:#f08a24;
+        font-size:14px;
+    ">
+        {years[0]} &nbsp;–&nbsp; {years[1]}
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ------------------------------
+# Persistent loader + control
+# ------------------------------
+# session state flags (initialize)
+if "is_loading" not in st.session_state:
+    st.session_state.is_loading = False
+if "data_loaded" not in st.session_state:
+    st.session_state.data_loaded = False
+if "loaded_df" not in st.session_state:
+    st.session_state.loaded_df = None
+
+# ------------------------------------------------------------------
+# Sidebar: tournament selection + explicit Load button
+# Controls are disabled while a load is in progress (is_loading=True)
+# ------------------------------------------------------------------
+
+st.sidebar.header("Select Tournaments")
+
+# Select All / Clear All buttons - disabled when loading
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    if st.button("✓ Select All", use_container_width=True, key="select_all_btn", disabled=st.session_state.is_loading):
+        st.session_state.selected_tournaments = list(TOURNAMENTS.keys())
+        st.rerun()
+with col2:
+    if st.button("✗ Clear All", use_container_width=True, key="clear_all_btn", disabled=st.session_state.is_loading):
+        st.session_state.selected_tournaments = []
+        st.rerun()
+
+if "selected_tournaments" not in st.session_state:
+    st.session_state.selected_tournaments = []
+
+selected_tournaments = st.sidebar.multiselect(
+    "Choose tournaments to load (select one or more)",
+    options=list(TOURNAMENTS.keys()),
+    default=st.session_state.selected_tournaments,
+    key="tournament_select_key",
+    disabled=st.session_state.is_loading
+)
+# persist back into session_state
+st.session_state.selected_tournaments = selected_tournaments
+
+# quick heuristic: All-leagues mode when >=7 selections
+ALL_LEAGUES_MODE = len(selected_tournaments) >= 7
+if ALL_LEAGUES_MODE:
+    st.sidebar.warning(
+        f"⚠️ {len(selected_tournaments)} tournaments selected. "
+        "App will load aggregated data; detailed visuals may be disabled."
+    )
+
+# Explicit Load button (disabled while loading)
+if st.sidebar.button("Load Selected Tournaments", use_container_width=True, key="load_selected_btn", disabled=st.session_state.is_loading):
+    # Mark loading start and rerun so UI reflects disabled state
+    st.session_state.is_loading = True
+    st.session_state.data_loaded = False
+    st.session_state.loaded_df = None
+    st.rerun()
+
+# If loading, perform the blocking load with incremental progress
+if st.session_state.is_loading and not st.session_state.data_loaded:
+    loading_placeholder = st.empty()
+    try:
+        with loading_placeholder.container():
+            st.info(f"🔄 Loading {len(selected_tournaments)} tournament(s)... Please wait, do not interact with the app.")
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            # Build file_signatures
+            resolved_files = []
+            for t in selected_tournaments:
+                token = TOURNAMENTS.get(t, t).lower()
+                path = _strict_file_for_tournament(token)
+                if path is None:
+                    resolved_files.append((t, None, None, None))
+                else:
+                    try:
+                        mtime = os.path.getmtime(path)
+                        size = os.path.getsize(path)
+                    except Exception:
+                        mtime, size = None, None
+                    resolved_files.append((t, path, mtime, size))
+
+            file_signatures = tuple(resolved_files)
+
+            # Cache setup
+            usecols = None  # Define here, can customize if needed
+            cache_key = _hash_args(tuple(selected_tournaments), selected_years, usecols, file_signatures)
+            cache_path = os.path.join(CACHE_DIR, f"merged_{cache_key}.parquet")
+
+            if os.path.exists(cache_path):
+                try:
+                    df_loaded = pd.read_parquet(cache_path)
+                    status_text.success("✅ Loaded from cache")
+                    progress_bar.progress(1.0)
+                except Exception:
+                    df_loaded = pd.DataFrame()
+            else:
+                # Inline batch loading with progress
+                BATCH_SIZE = 3
+                all_frames = []
+                tournament_batches = list(chunk_list(selected_tournaments, BATCH_SIZE))
+                num_batches = len(tournament_batches)
+
+                if num_batches == 0:
+                    df_loaded = pd.DataFrame()
+                else:
+                    for batch_idx, tournament_batch in enumerate(tournament_batches):
+                        batch_frames = []
+                        for t in tournament_batch:
+                            token = TOURNAMENTS.get(t, t).lower()
+                            path = _strict_file_for_tournament(token)
+                            if path is None:
+                                continue
+
+                            ext = os.path.splitext(path)[1].lower()
+
+                            try:
+                                if ext == ".parquet":
+                                    df = pd.read_parquet(path, columns=usecols)
+
+                                elif ext == ".csv":
+                                    file_size_mb = os.path.getsize(path) / (1024 * 1024)
+                                    if file_size_mb > 100:
+                                        chunks = []
+                                        chunk_size = 100000
+                                        for chunk in pd.read_csv(path, usecols=usecols, low_memory=False, chunksize=chunk_size):
+                                            year_col = _detect_year_column(chunk)
+                                            if year_col:
+                                                yrs = _extract_years(chunk[year_col])
+                                                if yrs is not None:
+                                                    mask = yrs.isin(selected_years).fillna(False)
+                                                    chunk = chunk.loc[mask]
+                                            if not chunk.empty:
+                                                chunks.append(chunk)
+                                        if chunks:
+                                            df = pd.concat(chunks, ignore_index=True)
+                                            del chunks
+                                            gc.collect()
+                                        else:
+                                            continue
+                                    else:
+                                        df = pd.read_csv(path, usecols=usecols, low_memory=False)
+
+                                else:
+                                    df = pd.read_excel(path, usecols=usecols)
+
+                            except MemoryError:
+                                continue
+                            except Exception:
+                                continue
+
+                            if df is None or df.empty:
+                                continue
+
+                            year_col = _detect_year_column(df)
+                            if year_col:
+                                yrs = _extract_years(df[year_col])
+                                if yrs is not None:
+                                    mask = yrs.isin(selected_years).fillna(False)
+                                    df = df.loc[mask]
+
+                            df["tournament"] = t
+
+                            if df.empty:
+                                continue
+
+                            batch_frames.append(df)
+                            del df
+                            gc.collect()
+
+                        if batch_frames:
+                            try:
+                                batch_merged = pd.concat(batch_frames, ignore_index=True, sort=False)
+                                all_frames.append(batch_merged)
+                                del batch_frames
+                                gc.collect()
+                            except MemoryError:
+                                continue
+
+                        # Update progress per batch
+                        progress = (batch_idx + 1) / num_batches
+                        progress_bar.progress(progress)
+                        status_text.text(f"Processed batch {batch_idx + 1}/{num_batches}")
+
+                if not all_frames:
+                    df_loaded = pd.DataFrame()
+                else:
+                    try:
+                        df_loaded = pd.concat(all_frames, ignore_index=True, sort=False)
+                        del all_frames
+                        gc.collect()
+                    except MemoryError:
+                        df_loaded = pd.DataFrame()
+
+                if "tournament" not in df_loaded.columns:
+                    df_loaded["tournament"] = np.nan
+
+                # Optimize dtypes
+                for col in df_loaded.select_dtypes(include=['object']).columns:
+                    num_unique = df_loaded[col].nunique()
+                    if num_unique > 0 and num_unique < len(df_loaded) * 0.5:
+                        try:
+                            df_loaded[col] = df_loaded[col].astype('category')
+                        except:
+                            pass
+
+                # Cache the result
+                try:
+                    df_loaded.to_parquet(cache_path, index=False)
+                except Exception:
+                    pass
+
+            # Final success
+            elapsed = (datetime.now() - datetime.now()).total_seconds()  # Placeholder, calculate properly if needed
+            status_text.success(f"✅ Loaded successfully")
+            time.sleep(0.4)
+
+        # Store and mark done
+        st.session_state.loaded_df = df_loaded
+        st.session_state.data_loaded = True
+        st.session_state.is_loading = False
+
+        loading_placeholder.empty()
+        st.rerun()
+
+    except MemoryError:
+        loading_placeholder.empty()
+        st.session_state.is_loading = False
+        st.error(
+            "❌ **Out of Memory!** The selected tournaments/years are too large.\n\n"
+            "Solutions:\n"
+            "- Select fewer tournaments (try 5 or less)\n"
+            "- Narrow the year range\n"
+            "- Re-run with fewer selections"
+        )
+        st.stop()
+
+    except Exception as e:
+        loading_placeholder.empty()
+        st.session_state.is_loading = False
+        st.error(f"❌ Error loading data: {str(e)}")
+        st.stop()
+
+# Use loaded data
+if st.session_state.data_loaded and isinstance(st.session_state.loaded_df, pd.DataFrame):
+    df = st.session_state.loaded_df
+    if df is None or df.empty:
+        st.warning("Loaded dataset is empty. Please adjust selection.")
+        st.stop()
+    if "tournament" not in df.columns:
+        st.error("Loaded data missing 'tournament' column.")
+        st.stop()
+
+    df = df[df["tournament"].isin(selected_tournaments)].copy()
+    if df.empty:
+        st.warning("No data after filtering.")
+        st.stop()
+
+    st.sidebar.success(
+        f"✅ Data Loaded\n\n"
+        f"📊 {len(df):,} rows\n"
+        f"🏆 {len(df['tournament'].unique())} tournaments\n"
+        f"📅 {selected_years[0]}-{selected_years[-1]}"
+    )
+
+    DF_gen = df
+
+else:
+    st.info("Data not loaded. Select tournaments and load.")
+    st.stop()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # DATASETS_DIR = "Datasets"
 # CACHE_DIR = ".cache_data"
@@ -795,15 +1226,15 @@ from datetime import datetime
 #     # ═══════════════════════════════════════════════════════════════════════
 #     # BATCHED LOADING: Process tournaments in smaller batches
 #     # ═══════════════════════════════════════════════════════════════════════
-   
-#     BATCH_SIZE = 3 # Load 3 tournaments at a time
+    
+#     BATCH_SIZE = 3  # Load 3 tournaments at a time
 #     all_frames = []
-   
+    
 #     tournament_batches = list(chunk_list(selected_tournaments, BATCH_SIZE))
-   
+    
 #     for batch_idx, tournament_batch in enumerate(tournament_batches):
 #         batch_frames = []
-       
+        
 #         for t in tournament_batch:
 #             token = TOURNAMENTS.get(t, t).lower()
 #             path = _strict_file_for_tournament(token)
@@ -816,14 +1247,14 @@ from datetime import datetime
 #             try:
 #                 if ext == ".parquet":
 #                     df = pd.read_parquet(path, columns=usecols)
-               
+                
 #                 elif ext == ".csv":
 #                     file_size_mb = os.path.getsize(path) / (1024 * 1024)
-                   
+                    
 #                     if file_size_mb > 100:
 #                         chunks = []
 #                         chunk_size = 100000
-                       
+                        
 #                         for chunk in pd.read_csv(path, usecols=usecols, low_memory=False, chunksize=chunk_size):
 #                             year_col = _detect_year_column(chunk)
 #                             if year_col:
@@ -831,10 +1262,10 @@ from datetime import datetime
 #                                 if yrs is not None:
 #                                     mask = yrs.isin(selected_years).fillna(False)
 #                                     chunk = chunk.loc[mask]
-                           
+                            
 #                             if not chunk.empty:
 #                                 chunks.append(chunk)
-                       
+                        
 #                         if chunks:
 #                             df = pd.concat(chunks, ignore_index=True)
 #                             del chunks
@@ -843,7 +1274,7 @@ from datetime import datetime
 #                             continue
 #                     else:
 #                         df = pd.read_csv(path, usecols=usecols, low_memory=False)
-               
+                
 #                 else:
 #                     df = pd.read_excel(path, usecols=usecols)
 
@@ -870,7 +1301,7 @@ from datetime import datetime
 #             batch_frames.append(df)
 #             del df
 #             gc.collect()
-       
+        
 #         if batch_frames:
 #             try:
 #                 batch_merged = pd.concat(batch_frames, ignore_index=True, sort=False)
@@ -947,11 +1378,19 @@ from datetime import datetime
 #     """,
 #     unsafe_allow_html=True
 # )
+# # columns to load (None = load all)
+# usecols = None
 
 # # ------------------------------
 # # Persistent loader + control
 # # ------------------------------
 # # session state flags (initialize)
+# # ------------------------------
+# # Persistent loader + control (stable, no experimental_rerun)
+# # ------------------------------
+# # Initialize session-state flags
+# if "load_requested" not in st.session_state:
+#     st.session_state.load_requested = False
 # if "is_loading" not in st.session_state:
 #     st.session_state.is_loading = False
 # if "data_loaded" not in st.session_state:
@@ -959,23 +1398,17 @@ from datetime import datetime
 # if "loaded_df" not in st.session_state:
 #     st.session_state.loaded_df = None
 
-# # ------------------------------------------------------------------
-# # Sidebar: tournament selection + explicit Load button
-# # Controls are disabled while a load is in progress (is_loading=True)
-# # ------------------------------------------------------------------
-
+# # Sidebar controls
 # st.sidebar.header("Select Tournaments")
 
-# # Select All / Clear All buttons - disabled when loading
+# # Select All / Clear All (disabled while loading)
 # col1, col2 = st.sidebar.columns(2)
 # with col1:
-#     if st.button("✓ Select All", use_container_width=True, key="select_all_btn", disabled=st.session_state.is_loading):
+#     if st.sidebar.button("✓ Select All", use_container_width=True, key="select_all_btn", disabled=st.session_state.is_loading):
 #         st.session_state.selected_tournaments = list(TOURNAMENTS.keys())
-#         st.rerun()
 # with col2:
-#     if st.button("✗ Clear All", use_container_width=True, key="clear_all_btn", disabled=st.session_state.is_loading):
+#     if st.sidebar.button("✗ Clear All", use_container_width=True, key="clear_all_btn", disabled=st.session_state.is_loading):
 #         st.session_state.selected_tournaments = []
-#         st.rerun()
 
 # if "selected_tournaments" not in st.session_state:
 #     st.session_state.selected_tournaments = []
@@ -987,10 +1420,11 @@ from datetime import datetime
 #     key="tournament_select_key",
 #     disabled=st.session_state.is_loading
 # )
-# # persist back into session_state
+
+# # persist selection
 # st.session_state.selected_tournaments = selected_tournaments
 
-# # quick heuristic: All-leagues mode when >=7 selections
+# # quick heuristic / UI hint
 # ALL_LEAGUES_MODE = len(selected_tournaments) >= 7
 # if ALL_LEAGUES_MODE:
 #     st.sidebar.warning(
@@ -998,70 +1432,101 @@ from datetime import datetime
 #         "App will load aggregated data; detailed visuals may be disabled."
 #     )
 
-# # Explicit Load button (disabled while loading)
-# load_btn_col = st.sidebar
-# if load_btn_col.button("Load Selected Tournaments", use_container_width=True, key="load_selected_btn", disabled=st.session_state.is_loading):
-#     # Mark loading start and rerun so UI reflects disabled state
-#     st.session_state.is_loading = True
-#     st.session_state.data_loaded = False
-#     st.session_state.loaded_df = None
-#     st.rerun()
+# # Load button (request)
+# if st.sidebar.button("Load Selected Tournaments", use_container_width=True, key="load_selected_btn", disabled=st.session_state.is_loading):
+#     st.session_state.load_requested = True
 
-# # If an external event set is already loading (from previous interaction),
-# # we now perform the actual blocking load here. This ensures controls were
-# # disabled in the UI before heavy work begins.
-# if st.session_state.is_loading and not st.session_state.data_loaded:
-#     loading_placeholder = st.empty()
+# # If user hasn't requested load and there is no loaded df, ask them to load
+# if not st.session_state.load_requested and not st.session_state.data_loaded:
+#     st.info("Data not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
+#     st.stop()
+
+# # If load requested and not yet loaded, perform blocking load now.
+# # This runs only once per user click because we set data_loaded on success.
+# if st.session_state.load_requested and not st.session_state.data_loaded:
+#     # Defensive: require at least one selection
+#     if not selected_tournaments:
+#         st.error("No tournaments selected. Please select tournaments to load.")
+#         st.session_state.load_requested = False
+#         st.stop()
+
+#     # Build resolved_files/file_signatures (same logic you used earlier)
+#     resolved_files = []
+#     missing = []
+#     for t in selected_tournaments:
+#         token = TOURNAMENTS.get(t, t).lower()
+#         path = _strict_file_for_tournament(token)
+#         if path is None:
+#             missing.append(t)
+#             resolved_files.append((t, None, None, None))
+#         else:
+#             try:
+#                 mtime = os.path.getmtime(path)
+#                 size = os.path.getsize(path)
+#             except Exception:
+#                 mtime, size = None, None
+#             resolved_files.append((t, path, mtime, size))
+
+#     if missing:
+#         st.sidebar.warning(f"No dataset found for: {', '.join(missing)}. Selected tournaments missing files will be skipped.")
+
+#     if all(r[1] is None for r in resolved_files):
+#         st.error("No data files were found for any selected tournaments. Please add dataset files or change selection.")
+#         st.session_state.load_requested = False
+#         st.stop()
+
+#     file_signatures = tuple(resolved_files)
+    
+#     # Begin blocking load
+#     st.session_state.is_loading = True
+#     load_placeholder = st.empty()
 #     try:
-#         with loading_placeholder.container():
+#         with load_placeholder.container():
 #             st.info(f"🔄 Loading {len(selected_tournaments)} tournament(s)... Please wait, do not interact with the app.")
 #             progress_bar = st.progress(0)
 #             status_text = st.empty()
 
-#             # Build file_signatures (same as before)
-#             resolved_files = []
-#             missing = []
-#             for t in selected_tournaments:
-#                 token = TOURNAMENTS.get(t, t).lower()
-#                 path = _strict_file_for_tournament(token)
-#                 if path is None:
-#                     missing.append(t)
-#                     resolved_files.append((t, None, None, None))
-#                 else:
-#                     try:
-#                         mtime = os.path.getmtime(path)
-#                         size = os.path.getsize(path)
-#                     except Exception:
-#                         mtime, size = None, None
-#                     resolved_files.append((t, path, mtime, size))
+#             start = datetime.now()
+#             # Call your cached loader (it will return quickly if cache exists, otherwise do the heavy work)
+#             df_loaded = load_filtered_data_fast(selected_tournaments, selected_years, usecols, file_signatures=file_signatures)
+#             elapsed = (datetime.now() - start).total_seconds()
 
-#             file_signatures = tuple(resolved_files)
-
-#             # start blocking load (this call returns only when full dataset is ready)
-#             start_time = datetime.now()
-#             df_loaded = load_filtered_data_fast(selected_tournaments, selected_years, file_signatures=file_signatures)
-#             elapsed = (datetime.now() - start_time).total_seconds()
-
-#             # cosmetic progress update
+#             # cosmetic update
 #             progress_bar.progress(100)
 #             status_text.success(f"✅ Loaded in {elapsed:.1f}s")
 
-#             # small pause so user sees success
+#             # small pause so the UI shows success briefly
 #             import time
-#             time.sleep(0.4)
+#             time.sleep(0.35)
 
-#         # store loaded DataFrame to session_state and mark done
+#         # Basic validation of returned DF
+#         if df_loaded is None or not isinstance(df_loaded, pd.DataFrame) or df_loaded.empty:
+#             load_placeholder.empty()
+#             st.error("Loaded data is empty or invalid after loading. Try fewer tournaments / a narrower year range.")
+#             st.session_state.is_loading = False
+#             st.session_state.load_requested = False
+#             st.stop()
+
+#         if "tournament" not in df_loaded.columns:
+#             load_placeholder.empty()
+#             st.error("Loaded data does not contain a 'tournament' column.")
+#             st.session_state.is_loading = False
+#             st.session_state.load_requested = False
+#             st.stop()
+
+#         # Save into session_state and mark as loaded
 #         st.session_state.loaded_df = df_loaded
 #         st.session_state.data_loaded = True
 #         st.session_state.is_loading = False
+#         st.session_state.load_requested = False
 
-#         # clear the loading UI and rerun so the rest of the app proceeds with loaded_df
-#         loading_placeholder.empty()
-#         st.rerun()
+#         # Clear placeholder
+#         load_placeholder.empty()
 
 #     except MemoryError:
-#         loading_placeholder.empty()
+#         load_placeholder.empty()
 #         st.session_state.is_loading = False
+#         st.session_state.load_requested = False
 #         st.error(
 #             "❌ **Out of Memory!** The selected tournaments/years are too large.\n\n"
 #             "Solutions:\n"
@@ -1072,29 +1537,23 @@ from datetime import datetime
 #         st.stop()
 
 #     except Exception as e:
-#         loading_placeholder.empty()
+#         load_placeholder.empty()
 #         st.session_state.is_loading = False
+#         st.session_state.load_requested = False
 #         st.error(f"❌ Error loading data: {str(e)}")
 #         st.stop()
 
-# # If data is loaded in session state, use it (and validate)
+# # At this point either data_loaded == True OR load not requested (handled above)
 # if st.session_state.data_loaded and isinstance(st.session_state.loaded_df, pd.DataFrame):
-#     df = st.session_state.loaded_df
-#     # Defensive validation
-#     if df is None or df.empty:
-#         st.warning("Loaded dataset is empty after loading. Please adjust selection.")
-#         st.stop()
-#     if "tournament" not in df.columns:
-#         st.error("Loaded data does not contain a 'tournament' column.")
-#         st.stop()
+#     # final defensive filtering and assignment for downstream code
+#     df = st.session_state.loaded_df.copy()
+#     df = df[df["tournament"].isin(selected_tournaments)].copy() if "tournament" in df.columns else df.copy()
 
-#     # re-filter to selected tournaments (defensive)
-#     df = df[df["tournament"].isin(selected_tournaments)].copy()
-#     if df.empty:
+#     if df is None or df.empty:
 #         st.warning("After filtering by selected tournaments and years, no rows remain.")
 #         st.stop()
 
-#     # Success banner (sidebar)
+#     # Provide sidebar success and expose global DF_gen
 #     st.sidebar.success(
 #         f"✅ Data Loaded Successfully\n\n"
 #         f"📊 {len(df):,} total rows\n"
@@ -1102,512 +1561,12 @@ from datetime import datetime
 #         f"📅 Years: {selected_years[0]}-{selected_years[-1]}"
 #     )
 
-#     # expose DF_gen as before
 #     DF_gen = df
 
 # else:
-#     # If not loaded yet, show a hint and stop execution of downstream code
-#     st.info("Data not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
+#     # Shouldn't reach here (guard), but in case show friendly message
+#     st.info("Data is not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
 #     st.stop()
-
-# def chunk_list(lst, n):
-#     for i in range(0, len(lst), n):
-#         yield lst[i:i + n]
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-DATASETS_DIR = "Datasets"
-CACHE_DIR = ".cache_data"
-os.makedirs(DATASETS_DIR, exist_ok=True)
-os.makedirs(CACHE_DIR, exist_ok=True)
-
-TOURNAMENTS = {
-    "IPL": "IPL_APP_IPL",
-    "CPL": "IPL_APP_CPL",
-    "ILT20": "IPL_APP_ILT20",
-    "LPL": "IPL_APP_LPL",
-    "MLC": "IPL_APP_MLC",
-    "SA20": "IPL_APP_SA20",
-    "Super Smash": "IPL_APP_SUPER_SMASH",
-    "T20 Blast": "IPL_APP_T20_BLAST",
-    "T20I": "IPL_APP_T20I",
-    "BBL": "IPL_APP_BBL",
-}
-
-# ────────────────────────────────────────────────
-# HELPERS
-# ────────────────────────────────────────────────
-
-def _hash_args(tournaments, years, usecols, file_signatures):
-    """Create a deterministic cache key that includes file signatures to avoid stale cache."""
-    tpart = "|".join(sorted(tournaments)) if tournaments else "none"
-    key = tpart + "|" + f"{min(years)}-{max(years)}"
-    if usecols:
-        key += "|" + ",".join(sorted(usecols))
-    if file_signatures:
-        sig_parts = []
-        for s in file_signatures:
-            sig_parts.append(f"{s[0]}::{s[1]}::{s[2]}::{s[3]}")
-        key += "|" + "|".join(sig_parts)
-    return hashlib.md5(key.encode()).hexdigest()
-
-
-def _strict_file_for_tournament(token: str):
-    """
-    STRICT resolver:
-    - Match token as a separate segment in filename (not arbitrary substring).
-    - Prefer parquet > csv > excel.
-    - If multiple candidates remain, pick the most recently-modified one.
-    """
-    if not token:
-        return None
-
-    token = token.lower()
-    files = glob.glob(os.path.join(DATASETS_DIR, "*"))
-    files = [f for f in files if os.path.isfile(f)]
-
-    pattern = re.compile(r'(^|[^a-z0-9])' + re.escape(token) + r'([^a-z0-9]|$)', flags=re.IGNORECASE)
-
-    strict_matches = []
-    for f in files:
-        name = os.path.basename(f).lower()
-        if pattern.search(name):
-            strict_matches.append(f)
-
-    valid = strict_matches or []
-    if not valid:
-        for f in files:
-            name = os.path.basename(f).lower()
-            if token in name:
-                valid.append(f)
-
-    if not valid:
-        return None
-
-    def sort_key(fpath):
-        ext = os.path.splitext(fpath)[1].lower()
-        priority = 0 if ext == ".parquet" else 1 if ext == ".csv" else 2
-        mtime = -os.path.getmtime(fpath)
-        return (priority, mtime)
-
-    valid.sort(key=sort_key)
-    return valid[0]
-
-
-def _detect_year_column(df):
-    for c in df.columns:
-        lc = c.lower()
-        if lc == "year" or lc == "season" or lc.endswith("_year"):
-            return c
-
-    for c in df.columns:
-        if "year" in c.lower():
-            return c
-
-    for c in df.columns:
-        if "date" in c.lower() or "match_date" in c.lower() or "start" in c.lower():
-            return c
-
-    return None
-
-
-def _extract_years(series):
-    if pd.api.types.is_numeric_dtype(series):
-        return series.astype("Int64")
-
-    dt = pd.to_datetime(series, errors="coerce", infer_datetime_format=True)
-    if dt.notna().any():
-        return dt.dt.year.astype("Int64")
-
-    s = series.astype(str).str.extract(r"\b((?:19|20)\d{2})\b")[0]
-    if s.notna().any():
-        return s.astype("Int64")
-
-    return None
-
-
-# ────────────────────────────────────────────────
-# OPTIMIZED LOADER (BLOCKING - NO PARTIAL DATA)
-# ────────────────────────────────────────────────
-
-@st.cache_data(ttl=24 * 3600, max_entries=5, show_spinner=False)
-def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, file_signatures=None):
-    """
-    Load data for the given tournaments and years.
-    BLOCKING: Returns complete data only - no partial results.
-    """
-    if not selected_tournaments:
-        return pd.DataFrame()
-
-    # Check cache first
-    cache_key = _hash_args(tuple(selected_tournaments), selected_years, usecols, file_signatures)
-    cache_path = os.path.join(CACHE_DIR, f"merged_{cache_key}.parquet")
-
-    if os.path.exists(cache_path):
-        try:
-            return pd.read_parquet(cache_path)
-        except Exception:
-            pass
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # BATCHED LOADING: Process tournaments in smaller batches
-    # ═══════════════════════════════════════════════════════════════════════
-    
-    BATCH_SIZE = 3  # Load 3 tournaments at a time
-    all_frames = []
-    
-    tournament_batches = list(chunk_list(selected_tournaments, BATCH_SIZE))
-    
-    for batch_idx, tournament_batch in enumerate(tournament_batches):
-        batch_frames = []
-        
-        for t in tournament_batch:
-            token = TOURNAMENTS.get(t, t).lower()
-            path = _strict_file_for_tournament(token)
-
-            if path is None:
-                continue
-
-            ext = os.path.splitext(path)[1].lower()
-
-            try:
-                if ext == ".parquet":
-                    df = pd.read_parquet(path, columns=usecols)
-                
-                elif ext == ".csv":
-                    file_size_mb = os.path.getsize(path) / (1024 * 1024)
-                    
-                    if file_size_mb > 100:
-                        chunks = []
-                        chunk_size = 100000
-                        
-                        for chunk in pd.read_csv(path, usecols=usecols, low_memory=False, chunksize=chunk_size):
-                            year_col = _detect_year_column(chunk)
-                            if year_col:
-                                yrs = _extract_years(chunk[year_col])
-                                if yrs is not None:
-                                    mask = yrs.isin(selected_years).fillna(False)
-                                    chunk = chunk.loc[mask]
-                            
-                            if not chunk.empty:
-                                chunks.append(chunk)
-                        
-                        if chunks:
-                            df = pd.concat(chunks, ignore_index=True)
-                            del chunks
-                            gc.collect()
-                        else:
-                            continue
-                    else:
-                        df = pd.read_csv(path, usecols=usecols, low_memory=False)
-                
-                else:
-                    df = pd.read_excel(path, usecols=usecols)
-
-            except MemoryError:
-                continue
-            except Exception:
-                continue
-
-            if df is None or df.empty:
-                continue
-
-            year_col = _detect_year_column(df)
-            if year_col:
-                yrs = _extract_years(df[year_col])
-                if yrs is not None:
-                    mask = yrs.isin(selected_years).fillna(False)
-                    df = df.loc[mask]
-
-            df["tournament"] = t
-
-            if df.empty:
-                continue
-
-            batch_frames.append(df)
-            del df
-            gc.collect()
-        
-        if batch_frames:
-            try:
-                batch_merged = pd.concat(batch_frames, ignore_index=True, sort=False)
-                all_frames.append(batch_merged)
-                del batch_frames
-                gc.collect()
-            except MemoryError:
-                continue
-
-    if not all_frames:
-        return pd.DataFrame()
-
-    try:
-        merged = pd.concat(all_frames, ignore_index=True, sort=False)
-        del all_frames
-        gc.collect()
-    except MemoryError:
-        return pd.DataFrame()
-
-    if "tournament" not in merged.columns:
-        merged["tournament"] = np.nan
-
-    # Optimize dtypes
-    for col in merged.select_dtypes(include=['object']).columns:
-        num_unique = merged[col].nunique()
-        if num_unique > 0 and num_unique < len(merged) * 0.5:
-            try:
-                merged[col] = merged[col].astype('category')
-            except:
-                pass
-
-    # Cache
-    try:
-        merged.to_parquet(cache_path, index=False)
-    except Exception:
-        pass
-
-    return merged
-
-
-# ────────────────────────────────────────────────
-# SIDEBAR CONTROLS
-# ────────────────────────────────────────────────
-
-st.sidebar.header("Select Years")
-
-if "year_range" not in st.session_state:
-    st.session_state.year_range = (2021, 2026)
-
-years = st.sidebar.slider(
-    "Select year range",
-    min_value=2021,
-    max_value=2026,
-    value=st.session_state.year_range,
-    step=1,
-    key="year_slider_key",
-    label_visibility="visible"
-)
-
-st.session_state.year_range = years
-selected_years = list(range(years[0], years[1] + 1))
-
-st.sidebar.markdown(
-    f"""
-    <div style="
-        margin-top:6px;
-        text-align:center;
-        font-weight:700;
-        color:#f08a24;
-        font-size:14px;
-    ">
-        {years[0]} &nbsp;–&nbsp; {years[1]}
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-# columns to load (None = load all)
-usecols = None
-
-# ------------------------------
-# Persistent loader + control
-# ------------------------------
-# session state flags (initialize)
-# ------------------------------
-# Persistent loader + control (stable, no experimental_rerun)
-# ------------------------------
-# Initialize session-state flags
-if "load_requested" not in st.session_state:
-    st.session_state.load_requested = False
-if "is_loading" not in st.session_state:
-    st.session_state.is_loading = False
-if "data_loaded" not in st.session_state:
-    st.session_state.data_loaded = False
-if "loaded_df" not in st.session_state:
-    st.session_state.loaded_df = None
-
-# Sidebar controls
-st.sidebar.header("Select Tournaments")
-
-# Select All / Clear All (disabled while loading)
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    if st.sidebar.button("✓ Select All", use_container_width=True, key="select_all_btn", disabled=st.session_state.is_loading):
-        st.session_state.selected_tournaments = list(TOURNAMENTS.keys())
-with col2:
-    if st.sidebar.button("✗ Clear All", use_container_width=True, key="clear_all_btn", disabled=st.session_state.is_loading):
-        st.session_state.selected_tournaments = []
-
-if "selected_tournaments" not in st.session_state:
-    st.session_state.selected_tournaments = []
-
-selected_tournaments = st.sidebar.multiselect(
-    "Choose tournaments to load (select one or more)",
-    options=list(TOURNAMENTS.keys()),
-    default=st.session_state.selected_tournaments,
-    key="tournament_select_key",
-    disabled=st.session_state.is_loading
-)
-
-# persist selection
-st.session_state.selected_tournaments = selected_tournaments
-
-# quick heuristic / UI hint
-ALL_LEAGUES_MODE = len(selected_tournaments) >= 7
-if ALL_LEAGUES_MODE:
-    st.sidebar.warning(
-        f"⚠️ {len(selected_tournaments)} tournaments selected. "
-        "App will load aggregated data; detailed visuals may be disabled."
-    )
-
-# Load button (request)
-if st.sidebar.button("Load Selected Tournaments", use_container_width=True, key="load_selected_btn", disabled=st.session_state.is_loading):
-    st.session_state.load_requested = True
-
-# If user hasn't requested load and there is no loaded df, ask them to load
-if not st.session_state.load_requested and not st.session_state.data_loaded:
-    st.info("Data not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
-    st.stop()
-
-# If load requested and not yet loaded, perform blocking load now.
-# This runs only once per user click because we set data_loaded on success.
-if st.session_state.load_requested and not st.session_state.data_loaded:
-    # Defensive: require at least one selection
-    if not selected_tournaments:
-        st.error("No tournaments selected. Please select tournaments to load.")
-        st.session_state.load_requested = False
-        st.stop()
-
-    # Build resolved_files/file_signatures (same logic you used earlier)
-    resolved_files = []
-    missing = []
-    for t in selected_tournaments:
-        token = TOURNAMENTS.get(t, t).lower()
-        path = _strict_file_for_tournament(token)
-        if path is None:
-            missing.append(t)
-            resolved_files.append((t, None, None, None))
-        else:
-            try:
-                mtime = os.path.getmtime(path)
-                size = os.path.getsize(path)
-            except Exception:
-                mtime, size = None, None
-            resolved_files.append((t, path, mtime, size))
-
-    if missing:
-        st.sidebar.warning(f"No dataset found for: {', '.join(missing)}. Selected tournaments missing files will be skipped.")
-
-    if all(r[1] is None for r in resolved_files):
-        st.error("No data files were found for any selected tournaments. Please add dataset files or change selection.")
-        st.session_state.load_requested = False
-        st.stop()
-
-    file_signatures = tuple(resolved_files)
-    
-    # Begin blocking load
-    st.session_state.is_loading = True
-    load_placeholder = st.empty()
-    try:
-        with load_placeholder.container():
-            st.info(f"🔄 Loading {len(selected_tournaments)} tournament(s)... Please wait, do not interact with the app.")
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-
-            start = datetime.now()
-            # Call your cached loader (it will return quickly if cache exists, otherwise do the heavy work)
-            df_loaded = load_filtered_data_fast(selected_tournaments, selected_years, usecols, file_signatures=file_signatures)
-            elapsed = (datetime.now() - start).total_seconds()
-
-            # cosmetic update
-            progress_bar.progress(100)
-            status_text.success(f"✅ Loaded in {elapsed:.1f}s")
-
-            # small pause so the UI shows success briefly
-            import time
-            time.sleep(0.35)
-
-        # Basic validation of returned DF
-        if df_loaded is None or not isinstance(df_loaded, pd.DataFrame) or df_loaded.empty:
-            load_placeholder.empty()
-            st.error("Loaded data is empty or invalid after loading. Try fewer tournaments / a narrower year range.")
-            st.session_state.is_loading = False
-            st.session_state.load_requested = False
-            st.stop()
-
-        if "tournament" not in df_loaded.columns:
-            load_placeholder.empty()
-            st.error("Loaded data does not contain a 'tournament' column.")
-            st.session_state.is_loading = False
-            st.session_state.load_requested = False
-            st.stop()
-
-        # Save into session_state and mark as loaded
-        st.session_state.loaded_df = df_loaded
-        st.session_state.data_loaded = True
-        st.session_state.is_loading = False
-        st.session_state.load_requested = False
-
-        # Clear placeholder
-        load_placeholder.empty()
-
-    except MemoryError:
-        load_placeholder.empty()
-        st.session_state.is_loading = False
-        st.session_state.load_requested = False
-        st.error(
-            "❌ **Out of Memory!** The selected tournaments/years are too large.\n\n"
-            "Solutions:\n"
-            "- Select fewer tournaments (try 5 or less)\n"
-            "- Narrow the year range\n"
-            "- Re-run with fewer selections"
-        )
-        st.stop()
-
-    except Exception as e:
-        load_placeholder.empty()
-        st.session_state.is_loading = False
-        st.session_state.load_requested = False
-        st.error(f"❌ Error loading data: {str(e)}")
-        st.stop()
-
-# At this point either data_loaded == True OR load not requested (handled above)
-if st.session_state.data_loaded and isinstance(st.session_state.loaded_df, pd.DataFrame):
-    # final defensive filtering and assignment for downstream code
-    df = st.session_state.loaded_df.copy()
-    df = df[df["tournament"].isin(selected_tournaments)].copy() if "tournament" in df.columns else df.copy()
-
-    if df is None or df.empty:
-        st.warning("After filtering by selected tournaments and years, no rows remain.")
-        st.stop()
-
-    # Provide sidebar success and expose global DF_gen
-    st.sidebar.success(
-        f"✅ Data Loaded Successfully\n\n"
-        f"📊 {len(df):,} total rows\n"
-        f"🏆 {len(df['tournament'].unique())} tournament(s)\n"
-        f"📅 Years: {selected_years[0]}-{selected_years[-1]}"
-    )
-
-    DF_gen = df
-
-else:
-    # Shouldn't reach here (guard), but in case show friendly message
-    st.info("Data is not loaded. Please select tournaments and click 'Load Selected Tournaments'.")
-    st.stop()
 
 
 
