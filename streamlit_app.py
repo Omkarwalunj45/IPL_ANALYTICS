@@ -8192,7 +8192,30 @@ elif sidebar_option == "Strength vs Weakness":
                 
                 # Optional: Show current selection for clarity (debug/help text)
                 st.caption(f"Current Kind: **{chosen_kind}** | Current Style: **{chosen_style}**")
+                def filter_valid_wagon(df, col="wagonZone"):
+                    if col not in df.columns:
+                        return df.iloc[0:0]
+                    return df[
+                        df[col].notna() & df[col].astype(str).str.strip().ne("")
+                    ].copy()
                 
+                
+                def filter_valid_line_length(df, line_col="line", length_col="length"):
+                    missing = []
+                    for c in (line_col, length_col):
+                        if c not in df.columns:
+                            missing.append(c)
+                    if missing:
+                        return df.iloc[0:0]
+                
+                    mask = (
+                        df[line_col].notna()
+                        & df[length_col].notna()
+                        & df[line_col].astype(str).str.strip().ne("")
+                        & df[length_col].astype(str).str.strip().ne("")
+                    )
+                    return df[mask].copy()
+
                 # Your existing logic — only runs when one is selected
                 if chosen_kind and chosen_kind != '-- none --':
                     def filter_by_kind(df, col='bowl_kind', kind=chosen_kind):
