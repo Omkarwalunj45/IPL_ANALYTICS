@@ -6159,9 +6159,10 @@ elif sidebar_option == "Match by Match Analysis":# Match by Match Analysis - ful
             
             # ---------------- VALIDATION ----------------
             if line_col in final_df.columns and length_col in final_df.columns:
-                plot_df = final_df[[line_col, length_col, run_col]].copy().dropna(
-                    subset=[line_col, length_col]
-                )
+                 plot_df = final_df[[line_col, length_col, run_col, 'dismissal']].copy().dropna(
+                subset=[line_col, length_col]
+            )
+
             
                 # ---------- LINE MAP ----------
                 def get_line_index(val):
