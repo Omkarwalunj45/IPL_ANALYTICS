@@ -2108,7 +2108,7 @@ def build_idf(df_local):
 
 sidebar_option = st.sidebar.radio(
     "Select an option:",
-    ("Player Profile", "Matchup Analysis", "Strength vs Weakness", "Match by Match Analysis","Integrated Contextual Ratings","AI Mode")
+    ("Player Profile", "Matchup Analysis", "Strength vs Weakness", "Match by Match Analysis","Integrated Contextual Ratings")
 )
 
 if df is not None:
@@ -8311,7 +8311,8 @@ elif sidebar_option == "Strength vs Weakness":
 
     pass
 # Sidebar UI
-elif sidebar_option == 'Integrated Contextual Ratings':
+# elif sidebar_option == 'Integrated Contextual Ratings':
+else:
     import io
     import pandas as pd
     import streamlit as st
@@ -8525,679 +8526,679 @@ elif sidebar_option == 'Integrated Contextual Ratings':
             mime="text/csv"
         )
 
-    pass
+    # pass
 
 
-else:
-    # ==================== FREE AI MODE WITH HUGGINGFACE (FIXED) ====================
-    # This version properly uses your HuggingFace token to avoid rate limits
+# else:
+#     # ==================== FREE AI MODE WITH HUGGINGFACE (FIXED) ====================
+#     # This version properly uses your HuggingFace token to avoid rate limits
         
-    # DF_gen['phase']=DF_gen['PHASE']
-    import os
-    import json
-    from datetime import datetime
-    import re
+#     # DF_gen['phase']=DF_gen['PHASE']
+#     import os
+#     import json
+#     from datetime import datetime
+#     import re
     
-    try:
-        import requests
-        REQUESTS_AVAILABLE = True
-    except ImportError:
-        REQUESTS_AVAILABLE = False
-        st.error("Please install requests: pip install requests")
+#     try:
+#         import requests
+#         REQUESTS_AVAILABLE = True
+#     except ImportError:
+#         REQUESTS_AVAILABLE = False
+#         st.error("Please install requests: pip install requests")
     
-    # ============================================================
-    # AI MODE SIDEBAR OPTION
-    # ============================================================
-    def is_valid_python(code: str) -> bool:
-      try:
-          compile(code, "<ai_code>", "eval")
-          return True
-      except SyntaxError:
-          return False
-    def normalize_ai_code(code: str) -> str:
-        """
-        Fix common AI mistakes:
-        - missing parentheses before chaining
-        - line continuation issues
-        """
-        code = code.strip()
+#     # ============================================================
+#     # AI MODE SIDEBAR OPTION
+#     # ============================================================
+#     def is_valid_python(code: str) -> bool:
+#       try:
+#           compile(code, "<ai_code>", "eval")
+#           return True
+#       except SyntaxError:
+#           return False
+#     def normalize_ai_code(code: str) -> str:
+#         """
+#         Fix common AI mistakes:
+#         - missing parentheses before chaining
+#         - line continuation issues
+#         """
+#         code = code.strip()
     
-        # Fix `.sort_values` / `.head` chained on expressions
-        if ".sort_values" in code or ".head(" in code:
-            if not code.startswith("("):
-                code = f"({code})"
+#         # Fix `.sort_values` / `.head` chained on expressions
+#         if ".sort_values" in code or ".head(" in code:
+#             if not code.startswith("("):
+#                 code = f"({code})"
     
-        # Remove stray line continuations
-        code = code.replace("\\\n", " ")
+#         # Remove stray line continuations
+#         code = code.replace("\\\n", " ")
     
-        return code
+#         return code
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("## 🤖 AI Analytics Assistant (FREE)")
+#     st.sidebar.markdown("---")
+#     st.sidebar.markdown("## 🤖 AI Analytics Assistant (FREE)")
     
-    # Show token status
-    hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
-    if hf_token:
-        st.sidebar.success("✓ HuggingFace Token: Active")
-    else:
-        st.sidebar.warning("⚠️ No HF Token (slower)")
+#     # Show token status
+#     hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
+#     if hf_token:
+#         st.sidebar.success("✓ HuggingFace Token: Active")
+#     else:
+#         st.sidebar.warning("⚠️ No HF Token (slower)")
     
-    if st.session_state.get('ai_mode', False):
-        st.sidebar.success("✓ AI Mode Active")
-        if st.sidebar.button("Exit AI Mode"):
-            st.session_state.ai_mode = False
-            st.rerun()
-    else:
-        if st.sidebar.button("Launch AI Mode 🚀 (FREE)", type="primary"):
-            st.session_state.ai_mode = True
-            st.rerun()
+#     if st.session_state.get('ai_mode', False):
+#         st.sidebar.success("✓ AI Mode Active")
+#         if st.sidebar.button("Exit AI Mode"):
+#             st.session_state.ai_mode = False
+#             st.rerun()
+#     else:
+#         if st.sidebar.button("Launch AI Mode 🚀 (FREE)", type="primary"):
+#             st.session_state.ai_mode = True
+#             st.rerun()
     
-    # ============================================================
-    # AI MODE MAIN INTERFACE
-    # ============================================================
+#     # ============================================================
+#     # AI MODE MAIN INTERFACE
+#     # ============================================================
     
-    if st.session_state.get('ai_mode', False):
+#     if st.session_state.get('ai_mode', False):
         
-        # Header
-        st.markdown(f"""
-        <div style="
-            background: linear-gradient(135deg, #059669, #10b981);
-            padding: 24px;
-            border-radius: 12px;
-            margin-bottom: 24px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        ">
-            <h1 style="color: white; margin: 0; font-size: 32px;">
-                🤖 AI Cricket Analytics Assistant (FREE)
-            </h1>
-            <p style="color: #d1fae5; margin: 8px 0 0 0; font-size: 16px;">
-                Powered by Hugging Face • 100% Free • No API costs
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+#         # Header
+#         st.markdown(f"""
+#         <div style="
+#             background: linear-gradient(135deg, #059669, #10b981);
+#             padding: 24px;
+#             border-radius: 12px;
+#             margin-bottom: 24px;
+#             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+#         ">
+#             <h1 style="color: white; margin: 0; font-size: 32px;">
+#                 🤖 AI Cricket Analytics Assistant (FREE)
+#             </h1>
+#             <p style="color: #d1fae5; margin: 8px 0 0 0; font-size: 16px;">
+#                 Powered by Hugging Face • 100% Free • No API costs
+#             </p>
+#         </div>
+#         """, unsafe_allow_html=True)
         
-        # Quick stats
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Tournaments", len(selected_tournaments))
-        with col2:
-            st.metric("Total Deliveries", f"{len(df):,}")
-        with col3:
-            token_status = "With Token ✓" if hf_token else "No Token"
-            st.metric("HF Status", token_status)
-        with col4:
-            queries_count = len(st.session_state.get('messages', [])) // 2
-            st.metric("Queries", queries_count)
+#         # Quick stats
+#         col1, col2, col3, col4 = st.columns(4)
+#         with col1:
+#             st.metric("Tournaments", len(selected_tournaments))
+#         with col2:
+#             st.metric("Total Deliveries", f"{len(df):,}")
+#         with col3:
+#             token_status = "With Token ✓" if hf_token else "No Token"
+#             st.metric("HF Status", token_status)
+#         with col4:
+#             queries_count = len(st.session_state.get('messages', [])) // 2
+#             st.metric("Queries", queries_count)
         
-        # Initialize session state
-        if 'messages' not in st.session_state:
-            st.session_state.messages = []
+#         # Initialize session state
+#         if 'messages' not in st.session_state:
+#             st.session_state.messages = []
         
-        # ============================================================
-        # DATA CONTEXT BUILDER
-        # ============================================================
+#         # ============================================================
+#         # DATA CONTEXT BUILDER
+#         # ============================================================
         
-        @st.cache_data
-        def get_data_context():
-            """Build context about available data"""
-            context = {
-                "tournaments": selected_tournaments,
-                "years": selected_years,
-                "total_rows": len(df),
-                "columns": list(df.columns),
-            }
+#         @st.cache_data
+#         def get_data_context():
+#             """Build context about available data"""
+#             context = {
+#                 "tournaments": selected_tournaments,
+#                 "years": selected_years,
+#                 "total_rows": len(df),
+#                 "columns": list(df.columns),
+#             }
             
-            if 'bat' in df.columns:
-                context['top_batters'] = df['bat'].value_counts().head(10).index.tolist()
-            if 'bowl' in df.columns:
-                context['top_bowlers'] = df['bowl'].value_counts().head(10).index.tolist()
+#             if 'bat' in df.columns:
+#                 context['top_batters'] = df['bat'].value_counts().head(10).index.tolist()
+#             if 'bowl' in df.columns:
+#                 context['top_bowlers'] = df['bowl'].value_counts().head(10).index.tolist()
             
-            key_cols = ['phase', 'bowl_kind', 'bowl_style', 'line', 'length']
-            context['filters'] = {}
-            for col in key_cols:
-                if col in df.columns:
-                    unique_vals = df[col].dropna().unique().tolist()
-                    if len(unique_vals) <= 30:
-                        context['filters'][col] = unique_vals[:15]
+#             key_cols = ['phase', 'bowl_kind', 'bowl_style', 'line', 'length']
+#             context['filters'] = {}
+#             for col in key_cols:
+#                 if col in df.columns:
+#                     unique_vals = df[col].dropna().unique().tolist()
+#                     if len(unique_vals) <= 30:
+#                         context['filters'][col] = unique_vals[:15]
             
-            return context
+#             return context
         
-        # ============================================================
-        # QUERY EXECUTOR
-        # ============================================================
+#         # ============================================================
+#         # QUERY EXECUTOR
+#         # ============================================================
         
-        def execute_query(code_str, df_ref):
-            """Safely execute AI-generated pandas code"""
+#         def execute_query(code_str, df_ref):
+#             """Safely execute AI-generated pandas code"""
         
-            if not code_str or not isinstance(code_str, str):
-                return {"text": "❌ No code generated.", "table": None}
+#             if not code_str or not isinstance(code_str, str):
+#                 return {"text": "❌ No code generated.", "table": None}
         
-            code_str = code_str.strip()
+#             code_str = code_str.strip()
         
-            # 🚨 HARD BLOCK: prevent bad code
-            if not is_valid_python(code_str):
-                return {
-                    "text": "❌ AI generated invalid Python code.\n\nPlease rephrase the question.",
-                    "table": None
-                }
+#             # 🚨 HARD BLOCK: prevent bad code
+#             if not is_valid_python(code_str):
+#                 return {
+#                     "text": "❌ AI generated invalid Python code.\n\nPlease rephrase the question.",
+#                     "table": None
+#                 }
         
-            try:
-                safe_globals = {
-                    "pd": pd,
-                    "np": np,
-                    "df": df_ref,
-                }
+#             try:
+#                 safe_globals = {
+#                     "pd": pd,
+#                     "np": np,
+#                     "df": df_ref,
+#                 }
         
-                result = eval(code_str, safe_globals)
+#                 result = eval(code_str, safe_globals)
         
-                if isinstance(result, pd.DataFrame):
-                    if len(result) > 50:
-                        return {
-                            "table": result.head(50),
-                            "text": f"Showing first 50 of {len(result)} rows"
-                        }
-                    return {"table": result, "text": None}
+#                 if isinstance(result, pd.DataFrame):
+#                     if len(result) > 50:
+#                         return {
+#                             "table": result.head(50),
+#                             "text": f"Showing first 50 of {len(result)} rows"
+#                         }
+#                     return {"table": result, "text": None}
         
-                if isinstance(result, pd.Series):
-                    return {"table": result.to_frame(), "text": None}
+#                 if isinstance(result, pd.Series):
+#                     return {"table": result.to_frame(), "text": None}
         
-                return {"text": str(result), "table": None}
+#                 return {"text": str(result), "table": None}
         
-            except Exception as e:
-                return {
-                    "text": f"❌ Execution error:\n\n{str(e)}",
-                    "table": None
-                }
+#             except Exception as e:
+#                 return {
+#                     "text": f"❌ Execution error:\n\n{str(e)}",
+#                     "table": None
+#                 }
 
 
 
         
-        # ============================================================
-        # HUGGINGFACE AI HANDLER (IMPROVED)
-        # ============================================================
+#         # ============================================================
+#         # HUGGINGFACE AI HANDLER (IMPROVED)
+#         # ============================================================
         
-        def query_huggingface(user_question, data_context):
-            """
-            HuggingFace Chat API (OpenAI compatible) — 2025 working version
-            """
+#         def query_huggingface(user_question, data_context):
+#             """
+#             HuggingFace Chat API (OpenAI compatible) — 2025 working version
+#             """
         
-            hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
+#             hf_token = os.environ.get("HUGGINGFACE_TOKEN") or st.secrets.get("HUGGINGFACE_TOKEN", None)
         
-            if not hf_token:
-                return {
-                    "response": "❌ HuggingFace token missing. Add it to secrets.",
-                    "code": None,
-                    "error": True
-                }
+#             if not hf_token:
+#                 return {
+#                     "response": "❌ HuggingFace token missing. Add it to secrets.",
+#                     "code": None,
+#                     "error": True
+#                 }
         
-            API_URL = "https://router.huggingface.co/v1/chat/completions"
+#             API_URL = "https://router.huggingface.co/v1/chat/completions"
         
-            headers = {
-                "Authorization": f"Bearer {hf_token}",
-                "Content-Type": "application/json"
-            }
+#             headers = {
+#                 "Authorization": f"Bearer {hf_token}",
+#                 "Content-Type": "application/json"
+#             }
         
-            system_prompt = f"""
-        You are a cricket data analyst.
+#             system_prompt = f"""
+#         You are a cricket data analyst.
         
-        The dataframe is called `df`.
+#         The dataframe is called `df`.
         
-        Important columns:
-        - bat (batter name)
-        - bowl (bowler name)
-        - phase (Powerplay, Middle, Death)
-        - batruns (runs scored off the ball)
-        - dismissal (NaN if no wicket)
-        - bowl_kind (Pace / Spin)
-        Use year column for year based filtration. Note that there's no season column
-        Rules:
-        - Respond ONLY with valid Python pandas code
-        - Do NOT explain anything
-        - Do NOT use markdown
-        - Assume df already exists
+#         Important columns:
+#         - bat (batter name)
+#         - bowl (bowler name)
+#         - phase (Powerplay, Middle, Death)
+#         - batruns (runs scored off the ball)
+#         - dismissal (NaN if no wicket)
+#         - bowl_kind (Pace / Spin)
+#         Use year column for year based filtration. Note that there's no season column
+#         Rules:
+#         - Respond ONLY with valid Python pandas code
+#         - Do NOT explain anything
+#         - Do NOT use markdown
+#         - Assume df already exists
         
-        Example:
-        df[df['phase']=='Death'].groupby('bat')['batruns'].sum().sort_values(ascending=False).head(5)
-        Remember SR is (runs/balls)*100 and to find balls played use ball_id.count() don't multiply by 6 as this is already balls
-        Summarizing once again: You are a CRICKET DATA ANALYST generating PANDAS code.
+#         Example:
+#         df[df['phase']=='Death'].groupby('bat')['batruns'].sum().sort_values(ascending=False).head(5)
+#         Remember SR is (runs/balls)*100 and to find balls played use ball_id.count() don't multiply by 6 as this is already balls
+#         Summarizing once again: You are a CRICKET DATA ANALYST generating PANDAS code.
 
-        STRICT RULES (FOLLOW EXACTLY):
+#         STRICT RULES (FOLLOW EXACTLY):
         
-        1. ONE ROW = ONE BALL FACED BY BATTER
-        2. Balls Faced = COUNT of rows (use .count() on any per-ball column like 'batruns')
-        3. Strike Rate = (Total Runs / Balls Faced) * 100
-        4. NEVER use dismissals to calculate strike rate
-        5. ALWAYS compute balls faced explicitly and name it 'balls'
-        6. ALWAYS compute runs explicitly and name it 'runs'
-        7. Use .agg() with named columns, NOT merges
-        8. If user specifies "at least X balls", apply filter AFTER aggregation
-        9. Phases are one of: Powerplay, Middle 1, Middle 2, Death
-        10. Output must be valid Python pandas code ONLY
-        11. 
-        AVAILABLE COLUMNS:
-        - bat : batter name
-        - bowl : bowler name
-        - batruns : runs scored off the ball
-        - ball_id : unique ball identifier
-        - phase : Powerplay / Middle 1 / Middle 2 / Death
-        - year : season year
-        - dismissal : NaN if not out, else dismissal type
+#         1. ONE ROW = ONE BALL FACED BY BATTER
+#         2. Balls Faced = COUNT of rows (use .count() on any per-ball column like 'batruns')
+#         3. Strike Rate = (Total Runs / Balls Faced) * 100
+#         4. NEVER use dismissals to calculate strike rate
+#         5. ALWAYS compute balls faced explicitly and name it 'balls'
+#         6. ALWAYS compute runs explicitly and name it 'runs'
+#         7. Use .agg() with named columns, NOT merges
+#         8. If user specifies "at least X balls", apply filter AFTER aggregation
+#         9. Phases are one of: Powerplay, Middle 1, Middle 2, Death
+#         10. Output must be valid Python pandas code ONLY
+#         11. 
+#         AVAILABLE COLUMNS:
+#         - bat : batter name
+#         - bowl : bowler name
+#         - batruns : runs scored off the ball
+#         - ball_id : unique ball identifier
+#         - phase : Powerplay / Middle 1 / Middle 2 / Death
+#         - year : season year
+#         - dismissal : NaN if not out, else dismissal type
         
-        CORRECT TEMPLATE FOR STRIKE RATE:
-        🏏 MATCH & INNINGS CONTEXT
+#         CORRECT TEMPLATE FOR STRIKE RATE:
+#         🏏 MATCH & INNINGS CONTEXT
         
-        p_match
-        Unique match identifier
+#         p_match
+#         Unique match identifier
         
-        inns
-        Inning number (1 or 2)
+#         inns
+#         Inning number (1 or 2)
         
-        year
-        Season year (e.g. 2023, 2024, 2025)
+#         year
+#         Season year (e.g. 2023, 2024, 2025)
         
-        competition
-        Tournament name (IPL, BBL, T20I, etc.)
+#         competition
+#         Tournament name (IPL, BBL, T20I, etc.)
         
-        winner
-        Match-winning team
+#         winner
+#         Match-winning team
         
-        👤 BATSMAN INFO
+#         👤 BATSMAN INFO
         
-        bat
-        Name of the batter on strike
+#         bat
+#         Name of the batter on strike
         
-        p_bat
-        Unique player ID for batter
+#         p_bat
+#         Unique player ID for batter
         
-        team_bat
-        Batting team
+#         team_bat
+#         Batting team
         
-        bat_hand
-        Batting handedness
+#         bat_hand
+#         Batting handedness
         
-        RHB or LHB
+#         RHB or LHB
         
-
-        
-        🎯 BOWLER INFO
-        
-        bowl
-        Name of the bowler delivering the ball
-        
-        team_bowl
-        Bowling team
-        
-        bowl_style
-        Bowling arm + style
-        Examples:
-        
-        Right-arm fast
-        
-        Left-arm fast
-        
-        Offbreak
-        
-        Slow left-arm
-        
-        bowl_kind
-        has pace bowler or spin bowler
-        
-        ⏱️ BALL IDENTIFIERS
-        
-        ball
-        Ball number within the over (1–6)
-        
-        ball_id
-        Unique identifier for each delivery
-        (useful for counting balls)
-        
-        over
-        Over number in the innings (1–20)
-        
-        📊 BALL OUTCOME
-        
-        batruns
-        Runs scored off the bat on this delivery
-        (0, 1, 2, 3, 4, 6)
-        
-        ballfaced
-        Indicator for a ball faced by batter
-        (usually = 1 for each delivery faced)
-        
-        bowlruns
-        Total runs conceded by the bowler on this ball
-        (includes extras)
-        
-        outcome
-        Text description of delivery result
-        
-        score
-        Team score after this ball
-        
-        ❌ DISMISSAL INFO
-        
-        out
-        1 if wicket fell on this delivery, else 0
-        
-        dismissal
-        Type of dismissal
-        Examples:
-        
-        caught
-        
-        bowled
-        
-        lbw
-        
-        stumped
-        
-        hit wicket
-        
-        run out
-        
-        p_out
-        Player dismissed (if any)
-        
-        ⚠️ NEVER use dismissal to calculate balls faced or strike rate
-        
-        🧮 EXTRAS
-        
-        noball – No-ball runs
-        
-        wide – Wide ball runs
-        
-        byes – Byes
-        
-        legbyes – Leg byes
-        
-        Extras count toward team runs, not batruns
-        
-        📈 CUMULATIVE PLAYER STATS (AT THAT BALL)
-        
-        cur_bat_runs
-        Batter’s total runs at that point
-        
-        cur_bat_bf
-        Batter’s balls faced till that delivery
-        
-        cur_bowl_ovr
-        Bowler overs bowled till that delivery
-        
-        cur_bowl_wkts
-        Bowler wickets till that delivery
-        
-        cur_bowl_runs
-        Bowler runs conceded till that delivery
-        
-        🧾 INNINGS CONTEXT
-        
-        inns_runs
-        Total innings runs so far
-        
-        inns_wkts
-        Wickets fallen so far
-        
-        inns_balls
-        Balls bowled so far
-        
-        inns_runs_rem
-        Runs remaining (in chase)
-        
-        inns_balls_rem
-        Balls remaining
-        
-        inns_rr
-        Current run rate
-        
-        inns_rrr
-        Required run rate
-        
-        🏟️ VENUE & LOCATION
-        
-        ground
-        Stadium name
-        
-        country
-        Country where match is played
-        
-        🎯 BALL TRACKING / TECHNICAL
-        
-        line
-        Line of delivery
-        (outside off, middle, leg, etc.)
-        
-        length
-        Length of delivery
-        (yorker, full, good, short)
-        
-        wagonX, wagonY
-        Shot coordinates
-        
-        wagonZone
-        Categorical shot direction zone
-        
-        shot
-        Shot type played
-        (drive, pull, cut, sweep, etc.)
-        
-        control
-        Shot control indicator
-        (controlled / mishit)
-        df_filtered.groupby('bat').agg(
-            runs=('batruns','sum'),
-            balls=('batruns','count')
-        ).assign(
-            SR=lambda x: (x['runs'] / x['balls']) * 100
-        )
-        Respond with a SINGLE pandas expression.
-        DO NOT use variable assignments.
-        DO NOT use multiple lines.
-        The expression must be directly executable with eval().
-        Use chaining only.
-
-        Question:
-        {user_question}
-        """
-        
-            payload = {
-                "model": "meta-llama/Meta-Llama-3-8B-Instruct",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_question}
-                ],
-                "temperature": 0.1,
-                "max_tokens": 300
-            }
 
         
-            try:
-                response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
+#         🎯 BOWLER INFO
         
-                if response.status_code != 200:
-                    return {
-                        "response": f"❌ API Error ({response.status_code})\n\n{response.text}",
-                        "code": None,
-                        "error": True
-                    }
+#         bowl
+#         Name of the bowler delivering the ball
         
-                data = response.json()
-                code = data["choices"][0]["message"]["content"].strip()
+#         team_bowl
+#         Bowling team
         
-                # clean accidental formatting
-                code = code.replace("```python", "").replace("```", "").strip()
+#         bowl_style
+#         Bowling arm + style
+#         Examples:
         
-                return {
-                    "response": "✅ Query interpreted and executed",
-                    "code": code,
-                    "error": False
-                }
+#         Right-arm fast
         
-            except Exception as e:
-                return {
-                    "response": f"❌ Exception: {str(e)}",
-                    "code": None,
-                    "error": True
-                }
+#         Left-arm fast
+        
+#         Offbreak
+        
+#         Slow left-arm
+        
+#         bowl_kind
+#         has pace bowler or spin bowler
+        
+#         ⏱️ BALL IDENTIFIERS
+        
+#         ball
+#         Ball number within the over (1–6)
+        
+#         ball_id
+#         Unique identifier for each delivery
+#         (useful for counting balls)
+        
+#         over
+#         Over number in the innings (1–20)
+        
+#         📊 BALL OUTCOME
+        
+#         batruns
+#         Runs scored off the bat on this delivery
+#         (0, 1, 2, 3, 4, 6)
+        
+#         ballfaced
+#         Indicator for a ball faced by batter
+#         (usually = 1 for each delivery faced)
+        
+#         bowlruns
+#         Total runs conceded by the bowler on this ball
+#         (includes extras)
+        
+#         outcome
+#         Text description of delivery result
+        
+#         score
+#         Team score after this ball
+        
+#         ❌ DISMISSAL INFO
+        
+#         out
+#         1 if wicket fell on this delivery, else 0
+        
+#         dismissal
+#         Type of dismissal
+#         Examples:
+        
+#         caught
+        
+#         bowled
+        
+#         lbw
+        
+#         stumped
+        
+#         hit wicket
+        
+#         run out
+        
+#         p_out
+#         Player dismissed (if any)
+        
+#         ⚠️ NEVER use dismissal to calculate balls faced or strike rate
+        
+#         🧮 EXTRAS
+        
+#         noball – No-ball runs
+        
+#         wide – Wide ball runs
+        
+#         byes – Byes
+        
+#         legbyes – Leg byes
+        
+#         Extras count toward team runs, not batruns
+        
+#         📈 CUMULATIVE PLAYER STATS (AT THAT BALL)
+        
+#         cur_bat_runs
+#         Batter’s total runs at that point
+        
+#         cur_bat_bf
+#         Batter’s balls faced till that delivery
+        
+#         cur_bowl_ovr
+#         Bowler overs bowled till that delivery
+        
+#         cur_bowl_wkts
+#         Bowler wickets till that delivery
+        
+#         cur_bowl_runs
+#         Bowler runs conceded till that delivery
+        
+#         🧾 INNINGS CONTEXT
+        
+#         inns_runs
+#         Total innings runs so far
+        
+#         inns_wkts
+#         Wickets fallen so far
+        
+#         inns_balls
+#         Balls bowled so far
+        
+#         inns_runs_rem
+#         Runs remaining (in chase)
+        
+#         inns_balls_rem
+#         Balls remaining
+        
+#         inns_rr
+#         Current run rate
+        
+#         inns_rrr
+#         Required run rate
+        
+#         🏟️ VENUE & LOCATION
+        
+#         ground
+#         Stadium name
+        
+#         country
+#         Country where match is played
+        
+#         🎯 BALL TRACKING / TECHNICAL
+        
+#         line
+#         Line of delivery
+#         (outside off, middle, leg, etc.)
+        
+#         length
+#         Length of delivery
+#         (yorker, full, good, short)
+        
+#         wagonX, wagonY
+#         Shot coordinates
+        
+#         wagonZone
+#         Categorical shot direction zone
+        
+#         shot
+#         Shot type played
+#         (drive, pull, cut, sweep, etc.)
+        
+#         control
+#         Shot control indicator
+#         (controlled / mishit)
+#         df_filtered.groupby('bat').agg(
+#             runs=('batruns','sum'),
+#             balls=('batruns','count')
+#         ).assign(
+#             SR=lambda x: (x['runs'] / x['balls']) * 100
+#         )
+#         Respond with a SINGLE pandas expression.
+#         DO NOT use variable assignments.
+#         DO NOT use multiple lines.
+#         The expression must be directly executable with eval().
+#         Use chaining only.
+
+#         Question:
+#         {user_question}
+#         """
+        
+#             payload = {
+#                 "model": "meta-llama/Meta-Llama-3-8B-Instruct",
+#                 "messages": [
+#                     {"role": "system", "content": system_prompt},
+#                     {"role": "user", "content": user_question}
+#                 ],
+#                 "temperature": 0.1,
+#                 "max_tokens": 300
+#             }
 
         
-        # ============================================================
-        # EXAMPLE QUERIES
-        # ============================================================
+#             try:
+#                 response = requests.post(API_URL, headers=headers, json=payload, timeout=60)
         
-        st.markdown("### 💡 Quick Examples")
+#                 if response.status_code != 200:
+#                     return {
+#                         "response": f"❌ API Error ({response.status_code})\n\n{response.text}",
+#                         "code": None,
+#                         "error": True
+#                     }
         
-        tab1, tab2 = st.tabs(["⚡ Batting", "🎯 Bowling"])
+#                 data = response.json()
+#                 code = data["choices"][0]["message"]["content"].strip()
         
-        with tab1:
-            batting_queries = [
-                "Top 10 strike rates in powerplay",
-                "Highest boundary percentage against spin",
-                "Top 5 run scorers in death overs",
-            ]
-            for eq in batting_queries:
-                if st.button(eq, key=f"bat_{eq}", use_container_width=True):
-                    st.session_state.example_query = eq
+#                 # clean accidental formatting
+#                 code = code.replace("```python", "").replace("```", "").strip()
         
-        with tab2:
-            bowling_queries = [
-                "Best economy rates in death overs",
-                "Bowlers with most yorker percentage",
-                "Top 10 wicket takers",
-            ]
-            for eq in bowling_queries:
-                if st.button(eq, key=f"bowl_{eq}", use_container_width=True):
-                    st.session_state.example_query = eq
+#                 return {
+#                     "response": "✅ Query interpreted and executed",
+#                     "code": code,
+#                     "error": False
+#                 }
         
-        st.markdown("---")
+#             except Exception as e:
+#                 return {
+#                     "response": f"❌ Exception: {str(e)}",
+#                     "code": None,
+#                     "error": True
+#                 }
+
         
-        # ============================================================
-        # CHAT INTERFACE
-        # ============================================================
+#         # ============================================================
+#         # EXAMPLE QUERIES
+#         # ============================================================
         
-        # Display chat history
-        for i, message in enumerate(st.session_state.messages):
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+#         st.markdown("### 💡 Quick Examples")
+        
+#         tab1, tab2 = st.tabs(["⚡ Batting", "🎯 Bowling"])
+        
+#         with tab1:
+#             batting_queries = [
+#                 "Top 10 strike rates in powerplay",
+#                 "Highest boundary percentage against spin",
+#                 "Top 5 run scorers in death overs",
+#             ]
+#             for eq in batting_queries:
+#                 if st.button(eq, key=f"bat_{eq}", use_container_width=True):
+#                     st.session_state.example_query = eq
+        
+#         with tab2:
+#             bowling_queries = [
+#                 "Best economy rates in death overs",
+#                 "Bowlers with most yorker percentage",
+#                 "Top 10 wicket takers",
+#             ]
+#             for eq in bowling_queries:
+#                 if st.button(eq, key=f"bowl_{eq}", use_container_width=True):
+#                     st.session_state.example_query = eq
+        
+#         st.markdown("---")
+        
+#         # ============================================================
+#         # CHAT INTERFACE
+#         # ============================================================
+        
+#         # Display chat history
+#         for i, message in enumerate(st.session_state.messages):
+#             with st.chat_message(message["role"]):
+#                 st.markdown(message["content"])
                 
-                if message.get("code"):
-                    with st.expander("📝 Generated Code", expanded=False):
-                        st.code(message["code"], language="python")
+#                 if message.get("code"):
+#                     with st.expander("📝 Generated Code", expanded=False):
+#                         st.code(message["code"], language="python")
                 
-                if message.get("result"):
-                    result = message["result"]
-                    if result.get("table") is not None:
-                        st.dataframe(result["table"], use_container_width=True)
-                    if result.get("text"):
-                        st.info(result["text"])
+#                 if message.get("result"):
+#                     result = message["result"]
+#                     if result.get("table") is not None:
+#                         st.dataframe(result["table"], use_container_width=True)
+#                     if result.get("text"):
+#                         st.info(result["text"])
         
-        # Chat input
-        user_input = st.chat_input("💬 Ask about your cricket data...")
+#         # Chat input
+#         user_input = st.chat_input("💬 Ask about your cricket data...")
         
-        if st.session_state.get('example_query'):
-            user_input = st.session_state.example_query
-            st.session_state.example_query = None
+#         if st.session_state.get('example_query'):
+#             user_input = st.session_state.example_query
+#             st.session_state.example_query = None
         
-        if user_input:
-            # Add user message
-            st.session_state.messages.append({"role": "user", "content": user_input})
+#         if user_input:
+#             # Add user message
+#             st.session_state.messages.append({"role": "user", "content": user_input})
             
-            with st.chat_message("user"):
-                st.markdown(user_input)
+#             with st.chat_message("user"):
+#                 st.markdown(user_input)
             
-            # Get AI response
-            with st.chat_message("assistant"):
-                with st.spinner("🤔 Thinking..."):
-                    data_context = get_data_context()
-                    ai_response = query_huggingface(user_input, data_context)
+#             # Get AI response
+#             with st.chat_message("assistant"):
+#                 with st.spinner("🤔 Thinking..."):
+#                     data_context = get_data_context()
+#                     ai_response = query_huggingface(user_input, data_context)
                     
-                    st.markdown(ai_response["response"])
+#                     st.markdown(ai_response["response"])
                     
-                    if ai_response["code"] and not ai_response.get("error"):
-                        with st.expander("📝 Generated Code", expanded=True):
-                            st.code(ai_response["code"], language="python")
+#                     if ai_response["code"] and not ai_response.get("error"):
+#                         with st.expander("📝 Generated Code", expanded=True):
+#                             st.code(ai_response["code"], language="python")
                         
-                        with st.spinner("⚙️ Running query..."):
-                            result = execute_query(ai_response["code"], df)
-                            ai_response["result"] = result
+#                         with st.spinner("⚙️ Running query..."):
+#                             result = execute_query(ai_response["code"], df)
+#                             ai_response["result"] = result
                         
-                        if result.get("table") is not None:
-                            st.dataframe(result["table"], use_container_width=True)
-                        if result.get("text"):
-                            st.info(result["text"])
+#                         if result.get("table") is not None:
+#                             st.dataframe(result["table"], use_container_width=True)
+#                         if result.get("text"):
+#                             st.info(result["text"])
             
-            # Save assistant message
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": ai_response["response"],
-                "code": ai_response.get("code"),
-                "result": ai_response.get("result")
-            })
+#             # Save assistant message
+#             st.session_state.messages.append({
+#                 "role": "assistant",
+#                 "content": ai_response["response"],
+#                 "code": ai_response.get("code"),
+#                 "result": ai_response.get("result")
+#             })
         
-        # ============================================================
-        # SIDEBAR INFO
-        # ============================================================
+#         # ============================================================
+#         # SIDEBAR INFO
+#         # ============================================================
         
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### 🔑 HuggingFace Token")
+#         st.sidebar.markdown("---")
+#         st.sidebar.markdown("### 🔑 HuggingFace Token")
         
-        if hf_token:
-            st.sidebar.success("""
-            ✅ **Token Active**
+#         if hf_token:
+#             st.sidebar.success("""
+#             ✅ **Token Active**
             
-            You have 10x more requests!
+#             You have 10x more requests!
             
-            Rate limit: ~1,000/hour
-            """)
-        else:
-            st.sidebar.warning("""
-            ⚠️ **No Token Set**
+#             Rate limit: ~1,000/hour
+#             """)
+#         else:
+#             st.sidebar.warning("""
+#             ⚠️ **No Token Set**
             
-            You're using the free tier with limits.
+#             You're using the free tier with limits.
             
-            **Get more requests (FREE):**
-            1. Visit: huggingface.co/settings/tokens
-            2. Create token (free!)
-            3. See instructions below ⬇️
-            """)
+#             **Get more requests (FREE):**
+#             1. Visit: huggingface.co/settings/tokens
+#             2. Create token (free!)
+#             3. See instructions below ⬇️
+#             """)
             
-            with st.sidebar.expander("📝 How to add token"):
-                st.markdown("""
-                **Step 1:** Create `.streamlit/secrets.toml` in your project:
+#             with st.sidebar.expander("📝 How to add token"):
+#                 st.markdown("""
+#                 **Step 1:** Create `.streamlit/secrets.toml` in your project:
                 
-                ```toml
-                HUGGINGFACE_TOKEN = "hf_your_token_here"
-                ```
+#                 ```toml
+#                 HUGGINGFACE_TOKEN = "hf_your_token_here"
+#                 ```
                 
-                **Step 2:** Restart Streamlit
+#                 **Step 2:** Restart Streamlit
                 
-                **For Streamlit Cloud:**
-                - Settings → Secrets
-                - Paste the above
-                - Save
-                """)
+#                 **For Streamlit Cloud:**
+#                 - Settings → Secrets
+#                 - Paste the above
+#                 - Save
+#                 """)
         
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("### 💡 Tips")
-        st.sidebar.info("""
-        **For best results:**
-        - Be specific with player names
-        - Mention phase (Powerplay/Death)
-        - Start simple, add filters
-        - If error, rephrase question
-        """)
+#         st.sidebar.markdown("---")
+#         st.sidebar.markdown("### 💡 Tips")
+#         st.sidebar.info("""
+#         **For best results:**
+#         - Be specific with player names
+#         - Mention phase (Powerplay/Death)
+#         - Start simple, add filters
+#         - If error, rephrase question
+#         """)
         
-        st.sidebar.markdown("---")
-        col_a, col_b = st.sidebar.columns(2)
+#         st.sidebar.markdown("---")
+#         col_a, col_b = st.sidebar.columns(2)
         
-        with col_a:
-            if st.button("🗑️ Clear", use_container_width=True):
-                st.session_state.messages = []
-                st.rerun()
+#         with col_a:
+#             if st.button("🗑️ Clear", use_container_width=True):
+#                 st.session_state.messages = []
+#                 st.rerun()
         
-        with col_b:
-            if st.button("🔄 Refresh", use_container_width=True):
-                st.rerun()
+#         with col_b:
+#             if st.button("🔄 Refresh", use_container_width=True):
+#                 st.rerun()
         
-        st.stop()
+#         st.stop()
     
-    # ==================== END FREE AI MODE ====================
+#     # ==================== END FREE AI MODE ====================
