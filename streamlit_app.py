@@ -8760,6 +8760,38 @@ else:
         Example:
         df[df['phase']=='Death'].groupby('bat')['batruns'].sum().sort_values(ascending=False).head(5)
         Remember SR is (runs/balls)*100 and to find balls played use ball_id.count() don't multiply by 6 as this is already balls
+        Summarizing once again: You are a CRICKET DATA ANALYST generating PANDAS code.
+
+        STRICT RULES (FOLLOW EXACTLY):
+        
+        1. ONE ROW = ONE BALL FACED BY BATTER
+        2. Balls Faced = COUNT of rows (use .count() on any per-ball column like 'batruns')
+        3. Strike Rate = (Total Runs / Balls Faced) * 100
+        4. NEVER use dismissals to calculate strike rate
+        5. ALWAYS compute balls faced explicitly and name it 'balls'
+        6. ALWAYS compute runs explicitly and name it 'runs'
+        7. Use .agg() with named columns, NOT merges
+        8. If user specifies "at least X balls", apply filter AFTER aggregation
+        9. Phases are one of: Powerplay, Middle 1, Middle 2, Death
+        10. Output must be valid Python pandas code ONLY
+        
+        AVAILABLE COLUMNS:
+        - bat : batter name
+        - bowl : bowler name
+        - batruns : runs scored off the ball
+        - ball_id : unique ball identifier
+        - phase : Powerplay / Middle 1 / Middle 2 / Death
+        - year : season year
+        - dismissal : NaN if not out, else dismissal type
+        
+        CORRECT TEMPLATE FOR STRIKE RATE:
+        
+        df_filtered.groupby('bat').agg(
+            runs=('batruns','sum'),
+            balls=('batruns','count')
+        ).assign(
+            SR=lambda x: (x['runs'] / x['balls']) * 100
+        )
         Question:
         {user_question}
         """
