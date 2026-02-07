@@ -941,10 +941,18 @@ if not selected_tournaments:
 
 with st.spinner("Loading data…"):
     if HEAVY_MODE:
-        df = load_filtered_data_ultra_safe(selected_tournaments, selected_years)
+        # 🔥 ultra-safe path: NO cache, NO file_signatures
+        df = load_filtered_data_ultra_safe(
+            selected_tournaments,
+            selected_years,
+            usecols=usecols
+        )
     else:
+        # 🔥 cached path: file_signatures REQUIRED
         df = load_filtered_data_fast(
-            selected_tournaments, selected_years,
+            selected_tournaments,
+            selected_years,
+            usecols=usecols,
             file_signatures=file_signatures
         )
 
