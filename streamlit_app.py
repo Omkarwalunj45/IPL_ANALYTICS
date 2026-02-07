@@ -789,6 +789,65 @@ def load_filtered_data_fast(selected_tournaments, selected_years, usecols=None, 
 
 
 # 🔥 NO-CACHE loader
+def load_filtered_data_ultra_safe(selected_tournaments, selected_years, usecols=None):
+    import tempfile
+
+    tmp_files = []
+
+    for t in selected_tournaments:
+        token = TOURNAMENTS.get(t, t).lower()
+        path = _strict_file_for_tournament(token)
+        if path is None:
+            continue
+
+        ext = os.path.splitext(path)[1].lower()
+
+        # ── CSV: true streaming ──
+        if ext == ".csv":
+            reader = pd.read_csv(
+                path,
+                usecols=usecols,
+                low_memory=False,
+                chunksize=CHUNK_ROWS
+            )
+        else:
+            # Parquet / Excel fallback (still risky)
+            reader = [pd.read_parquet(path, columns=usecols)]
+
+        for df in reader:
+            if df.empty:
+                continue
+
+            year_col = _detect_year_column(df)
+            if year_col:
+                yrs = _extract_years(df[year_col])
+                if yrs is not None:
+                    df = df.loc[yrs.isin(selected_years).fillna(False)]
+
+            if df.empty:
+                continue
+
+            df["tournament"] = t
+
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".parquet")
+            df.to_parquet(tmp.name, index=False)
+            tmp_files.append(tmp.name)
+
+            del df   # 🔥 free RAM immediately
+
+    if not tmp_files:
+        return pd.DataFrame()
+
+    # final controlled merge
+    merged = []
+    for chunk in chunk_list(tmp_files, 3):
+        dfs = [pd.read_parquet(p) for p in chunk]
+        merged.append(pd.concat(dfs, ignore_index=True, sort=False))
+        for p in chunk:
+            os.remove(p)
+
+    return pd.concat(merged, ignore_index=True, sort=False)
+
 def load_filtered_data_nocache(selected_tournaments, selected_years, usecols=None):
     tmp_files = []
     st.write("entered")
@@ -878,11 +937,16 @@ if not selected_tournaments:
     st.info("Please select tournaments.")
     st.stop()
 
+# HEAVY_MODE = len(selected_tournaments) >= 4
+
 with st.spinner("Loading data…"):
     if HEAVY_MODE:
-        df = load_filtered_data_nocache(selected_tournaments, selected_years)
+        df = load_filtered_data_ultra_safe(selected_tournaments, selected_years)
     else:
-        df = load_filtered_data_fast(selected_tournaments, selected_years)
+        df = load_filtered_data_fast(
+            selected_tournaments, selected_years,
+            file_signatures=file_signatures
+        )
 
 if df.empty:
     st.warning("No data loaded.")
