@@ -1017,16 +1017,16 @@ bowl_style_map = {
     'LBG': 'Leg break',
     'LF': 'Left-arm Fast',
     'LFM': 'Left-arm Fast',
-    'LM': 'Left-arm Medium-Fast',
-    'LMF': 'Left-arm Medium-Fast',
+    'LM': 'Left-arm Fast',
+    'LMF': 'Left-arm Fast',
     'LWS': 'Left-arm Wrist Spin',
     'OB': 'Off break',
     'OB/LB': 'Offbreak/Legbreak',
     'RF': 'Right-arm Fast',
     'RFM': 'Right-arm Fast',
-    'RM': 'Right-arm Medium-Fast',
-    'RM/OB': 'Right-arm Medium',
-    'RMF': 'Right-arm Medium-Fast',
+    'RM': 'Right-arm Fast',
+    'RM/OB': 'Right-arm Fast',
+    'RMF': 'Right-arm Fast',
     'SLA': 'Slow Left-arm Orthodox'
 }
 
