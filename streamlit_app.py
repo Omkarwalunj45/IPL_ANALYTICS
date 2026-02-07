@@ -821,7 +821,7 @@ if df.empty:
 # ============================================================
 
 st.success(
-    f"Loaded {len(df):,} rows | "
+    f" {len(df):,} Balls Analysed Across| "
     f"{len(selected_tournaments)} tournament(s) | "
     f"{year_range[0]}–{year_range[1]}"
 )
